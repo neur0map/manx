@@ -288,7 +288,7 @@ impl SearchEngine {
                     start = actual_end;
                     // Skip whitespace for next chunk
                     while start < docs.len()
-                        && docs.chars().nth(start).map_or(false, |c| c.is_whitespace())
+                        && docs.chars().nth(start).is_some_and(|c| c.is_whitespace())
                     {
                         start += 1;
                     }
