@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo lock for libraries (keeping it for binary reproducibility)
+# Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug
+*.log
+debug/
+
+# Environment
+.env
+.env.local
+
+# Test coverage
+tarpaulin-report.html
+cobertura.xml
