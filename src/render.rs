@@ -114,10 +114,7 @@ impl Renderer {
         } else {
             // Show more of the excerpt for better distinction
             let max_width = self.terminal_width.max(100) - 4;
-            println!(
-                "  {}",
-                self.truncate_text(&result.excerpt, max_width)
-            );
+            println!("  {}", self.truncate_text(&result.excerpt, max_width));
         }
 
         println!("{}\n", separator.dimmed());
