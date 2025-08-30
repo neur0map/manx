@@ -115,6 +115,16 @@ pub enum Commands {
         #[arg(long, value_name = "SIZE")]
         max_cache_size: Option<u64>,
     },
+    
+    /// Update Manx to the latest version from GitHub
+    Update {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+        /// Force update even if already on latest version
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]

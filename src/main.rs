@@ -5,6 +5,7 @@ mod render;
 mod cache;
 mod export;
 mod config;
+mod update;
 
 use anyhow::Result;
 use colored::control;
@@ -17,6 +18,7 @@ use crate::render::Renderer;
 use crate::cache::CacheManager;
 use crate::export::Exporter;
 use crate::config::Config;
+use crate::update::SelfUpdater;
 
 #[tokio::main]
 async fn main() {
@@ -189,6 +191,31 @@ async fn run() -> Result<()> {
                 &renderer,
                 args.offline
             ).await?;
+        }
+        
+        Some(Commands::Update { check, force }) => {
+            let updater = SelfUpdater::new(renderer)?;
+            
+            if check {
+                let update_info = updater.check_for_updates().await?;
+                
+                if update_info.update_available {
+                    println!("🎉 Update available!");
+                    println!("Current version: v{}", update_info.current_version);
+                    println!("Latest version:  v{}", update_info.latest_version);
+                    
+                    if !update_info.release_notes.trim().is_empty() {
+                        println!("\n📝 Release Notes:");
+                        println!("{}", update_info.release_notes);
+                    }
+                    
+                    println!("\nRun 'manx update' to install the latest version.");
+                } else {
+                    println!("✅ You're already on the latest version (v{})", update_info.current_version);
+                }
+            } else {
+                updater.perform_update(force).await?;
+            }
         }
         
         None => {
