@@ -1,6 +1,14 @@
-# Manx
+# 📚 Manx
 
-A CLI doc finder for developers. Query Context7 MCP for versioned documentation snippets in your terminal, with more documentation sources and a TUI coming soon.
+> *A blazing-fast CLI documentation finder that brings Context7 MCP docs right to your terminal - no IDE required*
+
+<div align="center">
+
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Language](https://img.shields.io/badge/language-Rust-orange.svg)
+![Status](https://img.shields.io/badge/status-Active%20Development-green.svg)
+
+</div>
 
 ## What is Manx?
 
@@ -34,7 +42,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[License to be determined]
+MIT License - see [LICENSE](LICENSE) for details
 
 ---
 
