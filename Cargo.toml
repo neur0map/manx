@@ -1,6 +1,6 @@
 [package]
 name = "manx-cli"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 authors = ["neur0map <email@example.com>"]
 description = "A blazing-fast CLI documentation finder powered by Context7 MCP"
