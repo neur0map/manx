@@ -84,6 +84,10 @@ pub struct Cli {
     /// Export in JSON format instead of Markdown (use with --save or --save-all)
     #[arg(long, help_heading = "SAVE OPTIONS")]
     pub json: bool,
+
+    /// Limit number of results shown (default: 10, use 0 for unlimited)
+    #[arg(short = 'l', long, value_name = "NUMBER", help_heading = "OUTPUT OPTIONS")]
+    pub limit: Option<usize>,
 }
 
 #[derive(Subcommand)]
