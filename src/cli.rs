@@ -17,8 +17,14 @@ EXAMPLES:
     manx --clear-cache             Quick cache cleanup
     manx config --auto-cache off   Disable automatic caching
 
+SEARCH SYNTAX:
+    manx fastapi cors              Library-specific search (precise)
+    manx \"fastapi cors\"            Semantic search (broader, related concepts)
+    manx fastapi --save 1,3,7      Save specific results to file
+    manx react --save-all --json   Save all results as JSON
+
 For more examples: https://github.com/neur0map/manx#usage",
-    version,
+    version = get_version_info(),
     author,
     arg_required_else_help = true
 )]
@@ -61,6 +67,18 @@ pub struct Cli {
     /// Disable automatic caching (manual caching only)
     #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_off: bool,
+    
+    /// Save specific search results by number (e.g., --save 1,3,7)
+    #[arg(long, value_name = "NUMBERS", help_heading = "SAVE OPTIONS")]
+    pub save: Option<String>,
+    
+    /// Save all search results to file
+    #[arg(long, help_heading = "SAVE OPTIONS")]
+    pub save_all: bool,
+    
+    /// Export in JSON format instead of Markdown (use with --save or --save-all)
+    #[arg(long, help_heading = "SAVE OPTIONS")]
+    pub json: bool,
 }
 
 #[derive(Subcommand)]
@@ -141,4 +159,26 @@ impl Cli {
     pub fn parse_args() -> Self {
         Cli::parse()
     }
+}
+
+fn get_version_info() -> &'static str {
+    concat!(
+        "\n",
+        "__| |________________________________________________________________________________| |__\n",
+        "__   ________________________________________________________________________________   __\n",
+        "  | |                                                                                | |  \n",
+        "  | | ███                    ██████   ██████   █████████   ██████   █████ █████ █████| |  \n",
+        "  | |░░░███                 ░░██████ ██████   ███░░░░░███ ░░██████ ░░███ ░░███ ░░███ | |  \n",
+        "  | |  ░░░███                ░███░█████░███  ░███    ░███  ░███░███ ░███  ░░███ ███  | |  \n",
+        "  | |    ░░░███              ░███░░███ ░███  ░███████████  ░███░░███░███   ░░█████   | |  \n",
+        "  | |     ███░               ░███ ░░░  ░███  ░███░░░░░███  ░███ ░░██████    ███░███  | |  \n",
+        "  | |   ███░                 ░███      ░███  ░███    ░███  ░███  ░░█████   ███ ░░███ | |  \n",
+        "  | | ███░      █████████    █████     █████ █████   █████ █████  ░░█████ █████ █████| |  \n",
+        "  | |░░░       ░░░░░░░░░    ░░░░░     ░░░░░ ░░░░░   ░░░░░ ░░░░░    ░░░░░ ░░░░░ ░░░░░ | |  \n",
+        "__| |________________________________________________________________________________| |__\n",
+        "__   ________________________________________________________________________________   __\n",
+        "  | |                                                                                | |  \n",
+        "\n",
+        "  v", env!("CARGO_PKG_VERSION"), " • blazing-fast docs finder\n"
+    )
 }

@@ -87,7 +87,7 @@ impl CacheManager {
             .as_secs();
         
         let age = now.saturating_sub(entry.timestamp);
-        let ttl_secs = entry.ttl_hours * 3600;
+        let ttl_secs = self.ttl.as_secs();
         
         if age > ttl_secs {
             fs::remove_file(&path).ok();

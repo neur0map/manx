@@ -1,6 +1,6 @@
 [package]
 name = "manx"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["neur0map <email@example.com>"]
 description = "A blazing-fast CLI documentation finder powered by Context7 MCP"
@@ -25,6 +25,7 @@ eventsource-client = "0.13"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
 
 # Terminal output
 colored = "2.1"

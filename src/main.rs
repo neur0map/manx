@@ -41,6 +41,9 @@ async fn run() -> Result<()> {
     // Load configuration
     let mut config = Config::load().unwrap_or_default();
     
+    // Merge CLI arguments with config
+    config.merge_with_cli(None, None, args.offline);
+    
     // Handle NO_COLOR environment variable
     if std::env::var("NO_COLOR").is_ok() || !config.color_output {
         control::set_override(false);
@@ -228,7 +231,10 @@ async fn run() -> Result<()> {
                     args.output.as_ref(),
                     &config,
                     &renderer,
-                    args.offline
+                    args.offline,
+                    args.save.as_ref(),
+                    args.save_all,
+                    args.json
                 ).await?;
             } else {
                 // Show help if no arguments
@@ -258,6 +264,9 @@ async fn handle_search_command(
     config: &Config,
     renderer: &Renderer,
     offline: bool,
+    save_numbers: Option<&String>,
+    save_all: bool,
+    json_format: bool,
 ) -> Result<()> {
     let cache_manager = if let Some(dir) = &config.cache_dir {
         CacheManager::with_custom_dir(dir.clone())?
@@ -290,7 +299,7 @@ async fn handle_search_command(
     let client = Context7Client::new(config.api_key.clone())?;
     let search_engine = SearchEngine::new(client);
     
-    let results = search_engine.search(
+    let (results, library_title, library_id) = search_engine.search(
         library,
         query,
         Some(config.default_limit)
@@ -303,13 +312,56 @@ async fn handle_search_command(
         cache_manager.set("search", &cache_key, &results).await.ok();
     }
     
-    // Render results
-    renderer.render_search_results(&results)?;
+    // Render results with library information
+    renderer.render_search_results_with_library(&results, Some((&library_title, &library_id)))?;
     
     // Export if requested
     if let Some(path) = output {
         Exporter::export_search_results(&results, path)?;
         renderer.print_success(&format!("Results exported to {:?}", path));
+    }
+    
+    // Handle batch save operations
+    if save_all || save_numbers.is_some() {
+        let filename = if let Some(path) = output {
+            path.clone()
+        } else {
+            // Generate smart default filename
+            let extension = if json_format { "json" } else { "md" };
+            let prefix = if save_all { "all" } else { "snippets" };
+            std::path::PathBuf::from(format!("{}-{}.{}", library, prefix, extension))
+        };
+        
+        if save_all {
+            // Save all results
+            Exporter::export_batch_snippets(&results, &filename, json_format, library, &cache_manager).await?;
+            renderer.print_success(&format!("All {} results saved to {:?}", results.len(), filename));
+        } else if let Some(numbers_str) = save_numbers {
+            // Parse and save specific results
+            let numbers: Result<Vec<usize>, _> = numbers_str
+                .split(',')
+                .map(|s| s.trim().parse::<usize>())
+                .collect();
+                
+            match numbers {
+                Ok(indices) => {
+                    let selected_results: Vec<crate::client::SearchResult> = indices
+                        .iter()
+                        .filter_map(|&i| results.get(i.saturating_sub(1)).cloned()) // Convert 1-based to 0-based and clone
+                        .collect();
+                    
+                    if selected_results.is_empty() {
+                        renderer.print_error("No valid result numbers specified");
+                    } else {
+                        Exporter::export_batch_snippets(&selected_results, &filename, json_format, library, &cache_manager).await?;
+                        renderer.print_success(&format!("{} snippets saved to {:?}", selected_results.len(), filename));
+                    }
+                }
+                Err(_) => {
+                    renderer.print_error("Invalid format for --save. Use comma-separated numbers like: --save 1,3,7");
+                }
+            }
+        }
     }
     
     Ok(())
@@ -354,21 +406,22 @@ async fn handle_doc_command(
     let client = Context7Client::new(config.api_key.clone())?;
     let search_engine = SearchEngine::new(client);
     
-    let doc = search_engine.get_documentation(library, Some(query)).await?;
+    let doc_text = search_engine.get_documentation(library, Some(query)).await?;
     
     pb.finish_and_clear();
     
     // Cache documentation only if auto-caching is enabled
     if config.auto_cache_enabled {
-        cache_manager.set("docs", &cache_key, &doc).await.ok();
+        cache_manager.set("docs", &cache_key, &doc_text).await.ok();
     }
     
-    // Render documentation
-    renderer.render_documentation(&doc)?;
+    // Render documentation using the new Context7 parser
+    renderer.render_context7_documentation(library, &doc_text)?;
     
     // Export if requested
     if let Some(path) = output {
-        Exporter::export_documentation(&doc, path)?;
+        // For now, just write the raw text - we can improve this later
+        std::fs::write(path, &doc_text)?;
         renderer.print_success(&format!("Documentation exported to {:?}", path));
     }
     
@@ -377,25 +430,95 @@ async fn handle_doc_command(
 
 async fn handle_snippet_command(
     id: &str,
-    _output: Option<&std::path::PathBuf>,
+    output: Option<&std::path::PathBuf>,
     config: &Config,
     renderer: &Renderer,
     offline: bool,
 ) -> Result<()> {
-    // For snippets, we need to fetch from cache or make a new request
-    // This is a simplified version - in production, we'd store snippet metadata
+    let cache_manager = if let Some(dir) = &config.cache_dir {
+        CacheManager::with_custom_dir(dir.clone())?
+    } else {
+        CacheManager::new()?
+    };
     
-    if offline || config.offline_mode {
-        anyhow::bail!("Snippet expansion requires online mode");
+    // We need to find which library this snippet belongs to by scanning the cache
+    // Since we don't know which library was searched, we'll look through all cached snippets
+    
+    let pb = renderer.show_progress(&format!("Looking for snippet {}...", id));
+    
+    let mut found_snippet: Option<String> = None;
+    let mut library_name = String::new();
+    
+    // Get the snippets cache directory and scan for the snippet ID
+    let dummy_path = cache_manager.cache_key("snippets", "dummy");
+    let snippets_cache_dir = dummy_path.parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get snippets cache directory"))?;
+    
+    if snippets_cache_dir.exists() {
+        // Read all cached snippet files and find the most recent one with the matching ID
+        let mut matching_files = Vec::new();
+        
+        if let Ok(entries) = std::fs::read_dir(snippets_cache_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let filename = entry.file_name();
+                    if let Some(filename_str) = filename.to_str() {
+                        // Snippet files are named like "libraryname_doc-1.json"
+                        if filename_str.ends_with(&format!("{}.json", id)) {
+                            if let Ok(metadata) = entry.metadata() {
+                                if let Ok(modified) = metadata.modified() {
+                                    matching_files.push((filename_str.to_string(), modified));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Sort by modification time (most recent first)
+        matching_files.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        // Try to load the most recent matching snippet
+        for (filename, _) in matching_files {
+            if let Some(underscore_pos) = filename.rfind('_') {
+                library_name = filename[..underscore_pos].to_string();
+                let snippet_key = format!("{}_{}", library_name, id);
+                
+                if let Ok(Some(content)) = cache_manager.get::<String>("snippets", &snippet_key).await {
+                    found_snippet = Some(content);
+                    break;
+                }
+            }
+        }
     }
     
-    let pb = renderer.show_progress(&format!("Fetching snippet {}...", id));
-    
-    // In a real implementation, we'd have a method to fetch specific snippets
-    // For now, we'll return an error message
     pb.finish_and_clear();
     
-    renderer.print_error("Snippet expansion not yet implemented. Use 'manx doc' instead.");
+    match found_snippet {
+        Some(content) => {
+            // Render the snippet using the Context7 documentation parser
+            renderer.render_context7_documentation(&format!("{} - {}", library_name, id), &content)?;
+            
+            // Export if requested
+            if let Some(path) = output {
+                std::fs::write(path, &content)?;
+                renderer.print_success(&format!("Snippet exported to {:?}", path));
+            }
+        }
+        None => {
+            renderer.print_error(&format!(
+                "Snippet '{}' not found in cache. Snippets are references to recent search results.", id
+            ));
+            renderer.print_success("Try running a search first, then use the ID from the results:");
+            renderer.print_success("  manx fastapi          # Search FastAPI docs");
+            renderer.print_success("  manx snippet doc-1    # Expand first result");
+            
+            if !offline && !config.offline_mode {
+                renderer.print_success("You can also try searching again to refresh the cache.");
+            }
+        }
+    }
     
     Ok(())
 }
