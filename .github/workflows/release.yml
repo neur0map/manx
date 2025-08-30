@@ -23,16 +23,9 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          body: |
-            Changes in this Release
-            - First release of Manx CLI
-            - Context7 MCP integration
-            - Fast documentation search
-            - Caching and offline support
-            - Export to Markdown/JSON
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
 
   build:
     needs: release
