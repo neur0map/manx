@@ -20,7 +20,7 @@ impl SearchEngine {
         &self,
         library: &str,
         query: &str,
-        _limit: Option<usize>,
+        limit: Option<usize>,
     ) -> Result<(Vec<SearchResult>, String, String)> {
         // Parse library@version format
         let (lib_name, _version) = parse_library_spec(library);
@@ -39,10 +39,17 @@ impl SearchEngine {
             .await?;
 
         // Step 4: Parse documentation into multiple results and rank them
-        let results =
+        let mut results =
             self.parse_documentation_into_results(library, query, &docs, &search_terms)?;
 
-        // Step 5: Cache individual snippets for later retrieval via snippet command
+        // Step 5: Apply limit if specified
+        if let Some(limit) = limit {
+            if limit > 0 && results.len() > limit {
+                results.truncate(limit);
+            }
+        }
+
+        // Step 6: Cache individual snippets for later retrieval via snippet command
         // We'll store each section separately so users can access them via "manx snippet doc-N"
         if let Ok(cache_manager) = crate::cache::CacheManager::new() {
             let sections = self.split_into_sections(&docs);
@@ -115,11 +122,25 @@ impl SearchEngine {
             // Calculate relevance score based on search terms
             let relevance = self.calculate_section_relevance(section, search_terms);
 
-            if relevance > 0.1 {
+            // Lower threshold for including results when we have multiple sections
+            let relevance_threshold = if sections.len() > 1 { 0.05 } else { 0.1 };
+
+            if relevance > relevance_threshold {
                 // Only include sections with reasonable relevance
                 let title = self
                     .extract_section_title(section)
-                    .unwrap_or_else(|| format!("{} - {}", library, original_query));
+                    .unwrap_or_else(|| {
+                        // Try to create a meaningful title from the section content
+                        let first_line = section.lines().next().unwrap_or("");
+                        let title_candidate = if first_line.len() > 60 {
+                            format!("{}...", &first_line[..57])
+                        } else if first_line.is_empty() {
+                            format!("{} - Result {}", original_query, idx + 1)
+                        } else {
+                            first_line.to_string()
+                        };
+                        format!("{} ({})", title_candidate, library)
+                    });
 
                 let excerpt = self.extract_section_excerpt(section);
 
@@ -137,20 +158,38 @@ impl SearchEngine {
         // Sort by relevance score (highest first)
         results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap());
 
-        // If no specific sections matched well, return the full documentation as one result
-        if results.is_empty() {
-            results.push(SearchResult {
-                id: "doc-1".to_string(),
-                library: library.to_string(),
-                title: format!("{} - {}", library, original_query),
-                excerpt: if docs.len() > 300 {
-                    format!("{}...", &docs[..300])
+        // If no specific sections matched well, create results from all sections anyway
+        if results.is_empty() && !sections.is_empty() {
+            for (idx, section) in sections.iter().enumerate().take(10) {
+                // Limit to first 10 sections
+                let title = self
+                    .extract_section_title(section)
+                    .unwrap_or_else(|| {
+                        let first_line = section.lines().next().unwrap_or("");
+                        if first_line.len() > 60 {
+                            format!("{}...", &first_line[..57])
+                        } else if first_line.is_empty() {
+                            format!("{} - Part {}", original_query, idx + 1)
+                        } else {
+                            first_line.to_string()
+                        }
+                    });
+
+                let excerpt = if section.len() > 300 {
+                    format!("{}...", &section[..300])
                 } else {
-                    docs.to_string()
-                },
-                url: None,
-                relevance_score: 1.0,
-            });
+                    section.to_string()
+                };
+
+                results.push(SearchResult {
+                    id: format!("doc-{}", idx + 1),
+                    library: library.to_string(),
+                    title,
+                    excerpt,
+                    url: None,
+                    relevance_score: 0.5, // Default relevance for unmatched sections
+                });
+            }
         }
 
         Ok(results)
@@ -189,7 +228,48 @@ impl SearchEngine {
             }
         }
 
-        // If no sections found, return the full document
+        // If no sections found, try alternative splitting methods
+        if sections.is_empty() {
+            // Try splitting by double newlines (paragraphs)
+            let paragraphs: Vec<&str> = docs.split("\n\n").collect();
+            if paragraphs.len() > 1 {
+                for paragraph in paragraphs {
+                    let trimmed = paragraph.trim();
+                    if trimmed.len() > 50 {  // Only include meaningful paragraphs
+                        sections.push(trimmed.to_string());
+                    }
+                }
+            }
+            
+            // If still no sections, split into chunks of reasonable size
+            if sections.is_empty() {
+                let chunk_size = 1000;  // Characters per chunk
+                let mut start = 0;
+                while start < docs.len() {
+                    let end = (start + chunk_size).min(docs.len());
+                    // Try to break at a sentence or paragraph boundary
+                    let mut actual_end = end;
+                    if end < docs.len() {
+                        // Look for a good break point
+                        if let Some(pos) = docs[start..end].rfind("\n\n") {
+                            actual_end = start + pos;
+                        } else if let Some(pos) = docs[start..end].rfind(". ") {
+                            actual_end = start + pos + 1;
+                        } else if let Some(pos) = docs[start..end].rfind('\n') {
+                            actual_end = start + pos;
+                        }
+                    }
+                    
+                    let chunk = docs[start..actual_end].trim();
+                    if !chunk.is_empty() {
+                        sections.push(chunk.to_string());
+                    }
+                    start = actual_end;
+                }
+            }
+        }
+
+        // Return at least something
         if sections.is_empty() {
             vec![docs.to_string()]
         } else {
