@@ -112,9 +112,11 @@ impl Renderer {
         if result.excerpt.contains("CODE SNIPPETS") {
             self.render_context7_excerpt(&result.excerpt)?;
         } else {
+            // Show more of the excerpt for better distinction
+            let max_width = self.terminal_width.max(100) - 4;
             println!(
                 "  {}",
-                self.truncate_text(&result.excerpt, self.terminal_width - 4)
+                self.truncate_text(&result.excerpt, max_width)
             );
         }
 
@@ -276,7 +278,13 @@ impl Renderer {
         if text.len() <= max_len {
             text.to_string()
         } else {
-            format!("{}...", &text[..max_len - 3])
+            // Try to break at a word boundary
+            let truncate_at = max_len - 3;
+            if let Some(last_space) = text[..truncate_at].rfind(' ') {
+                format!("{}...", &text[..last_space])
+            } else {
+                format!("{}...", &text[..truncate_at])
+            }
         }
     }
 
