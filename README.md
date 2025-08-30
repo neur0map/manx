@@ -29,10 +29,13 @@ Manx is a command-line interface documentation finder designed for developers wh
 ## Quick Install
 
 ```bash
-# Linux/macOS - Install to /usr/local/bin
+# Option 1: Using Cargo (if you have Rust installed)
+cargo install manx-cli
+
+# Option 2: Shell script installer
 curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
-# Or with wget
+# Option 3: Using wget
 wget -qO- https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 ```
 
@@ -85,13 +88,20 @@ manx react hooks --save-all --json
    manx --version
    ```
 
-### From Source (Cargo)
+### From Cargo (Recommended for Rust Users)
 
 ```bash
-# Install from crates.io (coming soon)
-cargo install manx
+# Install from crates.io
+cargo install manx-cli
 
-# Or build from source
+# Verify installation
+manx --version
+```
+
+### From Source
+
+```bash
+# Build from source
 git clone https://github.com/neur0map/manx.git
 cd manx
 cargo build --release
