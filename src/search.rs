@@ -64,9 +64,9 @@ impl SearchEngine {
         let mut terms = Vec::new();
         let mut current_term = String::new();
         let mut in_quotes = false;
-        let mut chars = query.chars().peekable();
+        let chars = query.chars().peekable();
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             match ch {
                 '"' => {
                     in_quotes = !in_quotes;

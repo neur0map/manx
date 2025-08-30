@@ -2,7 +2,6 @@ use crate::client::{CodeExample, DocSection, Documentation, SearchResult};
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::io;
-use termsize;
 
 pub struct Renderer {
     quiet_mode: bool,
@@ -136,8 +135,7 @@ impl Renderer {
 
         // Header
         println!(
-            "\n{} {} {}",
-            "📚".to_string(),
+            "\n📚 {} {}",
             doc.library.name.cyan().bold(),
             doc.library
                 .version
@@ -331,8 +329,7 @@ impl Renderer {
             }
 
             // Parse title blocks
-            if line.starts_with("TITLE: ") {
-                let title = &line[7..];
+            if let Some(title) = line.strip_prefix("TITLE: ") {
                 println!("\n{}", title.cyan().bold());
                 i += 1;
 
