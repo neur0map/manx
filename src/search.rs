@@ -127,20 +127,18 @@ impl SearchEngine {
 
             if relevance > relevance_threshold {
                 // Only include sections with reasonable relevance
-                let title = self
-                    .extract_section_title(section)
-                    .unwrap_or_else(|| {
-                        // Try to create a meaningful title from the section content
-                        let first_line = section.lines().next().unwrap_or("");
-                        let title_candidate = if first_line.len() > 60 {
-                            format!("{}...", &first_line[..57])
-                        } else if first_line.is_empty() {
-                            format!("{} - Result {}", original_query, idx + 1)
-                        } else {
-                            first_line.to_string()
-                        };
-                        format!("{} ({})", title_candidate, library)
-                    });
+                let title = self.extract_section_title(section).unwrap_or_else(|| {
+                    // Try to create a meaningful title from the section content
+                    let first_line = section.lines().next().unwrap_or("");
+                    let title_candidate = if first_line.len() > 60 {
+                        format!("{}...", &first_line[..57])
+                    } else if first_line.is_empty() {
+                        format!("{} - Result {}", original_query, idx + 1)
+                    } else {
+                        first_line.to_string()
+                    };
+                    format!("{} ({})", title_candidate, library)
+                });
 
                 let excerpt = self.extract_section_excerpt(section);
 
@@ -162,32 +160,30 @@ impl SearchEngine {
         if results.is_empty() && !sections.is_empty() {
             for (idx, section) in sections.iter().enumerate().take(10) {
                 // Limit to first 10 sections
-                let title = self
-                    .extract_section_title(section)
-                    .unwrap_or_else(|| {
-                        // Try to extract a meaningful title from the section
-                        let lines: Vec<&str> = section.lines().take(3).collect();
-                        let mut title_candidate = String::new();
-                        
-                        // Look for the first non-empty, meaningful line
-                        for line in &lines {
-                            let trimmed = line.trim();
-                            if !trimmed.is_empty() && trimmed.len() > 10 {
-                                title_candidate = if trimmed.len() > 60 {
-                                    format!("{}...", &trimmed[..57])
-                                } else {
-                                    trimmed.to_string()
-                                };
-                                break;
-                            }
+                let title = self.extract_section_title(section).unwrap_or_else(|| {
+                    // Try to extract a meaningful title from the section
+                    let lines: Vec<&str> = section.lines().take(3).collect();
+                    let mut title_candidate = String::new();
+
+                    // Look for the first non-empty, meaningful line
+                    for line in &lines {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() && trimmed.len() > 10 {
+                            title_candidate = if trimmed.len() > 60 {
+                                format!("{}...", &trimmed[..57])
+                            } else {
+                                trimmed.to_string()
+                            };
+                            break;
                         }
-                        
-                        if title_candidate.is_empty() {
-                            format!("{} - Section {}", original_query, idx + 1)
-                        } else {
-                            title_candidate
-                        }
-                    });
+                    }
+
+                    if title_candidate.is_empty() {
+                        format!("{} - Section {}", original_query, idx + 1)
+                    } else {
+                        title_candidate
+                    }
+                });
 
                 // Create a unique excerpt from this specific section
                 let excerpt = self.create_unique_excerpt(section, idx);
@@ -246,20 +242,22 @@ impl SearchEngine {
             if paragraphs.len() > 1 {
                 for paragraph in paragraphs {
                     let trimmed = paragraph.trim();
-                    if trimmed.len() > 50 {  // Only include meaningful paragraphs
+                    if trimmed.len() > 50 {
+                        // Only include meaningful paragraphs
                         sections.push(trimmed.to_string());
                     }
                 }
             }
-            
+
             // If still no good sections or too few, split into chunks
             if sections.len() < 3 {
-                sections.clear();  // Start fresh
-                let chunk_size = 800;  // Characters per chunk
+                sections.clear(); // Start fresh
+                let chunk_size = 800; // Characters per chunk
                 let mut start = 0;
                 let mut chunk_count = 0;
-                
-                while start < docs.len() && chunk_count < 20 {  // Limit to 20 chunks max
+
+                while start < docs.len() && chunk_count < 20 {
+                    // Limit to 20 chunks max
                     let end = (start + chunk_size).min(docs.len());
                     // Try to break at a sentence or paragraph boundary
                     let mut actual_end = end;
@@ -275,21 +273,23 @@ impl SearchEngine {
                             actual_end = start + pos;
                         }
                     }
-                    
+
                     // Make sure we're making progress
                     if actual_end <= start {
                         actual_end = end;
                     }
-                    
+
                     let chunk = docs[start..actual_end].trim();
                     if !chunk.is_empty() && chunk.len() > 50 {
                         sections.push(chunk.to_string());
                         chunk_count += 1;
                     }
-                    
+
                     start = actual_end;
                     // Skip whitespace for next chunk
-                    while start < docs.len() && docs.chars().nth(start).map_or(false, |c| c.is_whitespace()) {
+                    while start < docs.len()
+                        && docs.chars().nth(start).map_or(false, |c| c.is_whitespace())
+                    {
                         start += 1;
                     }
                 }
@@ -337,23 +337,23 @@ impl SearchEngine {
         let lines: Vec<&str> = section.lines().collect();
         let mut excerpt_lines = Vec::new();
         let mut char_count = 0;
-        
+
         // Skip some lines based on offset to get different content for each chunk
         let skip_lines = offset.saturating_mul(2);
-        
+
         for line in lines.iter().skip(skip_lines) {
             let trimmed = line.trim();
             if !trimmed.is_empty() {
                 excerpt_lines.push(trimmed);
                 char_count += trimmed.len();
-                
+
                 // Stop when we have enough content
                 if char_count > 200 || excerpt_lines.len() >= 3 {
                     break;
                 }
             }
         }
-        
+
         // If we didn't get enough content, try from the beginning
         if excerpt_lines.is_empty() {
             for line in lines.iter().take(5) {
@@ -367,7 +367,7 @@ impl SearchEngine {
                 }
             }
         }
-        
+
         let result = excerpt_lines.join(" ");
         if result.len() > 300 {
             format!("{}...", &result[..297])
