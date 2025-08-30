@@ -34,44 +34,43 @@ impl Default for Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
-        
+
         if !config_path.exists() {
             let config = Config::default();
             config.save()?;
             return Ok(config);
         }
-        
-        let content = fs::read_to_string(&config_path)
-            .context("Failed to read config file")?;
-        
-        let config: Config = serde_json::from_str(&content)
-            .context("Failed to parse config file")?;
-        
+
+        let content = fs::read_to_string(&config_path).context("Failed to read config file")?;
+
+        let config: Config =
+            serde_json::from_str(&content).context("Failed to parse config file")?;
+
         Ok(config)
     }
-    
+
     pub fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
-        
+
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         let content = serde_json::to_string_pretty(self)?;
-        fs::write(&config_path, content)
-            .context("Failed to write config file")?;
-        
+        fs::write(&config_path, content).context("Failed to write config file")?;
+
         Ok(())
     }
-    
+
     fn config_path() -> Result<PathBuf> {
         Ok(ProjectDirs::from("", "", "manx")
             .context("Failed to determine config directory")?
             .config_dir()
             .join("config.json"))
     }
-    
-    pub fn merge_with_cli(&mut self, 
+
+    pub fn merge_with_cli(
+        &mut self,
         api_key: Option<String>,
         cache_dir: Option<PathBuf>,
         offline: bool,
@@ -85,43 +84,53 @@ impl Config {
         if offline {
             self.offline_mode = true;
         }
-        
+
         // Check NO_COLOR environment variable
         if std::env::var("NO_COLOR").is_ok() {
             self.color_output = false;
         }
     }
-    
+
     pub fn display(&self) -> String {
         let mut output = String::new();
         output.push_str("Current Configuration:\n");
         output.push_str("=====================\n\n");
-        
-        output.push_str(&format!("API Key: {}\n", 
-            self.api_key.as_ref()
+
+        output.push_str(&format!(
+            "API Key: {}\n",
+            self.api_key
+                .as_ref()
                 .map(|k| {
                     if k.len() > 8 {
-                        format!("{}...{}", &k[..4], &k[k.len()-4..])
+                        format!("{}...{}", &k[..4], &k[k.len() - 4..])
                     } else {
                         "***".to_string()
                     }
                 })
                 .unwrap_or_else(|| "Not set".to_string())
         ));
-        
-        output.push_str(&format!("Cache Directory: {}\n",
-            self.cache_dir.as_ref()
+
+        output.push_str(&format!(
+            "Cache Directory: {}\n",
+            self.cache_dir
+                .as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "Default (~/.cache/manx)".to_string())
         ));
-        
+
         output.push_str(&format!("Default Search Limit: {}\n", self.default_limit));
         output.push_str(&format!("Offline Mode: {}\n", self.offline_mode));
         output.push_str(&format!("Color Output: {}\n", self.color_output));
-        output.push_str(&format!("Auto Cache Enabled: {}\n", self.auto_cache_enabled));
+        output.push_str(&format!(
+            "Auto Cache Enabled: {}\n",
+            self.auto_cache_enabled
+        ));
         output.push_str(&format!("Cache TTL (hours): {}\n", self.cache_ttl_hours));
-        output.push_str(&format!("Max Cache Size (MB): {}\n", self.max_cache_size_mb));
-        
+        output.push_str(&format!(
+            "Max Cache Size (MB): {}\n",
+            self.max_cache_size_mb
+        ));
+
         output
     }
 }
