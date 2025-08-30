@@ -23,6 +23,7 @@ Manx is a command-line interface documentation finder designed for developers wh
 - 🔌 **Context7 MCP integration** - always up-to-date
 - 💾 **Smart caching** - works offline after first use
 - 🌈 **Beautiful terminal output** with syntax highlighting
+- 📊 **Smart result limiting** - shows 10 results by default, customizable
 - 🚀 **Export to Markdown/JSON** for documentation
 
 ## Quick Install
@@ -49,6 +50,10 @@ manx react@18 hooks
 
 # Get full documentation
 manx doc fastapi authentication
+
+# Limit results (default: 10, use 0 for unlimited)
+manx fastapi --limit 5
+manx react hooks --limit 0
 
 # Save results to file
 manx fastapi --save 1,3,5
@@ -121,6 +126,14 @@ manx doc react hooks          # Full React Hooks documentation
 manx doc django orm           # Django ORM complete guide
 ```
 
+## Result Limiting
+```bash
+manx fastapi --limit 5         # Show only first 5 results
+manx react hooks --limit 0     # Show all results (unlimited)
+manx vue --limit 15            # Show first 15 results
+# Default limit is 10 results
+```
+
 ## Export Options
 ```bash
 manx fastapi --save 1,3,7     # Save specific results as markdown
@@ -139,6 +152,7 @@ manx --clear-cache         # Quick cache clear (global flag)
 
 ## Other Options
 ```bash
+manx --limit 5                 # Limit number of results (default: 10)
 manx --offline                 # Use cache only (no network)
 manx --quiet                   # JSON output (for scripts)
 manx --debug                   # Enable debug logging
@@ -228,6 +242,8 @@ manx config --api-key YOUR_KEY       # Set Context7 API key
 manx config --cache-dir /path/cache  # Set cache directory
 manx config --auto-cache on          # Enable auto-caching
 manx config --auto-cache off         # Disable auto-caching
+
+# Note: Default result limit (10) is configurable in config.json
 ```
 
 ### Environment Variables
