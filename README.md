@@ -4,9 +4,13 @@
 
 <div align="center">
 
+![GitHub Release](https://img.shields.io/github/v/release/neur0map/manx)
+![Crates.io Version](https://img.shields.io/crates/v/manx-cli)
+![GitHub Downloads](https://img.shields.io/github/downloads/neur0map/manx/total?label=github%20downloads)
+![Crates.io Downloads](https://img.shields.io/crates/d/manx-cli?label=crates.io%20downloads)
+![Crates.io Recent Downloads](https://img.shields.io/crates/dr/manx-cli?label=recent%20downloads)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Language](https://img.shields.io/badge/language-Rust-orange.svg)
-![Status](https://img.shields.io/badge/status-Production%20Ready-brightgreen.svg)
 ![Binary Size](https://img.shields.io/badge/binary-2.9MB-blue.svg)
 
 </div>
@@ -407,6 +411,17 @@ cargo build
 cargo test
 ./target/debug/manx --help
 ```
+
+## 📊 Stats & Activity
+
+<div align="center">
+
+![GitHub Stars](https://img.shields.io/github/stars/neur0map/manx?style=social)
+![GitHub Forks](https://img.shields.io/github/forks/neur0map/manx?style=social)
+![GitHub Issues](https://img.shields.io/github/issues/neur0map/manx)
+![GitHub Last Commit](https://img.shields.io/github/last-commit/neur0map/manx)
+
+</div>
 
 ## License
 
