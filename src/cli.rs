@@ -31,51 +31,56 @@ For more examples: https://github.com/neur0map/manx#usage",
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
-    
+
     /// Library name to search (examples: 'fastapi', 'react@18', 'vue@3')
     #[arg(value_name = "LIBRARY", help_heading = "ARGUMENTS")]
     pub library: Option<String>,
-    
+
     /// Search query within the library documentation
     #[arg(value_name = "QUERY", help_heading = "ARGUMENTS")]
     pub query: Option<String>,
-    
+
     /// Export results to file (format auto-detected by extension: .md, .json)
-    #[arg(short = 'o', long, value_name = "FILE", help_heading = "OUTPUT OPTIONS")]
+    #[arg(
+        short = 'o',
+        long,
+        value_name = "FILE",
+        help_heading = "OUTPUT OPTIONS"
+    )]
     pub output: Option<PathBuf>,
-    
+
     /// Output JSON format (useful for scripts and automation)
     #[arg(short = 'q', long, help_heading = "OUTPUT OPTIONS")]
     pub quiet: bool,
-    
+
     /// Work offline using only cached results (no network requests)
     #[arg(long, help_heading = "NETWORK OPTIONS")]
     pub offline: bool,
-    
+
     /// Show detailed debug information and API requests
     #[arg(long, help_heading = "DEBUG OPTIONS")]
     pub debug: bool,
-    
+
     /// Clear all cached documentation and start fresh
     #[arg(long, help_heading = "CACHE OPTIONS")]
     pub clear_cache: bool,
-    
+
     /// Enable automatic caching of all search results
     #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_on: bool,
-    
+
     /// Disable automatic caching (manual caching only)
     #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_off: bool,
-    
+
     /// Save specific search results by number (e.g., --save 1,3,7)
     #[arg(long, value_name = "NUMBERS", help_heading = "SAVE OPTIONS")]
     pub save: Option<String>,
-    
+
     /// Save all search results to file
     #[arg(long, help_heading = "SAVE OPTIONS")]
     pub save_all: bool,
-    
+
     /// Export in JSON format instead of Markdown (use with --save or --save-all)
     #[arg(long, help_heading = "SAVE OPTIONS")]
     pub json: bool,
@@ -95,7 +100,7 @@ pub enum Commands {
         #[arg(short = 'o', long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
-    
+
     /// Expand and view detailed information for a specific result
     Snippet {
         /// Result ID from previous search output
@@ -105,13 +110,13 @@ pub enum Commands {
         #[arg(short = 'o', long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
-    
+
     /// Manage local documentation cache
     Cache {
         #[command(subcommand)]
         command: CacheCommands,
     },
-    
+
     /// Configure Manx settings and preferences
     Config {
         /// Display current configuration settings
@@ -133,7 +138,7 @@ pub enum Commands {
         #[arg(long, value_name = "SIZE")]
         max_cache_size: Option<u64>,
     },
-    
+
     /// Update Manx to the latest version from GitHub
     Update {
         /// Check for updates without installing
