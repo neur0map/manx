@@ -5,109 +5,125 @@ use std::path::PathBuf;
 #[command(
     name = "manx",
     about = "A blazing-fast CLI documentation finder",
-    long_about = "Manx brings Context7 MCP docs right to your terminal - no IDE required",
+    long_about = "🚀 Manx - Fast documentation search powered by Context7 MCP
+
+Brings real-time, version-specific documentation right to your terminal.
+No IDE required, works anywhere!
+
+EXAMPLES:
+    manx fastapi                    Search FastAPI documentation
+    manx react@18 hooks            Search React v18 for hooks specifically  
+    manx doc django models         Get complete Django models guide
+    manx --clear-cache             Quick cache cleanup
+    manx config --auto-cache off   Disable automatic caching
+
+For more examples: https://github.com/neur0map/manx#usage",
     version,
-    author
+    author,
+    arg_required_else_help = true
 )]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
     
-    /// Library to search (e.g., 'fastapi', 'react@18')
-    #[arg(value_name = "LIBRARY")]
+    /// Library name to search (examples: 'fastapi', 'react@18', 'vue@3')
+    #[arg(value_name = "LIBRARY", help_heading = "ARGUMENTS")]
     pub library: Option<String>,
     
-    /// Search query
-    #[arg(value_name = "QUERY")]
+    /// Search query within the library documentation
+    #[arg(value_name = "QUERY", help_heading = "ARGUMENTS")]
     pub query: Option<String>,
     
-    /// Export output to file (format auto-detected: .md, .json)
-    #[arg(short = 'o', long, value_name = "FILE")]
+    /// Export results to file (format auto-detected by extension: .md, .json)
+    #[arg(short = 'o', long, value_name = "FILE", help_heading = "OUTPUT OPTIONS")]
     pub output: Option<PathBuf>,
     
-    /// Quiet mode (JSON output for scripts)
-    #[arg(short = 'q', long)]
+    /// Output JSON format (useful for scripts and automation)
+    #[arg(short = 'q', long, help_heading = "OUTPUT OPTIONS")]
     pub quiet: bool,
     
-    /// Use offline cache only
-    #[arg(long)]
+    /// Work offline using only cached results (no network requests)
+    #[arg(long, help_heading = "NETWORK OPTIONS")]
     pub offline: bool,
     
-    /// Enable debug logging
-    #[arg(long)]
+    /// Show detailed debug information and API requests
+    #[arg(long, help_heading = "DEBUG OPTIONS")]
     pub debug: bool,
     
-    /// Clear all cached documentation
-    #[arg(long)]
+    /// Clear all cached documentation and start fresh
+    #[arg(long, help_heading = "CACHE OPTIONS")]
     pub clear_cache: bool,
     
-    /// Enable automatic caching of search results
-    #[arg(long)]
+    /// Enable automatic caching of all search results
+    #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_on: bool,
     
-    /// Disable automatic caching of search results  
-    #[arg(long)]
+    /// Disable automatic caching (manual caching only)
+    #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_off: bool,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Get full documentation for a library
+    /// Get comprehensive documentation with examples and guides
     Doc {
-        /// Library name (e.g., 'fastapi', 'react@18')
+        /// Library name (examples: 'fastapi', 'react@18', 'django')
+        #[arg(value_name = "LIBRARY")]
         library: String,
-        /// Search query within docs
+        /// Topic to search for within documentation
+        #[arg(value_name = "TOPIC")]
         query: String,
-        /// Export output to file
-        #[arg(short = 'o', long)]
+        /// Save documentation to file (auto-detects format)
+        #[arg(short = 'o', long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
     
-    /// Expand a specific snippet by ID
+    /// Expand and view detailed information for a specific result
     Snippet {
-        /// Snippet ID from search results
+        /// Result ID from previous search output
+        #[arg(value_name = "RESULT_ID")]
         id: String,
-        /// Export output to file
-        #[arg(short = 'o', long)]
+        /// Save snippet details to file
+        #[arg(short = 'o', long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
     
-    /// Manage local cache
+    /// Manage local documentation cache
     Cache {
         #[command(subcommand)]
         command: CacheCommands,
     },
     
-    /// Configure manx settings
+    /// Configure Manx settings and preferences
     Config {
-        /// Show current configuration
+        /// Display current configuration settings
         #[arg(long)]
         show: bool,
-        /// Set API key for Context7
-        #[arg(long)]
+        /// Set Context7 API key (get one at context7.com)
+        #[arg(long, value_name = "KEY")]
         api_key: Option<String>,
-        /// Set cache directory
-        #[arg(long)]
+        /// Set custom cache directory path
+        #[arg(long, value_name = "PATH")]
         cache_dir: Option<PathBuf>,
-        /// Set auto-cache mode (on/off)
-        #[arg(long)]
+        /// Enable/disable automatic caching (values: on, off)
+        #[arg(long, value_name = "MODE")]
         auto_cache: Option<String>,
-        /// Set cache TTL in hours
-        #[arg(long)]
+        /// Set cache expiration time in hours (default: 24)
+        #[arg(long, value_name = "HOURS")]
         cache_ttl: Option<u64>,
-        /// Set maximum cache size in MB
-        #[arg(long)]
+        /// Set maximum cache size in MB (default: 100)
+        #[arg(long, value_name = "SIZE")]
         max_cache_size: Option<u64>,
     },
 }
 
 #[derive(Subcommand)]
 pub enum CacheCommands {
-    /// Clear all cached data
+    /// Remove all cached documentation and free up disk space
     Clear,
-    /// Show cache statistics
+    /// Display cache size, file count, and storage statistics  
     Stats,
-    /// List cached libraries
+    /// Show all currently cached libraries and their sizes
     List,
 }
 
