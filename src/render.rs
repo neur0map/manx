@@ -22,6 +22,10 @@ impl Renderer {
     }
     
     pub fn render_search_results(&self, results: &[SearchResult]) -> io::Result<()> {
+        self.render_search_results_with_library(results, None)
+    }
+    
+    pub fn render_search_results_with_library(&self, results: &[SearchResult], library_info: Option<(&str, &str)>) -> io::Result<()> {
         if self.quiet_mode {
             // JSON output for scripting
             println!("{}", serde_json::to_string_pretty(results)?);
@@ -33,10 +37,16 @@ impl Renderer {
             return Ok(());
         }
         
-        println!("\n{} {} found:\n", 
+        println!("{} {} found:", 
             results.len().to_string().cyan().bold(),
             if results.len() == 1 { "result" } else { "results" }
         );
+        
+        if let Some((library_title, library_id)) = library_info {
+            println!("📚 Using library: {} ({})\n", library_title.bright_blue(), library_id.dimmed());
+        } else {
+            println!();
+        }
         
         for (idx, result) in results.iter().enumerate() {
             self.render_search_result(idx + 1, result)?;
@@ -61,11 +71,43 @@ impl Renderer {
             println!("  {}: {}", "URL".dimmed(), url.blue().underline());
         }
         
-        println!("\n  {}", 
-            self.truncate_text(&result.excerpt, self.terminal_width - 4)
-        );
+        println!();
+        
+        // Parse and display Context7 content in a more readable format
+        if result.excerpt.contains("CODE SNIPPETS") {
+            self.render_context7_excerpt(&result.excerpt)?;
+        } else {
+            println!("  {}", 
+                self.truncate_text(&result.excerpt, self.terminal_width - 4)
+            );
+        }
         
         println!("{}\n", separator.dimmed());
+        Ok(())
+    }
+    
+    fn render_context7_excerpt(&self, content: &str) -> io::Result<()> {
+        // Find the first meaningful content after CODE SNIPPETS header
+        let lines: Vec<&str> = content.lines().collect();
+        let mut found_title = false;
+        
+        for line in lines.iter().take(10) { // Only show first few lines for excerpt
+            if line.starts_with("TITLE: ") && !found_title {
+                let title = &line[7..];
+                println!("  {}", title.white().bold());
+                found_title = true;
+            } else if line.starts_with("DESCRIPTION: ") && found_title {
+                let desc = &line[13..];
+                let truncated = self.truncate_text(desc, self.terminal_width - 4);
+                println!("  {}", truncated.dimmed());
+                break;
+            }
+        }
+        
+        if !found_title {
+            println!("  {}", "Documentation snippets available...".dimmed());
+        }
+        
         Ok(())
     }
     
@@ -224,5 +266,121 @@ impl Renderer {
         if !self.quiet_mode {
             println!("{} {}", "✓".green().bold(), message.green());
         }
+    }
+    
+    pub fn render_context7_documentation(&self, library: &str, content: &str) -> io::Result<()> {
+        if self.quiet_mode {
+            println!("{}", content);
+            return Ok(());
+        }
+        
+        // Header
+        println!("\n{} {} {}", 
+            "📚".cyan().bold(),
+            library.white().bold(),
+            "Documentation".dimmed()
+        );
+        
+        // Parse and render the Context7 format
+        self.parse_and_render_context7_content(content)?;
+        
+        Ok(())
+    }
+    
+    fn parse_and_render_context7_content(&self, content: &str) -> io::Result<()> {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+        
+        while i < lines.len() {
+            let line = lines[i];
+            
+            // Skip headers and separators
+            if line.starts_with("========================") {
+                if i + 1 < lines.len() && lines[i + 1].starts_with("CODE SNIPPETS") {
+                    println!("\n{}", "📝 Code Examples & Snippets".green().bold());
+                    i += 2;
+                    continue;
+                }
+                i += 1;
+                continue;
+            }
+            
+            // Parse title blocks
+            if line.starts_with("TITLE: ") {
+                let title = &line[7..];
+                println!("\n{}", title.cyan().bold());
+                i += 1;
+                
+                // Look for description
+                if i < lines.len() && lines[i].starts_with("DESCRIPTION: ") {
+                    let desc = &lines[i][13..];
+                    println!("{}", desc.dimmed());
+                    i += 1;
+                }
+                
+                // Skip empty lines
+                while i < lines.len() && lines[i].trim().is_empty() {
+                    i += 1;
+                }
+                
+                // Look for source
+                while i < lines.len() && lines[i].starts_with("SOURCE: ") {
+                    let source = &lines[i][8..];
+                    println!("{}: {}", "Source".dimmed(), source.blue());
+                    i += 1;
+                }
+                
+                // Skip empty lines
+                while i < lines.len() && lines[i].trim().is_empty() {
+                    i += 1;
+                }
+                
+                // Look for language and code block
+                if i < lines.len() && lines[i].starts_with("LANGUAGE: ") {
+                    let language = &lines[i][10..];
+                    i += 1;
+                    
+                    // Skip "CODE:" line
+                    if i < lines.len() && lines[i].starts_with("CODE:") {
+                        i += 1;
+                    }
+                    
+                    // Parse code block
+                    if i < lines.len() && lines[i].starts_with("```") {
+                        println!("\n{} {}:", "▶".cyan(), language.yellow());
+                        println!("{}", lines[i].dimmed());
+                        i += 1;
+                        
+                        // Print code content
+                        while i < lines.len() && !lines[i].starts_with("```") {
+                            let highlighted = self.highlight_code(lines[i], &language.to_lowercase());
+                            println!("{}", highlighted);
+                            i += 1;
+                        }
+                        
+                        // Print closing ```
+                        if i < lines.len() && lines[i].starts_with("```") {
+                            println!("{}", lines[i].dimmed());
+                            i += 1;
+                        }
+                    }
+                }
+                
+                // Skip separators
+                while i < lines.len() && (lines[i].trim().is_empty() || lines[i].starts_with("---")) {
+                    if lines[i].starts_with("---") {
+                        let separator = "─".repeat(self.terminal_width.min(60));
+                        println!("\n{}", separator.dimmed());
+                    }
+                    i += 1;
+                }
+                
+                continue;
+            }
+            
+            i += 1;
+        }
+        
+        Ok(())
     }
 }

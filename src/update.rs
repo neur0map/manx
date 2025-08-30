@@ -11,19 +11,10 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Debug, Deserialize)]
 struct GitHubRelease {
     tag_name: String,
-    name: String,
     body: String,
-    draft: bool,
-    prerelease: bool,
-    assets: Vec<GitHubAsset>,
+    // Other fields are ignored by serde when not present
 }
 
-#[derive(Debug, Deserialize)]
-struct GitHubAsset {
-    name: String,
-    browser_download_url: String,
-    content_type: String,
-}
 
 #[derive(Debug, Serialize)]
 pub struct UpdateInfo {
