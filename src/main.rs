@@ -325,7 +325,11 @@ async fn handle_search_command(
     }
 
     // Render results with library information and limit
-    renderer.render_search_results_with_library(&results, Some((&library_title, &library_id)), limit)?;
+    renderer.render_search_results_with_library(
+        &results,
+        Some((&library_title, &library_id)),
+        limit,
+    )?;
 
     // Export if requested
     if let Some(path) = output {
