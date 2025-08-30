@@ -22,6 +22,10 @@ debug/
 .env
 .env.local
 
+# Manx config (just in case someone copies it to the repo directory)
+config.json
+manx-config.json
+
 # Test coverage
 tarpaulin-report.html
 cobertura.xml
