@@ -7,22 +7,22 @@ on:
 
 permissions:
   contents: write
-  releases: write
 
 jobs:
-  create-release:
+  release:
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           body: |
             Changes in this Release
             - First release of Manx CLI
@@ -32,9 +32,10 @@ jobs:
             - Export to Markdown/JSON
           draft: false
           prerelease: false
+          generate_release_notes: true
 
   build:
-    needs: create-release
+    needs: release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -57,42 +58,28 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
+          targets: ${{ matrix.target }}
 
       - name: Install musl-tools (for musl target)
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get install -y musl-tools
 
-      - name: Cache cargo registry
-        uses: actions/cache@v3
+      - name: Cache cargo
+        uses: actions/cache@v4
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          
-      - name: Cache cargo index
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          
-      - name: Cache cargo build
-        uses: actions/cache@v3
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary (Unix)
         if: matrix.os != 'windows-latest'
@@ -105,11 +92,7 @@ jobs:
           mv target/${{ matrix.target }}/release/manx.exe target/${{ matrix.target }}/release/manx-${{ matrix.target }}.exe
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/manx-${{ matrix.target }}${{ matrix.suffix }}
-          asset_name: manx-${{ matrix.target }}${{ matrix.suffix }}
-          asset_content_type: application/octet-stream
+          tag_name: ${{ github.ref_name }}
+          files: target/${{ matrix.target }}/release/manx-${{ matrix.target }}${{ matrix.suffix }}
