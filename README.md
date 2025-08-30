@@ -14,6 +14,7 @@ Manx is a command-line interface documentation finder designed for developers wh
 - 🔌 MCP (Model Context Protocol) integration
 - 📦 Context7 MCP as primary backend for up-to-date library docs
 - 🚀 Extensible architecture for additional documentation sources
+- 🔓 No IDE or tool restrictions - run it from anywhere in your terminal, no need for Claude Code or IDE MCP extensions
 
 ## Installation
 
