@@ -187,6 +187,7 @@ async fn run() -> Result<()> {
             library,
             query,
             output,
+            limit,
         }) => {
             handle_doc_command(
                 &library,
@@ -195,12 +196,17 @@ async fn run() -> Result<()> {
                 &config,
                 &renderer,
                 args.offline,
+                limit,
             )
             .await?;
         }
 
         Some(Commands::Snippet { id, output }) => {
             handle_snippet_command(&id, output.as_ref(), &config, &renderer, args.offline).await?;
+        }
+
+        Some(Commands::Open { id, output }) => {
+            handle_open_command(&id, output.as_ref(), &config, &renderer).await?;
         }
 
         Some(Commands::Update { check, force }) => {
@@ -414,6 +420,7 @@ async fn handle_doc_command(
     config: &Config,
     renderer: &Renderer,
     offline: bool,
+    limit: Option<usize>,
 ) -> Result<()> {
     let cache_manager = if let Some(dir) = &config.cache_dir {
         CacheManager::with_custom_dir(dir.clone())?
@@ -447,7 +454,7 @@ async fn handle_doc_command(
     let search_engine = SearchEngine::new(client);
 
     let doc_text = search_engine
-        .get_documentation(library, Some(query))
+        .get_documentation(library, if query.is_empty() { None } else { Some(query) })
         .await?;
 
     pb.finish_and_clear();
@@ -458,7 +465,7 @@ async fn handle_doc_command(
     }
 
     // Render documentation using the new Context7 parser
-    renderer.render_context7_documentation(library, &doc_text)?;
+    renderer.render_context7_documentation_with_limit(library, &doc_text, limit)?;
 
     // Export if requested
     if let Some(path) = output {
@@ -561,6 +568,95 @@ async fn handle_snippet_command(
             if !offline && !config.offline_mode {
                 renderer.print_success("You can also try searching again to refresh the cache.");
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_open_command(
+    id: &str,
+    output: Option<&std::path::PathBuf>,
+    config: &Config,
+    renderer: &Renderer,
+) -> Result<()> {
+    let cache_manager = if let Some(dir) = &config.cache_dir {
+        CacheManager::with_custom_dir(dir.clone())?
+    } else {
+        CacheManager::new()?
+    };
+
+    let pb = renderer.show_progress(&format!("Looking for section {}...", id));
+
+    let mut found_section: Option<String> = None;
+    let mut library_name = String::new();
+
+    // Get the doc_sections cache directory and scan for the section ID
+    let dummy_path = cache_manager.cache_key("doc_sections", "dummy");
+    let sections_cache_dir = dummy_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get doc_sections cache directory"))?;
+
+    if sections_cache_dir.exists() {
+        // Read all cached section files and find the most recent one with the matching ID
+        let mut matching_files = Vec::new();
+
+        if let Ok(entries) = std::fs::read_dir(sections_cache_dir) {
+            for entry in entries.flatten() {
+                let filename = entry.file_name();
+                if let Some(filename_str) = filename.to_str() {
+                    // Section files are named like "libraryname_doc-1.json"
+                    if filename_str.ends_with(&format!("{}.json", id)) {
+                        if let Ok(metadata) = entry.metadata() {
+                            if let Ok(modified) = metadata.modified() {
+                                matching_files.push((filename_str.to_string(), modified));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by modification time (most recent first)
+        matching_files.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // Try to load the most recent matching section
+        for (filename, _) in matching_files {
+            if let Some(underscore_pos) = filename.rfind('_') {
+                library_name = filename[..underscore_pos].to_string();
+                let section_key = format!("{}_{}", library_name, id);
+
+                if let Ok(Some(content)) = cache_manager
+                    .get::<String>("doc_sections", &section_key)
+                    .await
+                {
+                    found_section = Some(content);
+                    break;
+                }
+            }
+        }
+    }
+
+    pb.finish_and_clear();
+
+    match found_section {
+        Some(content) => {
+            // Render the specific section
+            renderer.render_open_section(&format!("{} - {}", library_name, id), &content)?;
+
+            // Export if requested
+            if let Some(path) = output {
+                std::fs::write(path, &content)?;
+                renderer.print_success(&format!("Section exported to {:?}", path));
+            }
+        }
+        None => {
+            renderer.print_error(&format!(
+                "Section '{}' not found in cache. Doc sections are cached from recent 'doc' commands.", id
+            ));
+            renderer.print_success("Try running a doc command first, then use the section ID:");
+            renderer.print_success("  manx doc react           # Get React documentation");
+            renderer.print_success("  manx open doc-1          # Open first section");
         }
     }
 

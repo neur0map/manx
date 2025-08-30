@@ -1,4 +1,6 @@
 use crate::client::{CodeExample, DocSection, Documentation, SearchResult};
+use crate::config::Config;
+use anyhow::Result;
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::io;
@@ -6,15 +8,18 @@ use std::io;
 pub struct Renderer {
     quiet_mode: bool,
     terminal_width: usize,
+    config: Option<Config>,
 }
 
 impl Renderer {
     pub fn new(quiet: bool) -> Self {
         let terminal_width = termsize::get().map(|size| size.cols as usize).unwrap_or(80);
+        let config = Config::load().ok();
 
         Self {
             quiet_mode: quiet,
             terminal_width,
+            config,
         }
     }
 
@@ -317,6 +322,15 @@ impl Renderer {
     }
 
     pub fn render_context7_documentation(&self, library: &str, content: &str) -> io::Result<()> {
+        self.render_context7_documentation_with_limit(library, content, None)
+    }
+
+    pub fn render_context7_documentation_with_limit(
+        &self,
+        library: &str,
+        content: &str,
+        limit: Option<usize>,
+    ) -> io::Result<()> {
         if self.quiet_mode {
             println!("{}", content);
             return Ok(());
@@ -330,17 +344,44 @@ impl Renderer {
             "Documentation".dimmed()
         );
 
-        // Parse and render the Context7 format
-        self.parse_and_render_context7_content(content)?;
+        // Parse and render the Context7 format with limit
+        self.parse_and_render_context7_content_with_limit(content, limit)?;
+
+        // Cache individual sections for the open command
+        let sections = self.extract_doc_sections(content);
+        if self.cache_doc_sections(library, &sections).is_err() {
+            // Silently continue if caching fails
+        }
 
         Ok(())
     }
 
-    fn parse_and_render_context7_content(&self, content: &str) -> io::Result<()> {
+    fn parse_and_render_context7_content_with_limit(
+        &self,
+        content: &str,
+        limit: Option<usize>,
+    ) -> io::Result<()> {
         let lines: Vec<&str> = content.lines().collect();
         let mut i = 0;
+        let mut sections_shown = 0;
+        let section_limit = limit.unwrap_or(10); // Default to 10 sections
 
         while i < lines.len() {
+            // Check if we've reached the limit (but only if limit is not 0, which means unlimited)
+            if limit.is_some() && limit.unwrap() > 0 && sections_shown >= section_limit {
+                let remaining = self.count_remaining_sections(&lines[i..]);
+                if remaining > 0 {
+                    println!(
+                        "\n{}",
+                        format!(
+                            "... and {} more sections. Use --limit 0 to show all.",
+                            remaining
+                        )
+                        .yellow()
+                    );
+                }
+                break;
+            }
             let line = lines[i];
 
             // Skip headers and separators
@@ -356,7 +397,12 @@ impl Renderer {
 
             // Parse title blocks
             if let Some(title) = line.strip_prefix("TITLE: ") {
-                println!("\n{}", title.cyan().bold());
+                sections_shown += 1;
+                println!(
+                    "\n{} {}",
+                    format!("[{}]", sections_shown).cyan().bold(),
+                    title.white().bold()
+                );
                 i += 1;
 
                 // Look for description
@@ -431,6 +477,195 @@ impl Renderer {
             i += 1;
         }
 
+        // Add tip message about opening sections
+        if sections_shown > 0 {
+            println!(
+                "\n{}",
+                "Tip: Use 'manx open <section-id>' to expand a specific section.".dimmed()
+            );
+        }
+
+        Ok(())
+    }
+
+    fn count_remaining_sections(&self, lines: &[&str]) -> usize {
+        lines
+            .iter()
+            .filter(|line| line.starts_with("TITLE: "))
+            .count()
+    }
+
+    fn extract_doc_sections(&self, content: &str) -> Vec<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut sections = Vec::new();
+        let mut i = 0;
+
+        while i < lines.len() {
+            let line = lines[i];
+
+            // Look for title blocks (start of a section)
+            if let Some(_title) = line.strip_prefix("TITLE: ") {
+                let section_start = i;
+                let mut section_end = lines.len();
+
+                // Find the end of this section (next TITLE or end of content)
+                for (j, line) in lines.iter().enumerate().skip(i + 1) {
+                    if line.starts_with("TITLE: ") {
+                        section_end = j;
+                        break;
+                    }
+                }
+
+                // Extract the complete section
+                let section_lines = &lines[section_start..section_end];
+                let section_content = section_lines.join("\n").trim().to_string();
+
+                if !section_content.is_empty() {
+                    sections.push(section_content);
+                }
+
+                i = section_end;
+            } else {
+                i += 1;
+            }
+        }
+
+        sections
+    }
+
+    pub fn render_open_section(&self, id: &str, content: &str) -> io::Result<()> {
+        if self.quiet_mode {
+            println!("{}", content);
+            return Ok(());
+        }
+
+        println!(
+            "\n{} {} {}",
+            "📖".cyan().bold(),
+            id.yellow().bold(),
+            "Documentation Section".dimmed()
+        );
+
+        // Parse and render just this section
+        self.render_single_section(content)?;
+
+        Ok(())
+    }
+
+    fn render_single_section(&self, content: &str) -> io::Result<()> {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+
+        while i < lines.len() {
+            let line = lines[i];
+
+            // Skip headers and separators
+            if line.starts_with("========================") {
+                if i + 1 < lines.len() && lines[i + 1].starts_with("CODE SNIPPETS") {
+                    println!("\n{}", "📝 Code Examples & Snippets".green().bold());
+                    i += 2;
+                    continue;
+                }
+                i += 1;
+                continue;
+            }
+
+            // Parse title blocks (but don't add numbering)
+            if let Some(title) = line.strip_prefix("TITLE: ") {
+                println!("\n{}", title.white().bold());
+                i += 1;
+
+                // Look for description
+                if i < lines.len() && lines[i].starts_with("DESCRIPTION: ") {
+                    let desc = &lines[i][13..];
+                    println!("{}", desc.dimmed());
+                    i += 1;
+                }
+
+                // Skip empty lines
+                while i < lines.len() && lines[i].trim().is_empty() {
+                    i += 1;
+                }
+
+                // Look for source
+                while i < lines.len() && lines[i].starts_with("SOURCE: ") {
+                    let source = &lines[i][8..];
+                    println!("{}: {}", "Source".dimmed(), source.blue());
+                    i += 1;
+                }
+
+                // Skip empty lines
+                while i < lines.len() && lines[i].trim().is_empty() {
+                    i += 1;
+                }
+
+                // Look for language and code block
+                if i < lines.len() && lines[i].starts_with("LANGUAGE: ") {
+                    let language = &lines[i][10..];
+                    i += 1;
+
+                    // Skip "CODE:" line
+                    if i < lines.len() && lines[i].starts_with("CODE:") {
+                        i += 1;
+                    }
+
+                    // Parse code block
+                    if i < lines.len() && lines[i].starts_with("```") {
+                        println!("\n{} {}:", "▶".cyan(), language.yellow());
+                        println!("{}", lines[i].dimmed());
+                        i += 1;
+
+                        // Print code content
+                        while i < lines.len() && !lines[i].starts_with("```") {
+                            let highlighted =
+                                self.highlight_code(lines[i], &language.to_lowercase());
+                            println!("{}", highlighted);
+                            i += 1;
+                        }
+
+                        // Print closing ```
+                        if i < lines.len() && lines[i].starts_with("```") {
+                            println!("{}", lines[i].dimmed());
+                            i += 1;
+                        }
+                    }
+                }
+
+                // Skip separators
+                while i < lines.len() && (lines[i].trim().is_empty() || lines[i].starts_with("---"))
+                {
+                    if lines[i].starts_with("---") {
+                        let separator = "─".repeat(self.terminal_width.min(60));
+                        println!("\n{}", separator.dimmed());
+                    }
+                    i += 1;
+                }
+
+                continue;
+            }
+
+            i += 1;
+        }
+
+        Ok(())
+    }
+
+    fn cache_doc_sections(&self, library: &str, sections: &[String]) -> Result<()> {
+        if let Some(config) = &self.config {
+            if config.auto_cache_enabled {
+                if let Ok(cache_manager) = crate::cache::CacheManager::new() {
+                    let library_clean = library.to_string();
+                    let sections_clone = sections.to_vec();
+
+                    tokio::spawn(async move {
+                        for (idx, section) in sections_clone.iter().enumerate() {
+                            let cache_key = format!("{}_doc-{}", library_clean, idx + 1);
+                            let _ = cache_manager.set("doc_sections", &cache_key, section).await;
+                        }
+                    });
+                }
+            }
+        }
         Ok(())
     }
 }

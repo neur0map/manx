@@ -5,25 +5,28 @@ use std::path::PathBuf;
 #[command(
     name = "manx",
     about = "A blazing-fast CLI documentation finder",
-    long_about = "🚀 Manx - Fast documentation search powered by Context7 MCP
+    long_about = "🚀 Manx - Fast documentation finder with two modes:
 
-Brings real-time, version-specific documentation right to your terminal.
-No IDE required, works anywhere!
+📝 SEARCH MODE (default): Find specific code snippets and examples
+    manx react hooks              Find React hooks code examples
+    manx fastapi middleware       Search FastAPI middleware snippets  
+    manx django auth --limit 5    Limit search results to 5 entries
 
-EXAMPLES:
-    manx fastapi                    Search FastAPI documentation
-    manx react@18 hooks            Search React v18 for hooks specifically  
-    manx doc django models         Get complete Django models guide
-    manx --clear-cache             Quick cache cleanup
-    manx config --auto-cache off   Disable automatic caching
+📚 DOC MODE: Browse comprehensive guides and documentation
+    manx doc react               Browse full React documentation
+    manx doc fastapi \"async\"     Get FastAPI async documentation
+    manx doc django --limit 3    Show first 3 documentation sections
 
-SEARCH SYNTAX:
-    manx fastapi cors              Library-specific search (precise)
-    manx \"fastapi cors\"            Semantic search (broader, related concepts)
-    manx fastapi --save 1,3,7      Save specific results to file
-    manx react --save-all --json   Save all results as JSON
+💾 SAVE & EXPORT:
+    manx fastapi --save 1,3,7     Save specific search results
+    manx react --save-all --json Export all results as JSON
+    manx doc react -o react.md   Export docs to markdown
 
-For more examples: https://github.com/neur0map/manx#usage",
+⚙️  CONFIGURATION:
+    manx config --show           Show current settings
+    manx cache clear            Clear cached data
+
+Use 'manx <command> --help' for detailed command information.",
     version = get_version_info(),
     author,
     arg_required_else_help = true
@@ -36,7 +39,7 @@ pub struct Cli {
     #[arg(value_name = "LIBRARY", help_heading = "ARGUMENTS")]
     pub library: Option<String>,
 
-    /// Search query within the library documentation
+    /// 📝 Search for specific code snippets and examples
     #[arg(value_name = "QUERY", help_heading = "ARGUMENTS")]
     pub query: Option<String>,
 
@@ -97,17 +100,20 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Get comprehensive documentation with examples and guides
+    /// 📚 Browse comprehensive documentation sections and guides
     Doc {
         /// Library name (examples: 'fastapi', 'react@18', 'django')
         #[arg(value_name = "LIBRARY")]
         library: String,
-        /// Topic to search for within documentation
-        #[arg(value_name = "TOPIC")]
+        /// Topic to search for within documentation (optional - omit for general docs)
+        #[arg(value_name = "TOPIC", default_value = "")]
         query: String,
         /// Save documentation to file (auto-detects format)
         #[arg(short = 'o', long, value_name = "FILE")]
         output: Option<PathBuf>,
+        /// Limit number of sections shown (default: 10, use 0 for unlimited)
+        #[arg(short = 'l', long, value_name = "NUMBER")]
+        limit: Option<usize>,
     },
 
     /// Expand and view detailed information for a specific result
@@ -146,6 +152,16 @@ pub enum Commands {
         /// Set maximum cache size in MB (default: 100)
         #[arg(long, value_name = "SIZE")]
         max_cache_size: Option<u64>,
+    },
+
+    /// 🔗 Open a specific documentation section by ID (e.g., 'doc-4')
+    Open {
+        /// Section ID from previous doc command output
+        #[arg(value_name = "SECTION_ID")]
+        id: String,
+        /// Save opened section to file
+        #[arg(short = 'o', long, value_name = "FILE")]
+        output: Option<PathBuf>,
     },
 
     /// Update Manx to the latest version from GitHub
