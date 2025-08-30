@@ -19,13 +19,14 @@ impl Renderer {
     }
 
     pub fn render_search_results(&self, results: &[SearchResult]) -> io::Result<()> {
-        self.render_search_results_with_library(results, None)
+        self.render_search_results_with_library(results, None, None)
     }
 
     pub fn render_search_results_with_library(
         &self,
         results: &[SearchResult],
         library_info: Option<(&str, &str)>,
+        limit: Option<usize>,
     ) -> io::Result<()> {
         if self.quiet_mode {
             // JSON output for scripting
@@ -58,8 +59,28 @@ impl Renderer {
             println!();
         }
 
-        for (idx, result) in results.iter().enumerate() {
+        // Use provided limit or default to 10 (0 means unlimited)
+        let display_limit = limit.unwrap_or(10);
+        let total_results = results.len();
+        let results_to_show = if display_limit == 0 {
+            results.iter().take(total_results)
+        } else {
+            results.iter().take(display_limit)
+        };
+
+        for (idx, result) in results_to_show.enumerate() {
             self.render_search_result(idx + 1, result)?;
+        }
+
+        if display_limit > 0 && total_results > display_limit {
+            println!(
+                "\n{}",
+                format!(
+                    "... and {} more results. Use --limit 0 to show all, or --save-all to export.",
+                    total_results - display_limit
+                )
+                .yellow()
+            );
         }
 
         println!(

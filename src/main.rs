@@ -245,6 +245,7 @@ async fn run() -> Result<()> {
                     args.save.as_ref(),
                     args.save_all,
                     args.json,
+                    args.limit,
                 )
                 .await?;
             } else {
@@ -279,6 +280,7 @@ async fn handle_search_command(
     save_numbers: Option<&String>,
     save_all: bool,
     json_format: bool,
+    limit: Option<usize>,
 ) -> Result<()> {
     let cache_manager = if let Some(dir) = &config.cache_dir {
         CacheManager::with_custom_dir(dir.clone())?
@@ -322,8 +324,8 @@ async fn handle_search_command(
         cache_manager.set("search", &cache_key, &results).await.ok();
     }
 
-    // Render results with library information
-    renderer.render_search_results_with_library(&results, Some((&library_title, &library_id)))?;
+    // Render results with library information and limit
+    renderer.render_search_results_with_library(&results, Some((&library_title, &library_id)), limit)?;
 
     // Export if requested
     if let Some(path) = output {
