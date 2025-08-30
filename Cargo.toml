@@ -1,5 +1,5 @@
 [package]
-name = "manx"
+name = "manx-cli"
 version = "0.3.3"
 edition = "2021"
 authors = ["neur0map <email@example.com>"]
@@ -10,6 +10,10 @@ license = "MIT"
 readme = "README.md"
 keywords = ["cli", "documentation", "mcp", "context7", "terminal"]
 categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "manx"
+path = "src/main.rs"
 
 [dependencies]
 # CLI framework
