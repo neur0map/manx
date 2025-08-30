@@ -268,6 +268,7 @@ async fn run() -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_search_command(
     library: &str,
     query: &str,
@@ -495,16 +496,14 @@ async fn handle_snippet_command(
         let mut matching_files = Vec::new();
 
         if let Ok(entries) = std::fs::read_dir(snippets_cache_dir) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let filename = entry.file_name();
-                    if let Some(filename_str) = filename.to_str() {
-                        // Snippet files are named like "libraryname_doc-1.json"
-                        if filename_str.ends_with(&format!("{}.json", id)) {
-                            if let Ok(metadata) = entry.metadata() {
-                                if let Ok(modified) = metadata.modified() {
-                                    matching_files.push((filename_str.to_string(), modified));
-                                }
+            for entry in entries.flatten() {
+                let filename = entry.file_name();
+                if let Some(filename_str) = filename.to_str() {
+                    // Snippet files are named like "libraryname_doc-1.json"
+                    if filename_str.ends_with(&format!("{}.json", id)) {
+                        if let Ok(metadata) = entry.metadata() {
+                            if let Ok(modified) = metadata.modified() {
+                                matching_files.push((filename_str.to_string(), modified));
                             }
                         }
                     }

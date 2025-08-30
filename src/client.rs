@@ -141,8 +141,8 @@ impl Context7Client {
 
         for line in &lines {
             // Look for library title (first line of each library block)
-            if line.starts_with("- Title: ") {
-                let title = line[9..].trim().to_string();
+            if let Some(stripped) = line.strip_prefix("- Title: ") {
+                let title = stripped.trim().to_string();
                 current_lib = Some((String::new(), title, 0.0, 0));
             }
             // Look for library ID
