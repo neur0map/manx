@@ -43,20 +43,20 @@ Manx is a command-line interface documentation finder designed for developers wh
 
 ```bash
 # Linux/macOS - Install to /usr/local/bin
-curl -fsSL https://raw.githubusercontent.com/yourusername/manx/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
 # Or with wget
-wget -qO- https://raw.githubusercontent.com/yourusername/manx/main/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 ```
 
 ### Manual Installation
 
 1. **Download the latest release** for your platform:
-   - [Linux x86_64](https://github.com/yourusername/manx/releases/latest/download/manx-x86_64-unknown-linux-gnu)
-   - [Linux ARM64](https://github.com/yourusername/manx/releases/latest/download/manx-aarch64-unknown-linux-gnu)  
-   - [macOS x86_64](https://github.com/yourusername/manx/releases/latest/download/manx-x86_64-apple-darwin)
-   - [macOS ARM64](https://github.com/yourusername/manx/releases/latest/download/manx-aarch64-apple-darwin)
-   - [Windows](https://github.com/yourusername/manx/releases/latest/download/manx-x86_64-pc-windows-msvc.exe)
+   - [Linux x86_64](https://github.com/neur0map/manx/releases/latest/download/manx-x86_64-unknown-linux-gnu)
+   - [Linux ARM64](https://github.com/neur0map/manx/releases/latest/download/manx-aarch64-unknown-linux-gnu)  
+   - [macOS x86_64](https://github.com/neur0map/manx/releases/latest/download/manx-x86_64-apple-darwin)
+   - [macOS ARM64](https://github.com/neur0map/manx/releases/latest/download/manx-aarch64-apple-darwin)
+   - [Windows](https://github.com/neur0map/manx/releases/latest/download/manx-x86_64-pc-windows-msvc.exe)
 
 2. **Make executable and move to PATH**:
    ```bash
@@ -76,7 +76,7 @@ wget -qO- https://raw.githubusercontent.com/yourusername/manx/main/install.sh | 
 cargo install manx
 
 # Or build from source
-git clone https://github.com/yourusername/manx.git
+git clone https://github.com/neur0map/manx.git
 cd manx
 cargo build --release
 sudo cp target/release/manx /usr/local/bin/
@@ -374,7 +374,7 @@ rm -rf ~/.config/manx
 rm -rf ~/.cache/manx
 
 # Or use the installer  
-curl -fsSL https://raw.githubusercontent.com/yourusername/manx/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash -s -- --uninstall
 ```
 
 ## Contributing
@@ -392,7 +392,7 @@ We welcome contributions! Here's how to get started:
 ### Development Setup
 
 ```bash
-git clone https://github.com/yourusername/manx.git
+git clone https://github.com/neur0map/manx.git
 cd manx
 cargo build
 cargo test
