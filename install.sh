@@ -4,7 +4,7 @@ set -euo pipefail
 # Manx Installation Script
 # Installs the latest release of Manx CLI from GitHub
 
-readonly REPO="yourusername/manx"
+readonly REPO="neur0map/manx"
 readonly BINARY_NAME="manx"
 readonly INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 readonly CONFIG_DIR="${HOME}/.config/manx"

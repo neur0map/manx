@@ -2,10 +2,10 @@
 name = "manx"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <email@example.com>"]
+authors = ["neur0map <email@example.com>"]
 description = "A blazing-fast CLI documentation finder powered by Context7 MCP"
-homepage = "https://github.com/yourusername/manx"
-repository = "https://github.com/yourusername/manx"
+homepage = "https://github.com/neur0map/manx"
+repository = "https://github.com/neur0map/manx"
 license = "MIT"
 readme = "README.md"
 keywords = ["cli", "documentation", "mcp", "context7", "terminal"]
