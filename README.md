@@ -116,7 +116,7 @@ Every answer is tied to specific commits, tags, or branches so you always know t
 
 A powerful new search system that adapts to your workflow - from quick snippet lookup to AI-powered Q&A.
 
-### 🎭 Dual Operating Modes
+### 🎭 Dual Operating Modes with optional AI assisted
 
 <div align="center">
 
