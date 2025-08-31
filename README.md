@@ -30,6 +30,22 @@ Manx is a command-line interface documentation finder designed for developers wh
 - 📊 **Smart result limiting** - shows 10 results by default, customizable
 - 🚀 **Export to Markdown/JSON** for documentation
 
+
+## Future Planned Implementations
+
+Manx will soon connect directly to a dedicated documentation backend for GitHub projects. The biggest highlight: you’ll be able to **ask questions in plain English and get instant answers pulled straight from the project’s own docs**. No more scrolling through README files or guessing keywords — just ask and Manx brings the answer to you, with links back to the source.
+
+Planned features include:
+
+- **Ask and Get Answers** – type questions like *“How do I set up authentication?”* or *“Where are the plugin configs?”* and Manx will return clear, cited answers automatically.  
+- **Browse Docs Like a Map** – instantly view the full doc tree of any repo so you can jump straight to what matters.  
+- **Read Without Leaving the CLI** – open guides, configs, or FAQs right in your terminal.  
+- **Fast Re-Use** – Manx saves results locally so repeat lookups are near-instant and can work offline.  
+- **Version Awareness** – every answer is tied to a specific commit, tag, or branch so you know exactly where it came from.  
+- **Stay Smooth** – if a doc source is slow or down, Manx will retry or switch without breaking your workflow.  
+
+
+
 ## Quick Install
 
 ```bash
