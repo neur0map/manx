@@ -31,51 +31,179 @@ Manx is a command-line interface documentation finder designed for developers wh
 - 🚀 **Export to Markdown/JSON** for documentation
 
 
-## Future Planned Implementation : Github Database support
+## 🚀 Coming Soon
 
-Manx will soon connect directly to a dedicated documentation backend for GitHub projects. The biggest highlight: you’ll be able to **ask questions in plain English and get instant answers pulled straight from the project’s own docs**. No more scrolling through README files or guessing keywords — just ask and Manx brings the answer to you, with links back to the source.
+<div align="center">
 
-Planned features include:
+> **Exciting new features in active development**
 
-- **Ask and Get Answers** – type questions like *“How do I set up authentication?”* or *“Where are the plugin configs?”* and Manx will return clear, cited answers automatically.  
-- **Browse Docs Like a Map** – instantly view the full doc tree of any repo so you can jump straight to what matters.  
-- **Read Without Leaving the CLI** – open guides, configs, or FAQs right in your terminal.  
-- **Fast Re-Use** – Manx saves results locally so repeat lookups are near-instant and can work offline.  
-- **Version Awareness** – every answer is tied to a specific commit, tag, or branch so you know exactly where it came from.  
-- **Stay Smooth** – if a doc source is slow or down, Manx will retry or switch without breaking your workflow.  
+</div>
 
+---
 
-## Future Implementation Plan: Knowledge Search
+## 🐙 GitHub Database Support
 
-Manx will introduce a **Knowledge Search** feature that gives developers a fast way to look up information, code snippets, and documentation directly from the terminal.  
+<div align="center">
 
-### Two Ways to Use It
+**Ask questions in plain English and get instant answers from any project's documentation**
 
-- **Snippets Mode (no model required)**  
-  - Returns raw, relevant text from web search or local notes.  
-  - You’ll see the exact snippets and links, nothing rewritten.  
-  - Works instantly, private, and lightweight.  
+</div>
 
-- **Answer Mode (with a model)**  
-  - The retrieved snippets are passed through a language model to generate a clean, summarized answer.  
-  - Answers always include citations back to the sources.  
-  - Compatible with both **cloud models** (OpenAI, Anthropic, etc.) and **local models** (Ollama, LM Studio, llama.cpp).  
-  - Provides the “ask a question → get an answer” workflow right in your CLI.  
+Manx will soon connect directly to GitHub repositories, transforming how you explore and understand project documentation. No more endless scrolling through README files or guessing the right search terms.
 
-### Planned Features
-- **Search** – run quick lookups across the web or your own notes.  
-- **Ask** – type natural questions and get answers with sources.  
-- **Local Notes Support** – index and query your own docs or notes privately.  
-- **Mode Control** – toggle between `--mode snippets` and `--mode answer`.  
-- **Caching & Provenance** – results are saved locally and always show their origin.  
-- **Automatic Fallbacks** – if no model is set, Manx defaults to snippets mode.  
+### ✨ Core Features
 
-### Why It Matters
-Knowledge Search makes Manx more flexible:  
-- In **snippets mode**, it’s a lightning-fast search companion.  
-- In **answer mode**, it becomes a doc-aware assistant.  
+<table>
+<tr>
+<td width="50%">
 
-Either way, you get consistent results, citations, and offline caching — all from the same terminal workflow.
+**🤔 Natural Language Q&A**
+- *"How do I set up authentication?"*
+- *"Where are the plugin configs?"*
+- *"What's the deployment process?"*
+
+Get clear, cited answers automatically.
+
+</td>
+<td width="50%">
+
+**🗺️ Documentation Explorer**
+- Browse full doc trees instantly
+- Jump straight to relevant sections
+- Visual navigation through complex projects
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**📖 Terminal-Native Reading**
+- Open guides, configs, and FAQs in CLI
+- Syntax highlighting and formatting
+- No context switching required
+
+</td>
+<td width="50%">
+
+**⚡ Smart Caching**
+- Lightning-fast repeat lookups
+- Offline-capable after first fetch
+- Intelligent background updates
+
+</td>
+</tr>
+</table>
+
+### 🎯 Version Intelligence
+
+Every answer is tied to specific commits, tags, or branches so you always know the exact source and version context.
+
+### 🛡️ Reliability Features
+
+- **Auto-retry logic** for slow or unreliable doc sources
+- **Graceful fallbacks** when repositories are temporarily unavailable
+- **Seamless workflow** - never breaks your development flow
+
+---
+
+## 🧠 Knowledge Search Engine
+
+<div align="center">
+
+**Universal search across documentation, code snippets, and your personal notes**
+
+</div>
+
+A powerful new search system that adapts to your workflow - from quick snippet lookup to AI-powered Q&A.
+
+### 🎭 Dual Operating Modes
+
+<div align="center">
+
+| 📄 **Snippets Mode** | 🤖 **Answer Mode** |
+|----------------------|---------------------|
+| No model required | Powered by AI |
+| Raw, unfiltered results | Clean, summarized answers |
+| Lightning fast | Context-aware responses |
+| Privacy-focused | Citation-rich |
+
+</div>
+
+#### 📄 Snippets Mode *(Privacy-First)*
+```bash
+manx search "react useEffect cleanup"
+# Returns: Raw snippets + source links
+# ✅ Instant results  ✅ No data sent to models  ✅ Lightweight
+```
+
+#### 🤖 Answer Mode *(AI-Enhanced)*
+```bash
+manx ask "How do I prevent memory leaks with useEffect?"
+# Returns: Comprehensive answer with citations
+# ✅ Cloud models (OpenAI, Anthropic)  ✅ Local models (Ollama, llama.cpp)
+```
+
+### 🛠️ Planned Command Interface
+
+```bash
+# Quick web/notes search
+manx search "docker compose production setup"
+
+# Natural language questions  
+manx ask "What's the difference between JWT and OAuth?"
+
+# Index your personal documentation
+manx index ~/my-docs/
+
+# Control the experience
+manx search --mode snippets "api rate limiting"
+manx search --mode answer "api rate limiting best practices"
+```
+
+### 📚 Knowledge Sources
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+**🌐 Web Search**
+- Developer documentation
+- Stack Overflow answers
+- GitHub discussions
+- Technical blogs
+
+</td>
+<td width="33%" align="center">
+
+**📝 Personal Notes**
+- Your local documentation
+- Project wikis
+- Team knowledge bases
+- Private repositories
+
+</td>
+<td width="33%" align="center">
+
+**🔄 Smart Caching**
+- Offline availability
+- Source provenance
+- Automatic updates
+- Result versioning
+
+</td>
+</tr>
+</table>
+
+### 🎯 Why This Matters
+
+Knowledge Search transforms Manx from a documentation tool into your personal development assistant:
+
+- **🏃‍♂️ Snippets Mode**: Lightning-fast research companion
+- **🧠 Answer Mode**: Intelligent documentation assistant  
+- **🔒 Privacy Control**: Choose when to use AI vs. raw search
+- **📱 Unified Interface**: One tool for all knowledge needs
+
+All with consistent caching, source attribution, and the same lightning-fast terminal workflow you already love.
 
 
 ## Quick Install
