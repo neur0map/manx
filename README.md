@@ -31,7 +31,7 @@ Manx is a command-line interface documentation finder designed for developers wh
 - 🚀 **Export to Markdown/JSON** for documentation
 
 
-## Future Planned Implementations
+## Future Planned Implementation : Github Database support
 
 Manx will soon connect directly to a dedicated documentation backend for GitHub projects. The biggest highlight: you’ll be able to **ask questions in plain English and get instant answers pulled straight from the project’s own docs**. No more scrolling through README files or guessing keywords — just ask and Manx brings the answer to you, with links back to the source.
 
@@ -44,6 +44,38 @@ Planned features include:
 - **Version Awareness** – every answer is tied to a specific commit, tag, or branch so you know exactly where it came from.  
 - **Stay Smooth** – if a doc source is slow or down, Manx will retry or switch without breaking your workflow.  
 
+
+## Future Implementation Plan: Knowledge Search
+
+Manx will introduce a **Knowledge Search** feature that gives developers a fast way to look up information, code snippets, and documentation directly from the terminal.  
+
+### Two Ways to Use It
+
+- **Snippets Mode (no model required)**  
+  - Returns raw, relevant text from web search or local notes.  
+  - You’ll see the exact snippets and links, nothing rewritten.  
+  - Works instantly, private, and lightweight.  
+
+- **Answer Mode (with a model)**  
+  - The retrieved snippets are passed through a language model to generate a clean, summarized answer.  
+  - Answers always include citations back to the sources.  
+  - Compatible with both **cloud models** (OpenAI, Anthropic, etc.) and **local models** (Ollama, LM Studio, llama.cpp).  
+  - Provides the “ask a question → get an answer” workflow right in your CLI.  
+
+### Planned Features
+- **Search** – run quick lookups across the web or your own notes.  
+- **Ask** – type natural questions and get answers with sources.  
+- **Local Notes Support** – index and query your own docs or notes privately.  
+- **Mode Control** – toggle between `--mode snippets` and `--mode answer`.  
+- **Caching & Provenance** – results are saved locally and always show their origin.  
+- **Automatic Fallbacks** – if no model is set, Manx defaults to snippets mode.  
+
+### Why It Matters
+Knowledge Search makes Manx more flexible:  
+- In **snippets mode**, it’s a lightning-fast search companion.  
+- In **answer mode**, it becomes a doc-aware assistant.  
+
+Either way, you get consistent results, citations, and offline caching — all from the same terminal workflow.
 
 
 ## Quick Install
