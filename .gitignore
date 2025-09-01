@@ -37,4 +37,3 @@ docs/dist/
 docs/.env
 docs/.env.local
 docs/.env.production
-docs/package-lock.json
