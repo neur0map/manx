@@ -1,0 +1,384 @@
+---
+title: Examples
+description: Real-world examples and use cases for Manx
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Common Use Cases
+
+### Quick Reference While Coding
+
+```bash
+# Working with FastAPI? Quick middleware reference:
+manx fastapi middleware
+
+# Need React hooks documentation:
+manx react useEffect cleanup
+
+# Django ORM queries:
+manx django queryset filter
+```
+
+### Version-Specific Documentation
+
+```bash
+# React 18 vs React 17
+manx react@18 concurrent
+manx react@17 lifecycle
+
+# Vue 3 Composition API
+manx vue@3 composition setup
+
+# Angular specific version
+manx angular@15 signals
+```
+
+## Language-Specific Examples
+
+<Tabs>
+  <TabItem label="Python">
+    ### Python Libraries
+    
+    ```bash
+    # FastAPI
+    manx fastapi
+    manx fastapi middleware cors
+    manx fastapi dependency injection
+    
+    # Django
+    manx django models
+    manx django views class-based
+    manx django orm aggregate
+    
+    # Flask
+    manx flask blueprints
+    manx flask testing
+    
+    # Data Science
+    manx pandas dataframe merge
+    manx numpy array broadcasting
+    manx scikit-learn random forest
+    ```
+  </TabItem>
+  
+  <TabItem label="JavaScript">
+    ### JavaScript/TypeScript
+    
+    ```bash
+    # React
+    manx react hooks
+    manx react context provider
+    manx react memo optimization
+    
+    # Vue
+    manx vue reactivity
+    manx vue router guards
+    manx vue pinia store
+    
+    # Node.js
+    manx express middleware
+    manx express error handling
+    
+    # Next.js
+    manx nextjs app router
+    manx nextjs server components
+    ```
+  </TabItem>
+  
+  <TabItem label="Rust">
+    ### Rust Crates
+    
+    ```bash
+    # Async
+    manx tokio spawn
+    manx async-std timer
+    
+    # Web
+    manx actix-web middleware
+    manx rocket guards
+    manx axum extractors
+    
+    # Serialization
+    manx serde derive
+    manx serde_json value
+    ```
+  </TabItem>
+  
+  <TabItem label="Go">
+    ### Go Packages
+    
+    ```bash
+    # Web Frameworks
+    manx gin middleware
+    manx echo routing
+    manx fiber ctx
+    
+    # Database
+    manx gorm associations
+    manx sqlx prepared statements
+    
+    # Concurrency
+    manx goroutines
+    manx channels select
+    ```
+  </TabItem>
+</Tabs>
+
+## Workflow Integration
+
+### Documentation During Code Review
+
+```bash
+# Reviewing a PR with unfamiliar API?
+manx library-name api-method
+
+# Quick verification of best practices
+manx react performance optimization
+manx django security csrf
+```
+
+### Learning New Technologies
+
+```bash
+# Starting with a new framework
+manx fastapi doc getting-started
+manx fastapi doc tutorial
+
+# Deep dive into concepts
+manx react doc hooks rules
+manx django doc models meta
+```
+
+### Creating Documentation
+
+```bash
+# Export comprehensive docs for your team
+manx fastapi authentication --save-all -o auth-docs.md
+manx react hooks --save-all --json -o react-hooks.json
+
+# Create a knowledge base
+for topic in routing middleware authentication; do
+  manx fastapi $topic --save-all -o fastapi-$topic.md
+done
+```
+
+## Advanced Scripting
+
+### Automated Documentation Generation
+
+```bash
+#!/bin/bash
+# generate-docs.sh
+
+libraries=("fastapi" "pydantic" "sqlalchemy")
+topics=("basics" "advanced" "best-practices")
+
+mkdir -p project-docs
+
+for lib in "${libraries[@]}"; do
+  for topic in "${topics[@]}"; do
+    echo "Fetching $lib $topic..."
+    manx doc $lib $topic --quiet > "project-docs/${lib}-${topic}.md"
+  done
+done
+```
+
+### Search Multiple Libraries
+
+```bash
+#!/bin/bash
+# multi-search.sh
+
+query="authentication"
+libs=("fastapi" "django" "flask" "express")
+
+for lib in "${libs[@]}"; do
+  echo "=== $lib ==="
+  manx $lib $query --limit 3
+  echo ""
+done
+```
+
+### Interactive Documentation Browser
+
+```bash
+# Use with fzf for interactive browsing
+manx react hooks --json | \
+  jq -r '.results[].title' | \
+  fzf --preview "manx react hooks --json | \
+    jq -r '.results[] | select(.title==\"{}\") | .content'"
+```
+
+## CI/CD Integration
+
+### Pre-commit Hook
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit
+
+# Check for outdated API usage
+if git diff --cached --name-only | grep -q "\.py$"; then
+  echo "Checking FastAPI documentation..."
+  manx fastapi deprecated --limit 5
+fi
+```
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/docs-check.yml
+name: Documentation Check
+
+on: [pull_request]
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Install Manx
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
+      
+      - name: Verify API Usage
+        run: |
+          manx fastapi security --json | \
+            jq '.results[0].content' > security-check.md
+```
+
+## Productivity Tips
+
+### Shell Aliases
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+
+# Quick searches
+alias mf='manx fastapi'
+alias mr='manx react'
+alias md='manx django'
+
+# Documentation mode
+alias mdoc='manx doc'
+
+# Offline mode
+alias moff='manx --offline'
+
+# Clear cache
+alias mclear='manx cache clear'
+```
+
+### Function for Context Switching
+
+```bash
+# Add to shell config
+function docs() {
+  local lib=$1
+  shift
+  manx $lib "$@" --limit 5
+}
+
+# Usage:
+# docs fastapi middleware
+# docs react hooks useState
+```
+
+### Project-Specific Documentation
+
+```bash
+# Create a .manxrc in your project
+cat > .manxrc << 'EOF'
+#!/bin/bash
+PROJECT_LIBS=("fastapi" "pydantic" "sqlalchemy")
+
+project_docs() {
+  for lib in "${PROJECT_LIBS[@]}"; do
+    manx $lib "$@"
+  done
+}
+EOF
+
+source .manxrc
+project_docs authentication
+```
+
+## Export Examples
+
+### Markdown Export
+
+```bash
+# Single result
+manx fastapi routing --save 1
+
+# Multiple results
+manx react hooks --save 1,3,5,7
+
+# Range of results
+manx django models --save 1-10
+
+# All results
+manx vue composition --save-all
+
+# Custom filename
+manx fastapi -o fastapi-complete.md
+```
+
+### JSON Export for Processing
+
+```bash
+# Export and process with jq
+manx fastapi --json | jq '.results[] | {title, url}'
+
+# Filter by content
+manx react --json | jq '.results[] | select(.content | contains("useState"))'
+
+# Create CSV
+manx django --json | \
+  jq -r '.results[] | [.title, .url] | @csv' > django-docs.csv
+```
+
+## Troubleshooting Searches
+
+### When Results Aren't What You Expected
+
+```bash
+# Too many results? Increase limit
+manx react --limit 20
+
+# Wrong version? Specify it
+manx react@18 suspense
+
+# Need more context? Use doc command
+manx doc react suspense
+
+# Results too old? Clear cache
+manx --clear-cache react suspense
+```
+
+### Debugging Search Issues
+
+```bash
+# Enable debug mode
+manx --debug fastapi
+
+# Check what's cached
+manx cache list
+
+# Force online search
+manx --clear-cache fastapi middleware
+
+# Check your configuration
+manx config --show
+```
+
+## Best Practices
+
+1. **Use version specifiers** for consistency across team
+2. **Export important searches** for offline reference
+3. **Set up aliases** for frequently used libraries
+4. **Clear cache periodically** for fresh documentation
+5. **Use `--limit 0`** when you need comprehensive results
+6. **Combine with other tools** (grep, jq, fzf) for power usage

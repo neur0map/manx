@@ -13,6 +13,8 @@
 ![Language](https://img.shields.io/badge/language-Rust-orange.svg)
 ![Binary Size](https://img.shields.io/badge/binary-2.9MB-blue.svg)
 
+**📖 [Complete Documentation](https://neur0map.github.io/manx) • 🚀 [Quick Start](https://neur0map.github.io/manx/getting-started) • 💻 [Installation Guide](https://neur0map.github.io/manx/installation)**
+
 </div>
 
 ## What is Manx?
