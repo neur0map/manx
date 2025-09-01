@@ -29,3 +29,12 @@ manx-config.json
 # Test coverage
 tarpaulin-report.html
 cobertura.xml
+
+# Documentation site
+docs/node_modules/
+docs/.astro/
+docs/dist/
+docs/.env
+docs/.env.local
+docs/.env.production
+docs/package-lock.json
