@@ -334,10 +334,47 @@
     max-width: 100% !important;
     height: auto !important;
     object-fit: contain !important;
-    margin: 0 auto !important;
+    margin: 1rem auto !important;
     border-radius: 0.5rem !important;
     box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
     transform: none !important;
+    order: 2 !important;
+  }
+  
+  /* Fix hero layout order on mobile */
+  .hero {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .hero > * {
+    order: 1;
+  }
+  
+  .hero picture,
+  .hero img {
+    order: 3 !important;
+  }
+  
+  /* Ensure title appears first */
+  [data-page-title] {
+    order: 0 !important;
+  }
+  
+  /* Starlight specific hero fixes */
+  .sl-flex.hero {
+    flex-direction: column !important;
+  }
+  
+  .hero .sl-flex {
+    order: 1 !important;
+  }
+  
+  /* Move image after title and tagline */
+  .hero .not-content {
+    order: 4 !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
   }
 
   .hero-title {
