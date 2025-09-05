@@ -68,14 +68,18 @@ walkdir = "2.4"
 uuid = { version = "1.6", features = ["v4"] }
 
 # Embedding model dependencies
-ort = { version = "1.16", features = ["load-dynamic"] }
+ort = { version = "1.16", features = ["load-dynamic"], optional = true }
 sha2 = "0.10"
-hf-hub = "0.3"
-tokenizers = "0.15"
+hf-hub = { version = "0.3", optional = true }
+tokenizers = { version = "0.15", optional = true }
 base64 = "0.22"
 bytes = "1.5"
 async-trait = "0.1"
 dirs = "5.0"
+
+[features]
+default = ["onnx-embeddings"]
+onnx-embeddings = ["ort", "hf-hub", "tokenizers"]
 
 [profile.release]
 # Optimize for small binary size and performance
@@ -91,5 +95,3 @@ inherits = "release"
 strip = false
 debug = true
 
-[features]
-default = []
