@@ -251,19 +251,26 @@ impl RagSystem {
     }
 
     pub async fn index_url_deep(
-        &mut self, 
-        url: &str, 
-        max_depth: Option<u32>, 
-        max_pages: Option<u32>
+        &mut self,
+        url: &str,
+        max_depth: Option<u32>,
+        max_pages: Option<u32>,
     ) -> Result<usize> {
         if !self.config.enabled {
             return Err(anyhow::anyhow!("RAG system is disabled"));
         }
 
-        log::info!("Deep indexing URL: {} (depth: {:?}, pages: {:?})", url, max_depth, max_pages);
+        log::info!(
+            "Deep indexing URL: {} (depth: {:?}, pages: {:?})",
+            url,
+            max_depth,
+            max_pages
+        );
 
         let indexer = Indexer::new(&self.config)?;
-        let chunks = indexer.index_url_deep(url.to_string(), max_depth, max_pages).await?;
+        let chunks = indexer
+            .index_url_deep(url.to_string(), max_depth, max_pages)
+            .await?;
         let chunk_count = chunks.len();
 
         // Store chunks in local vector storage

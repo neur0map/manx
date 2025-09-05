@@ -5,10 +5,10 @@
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
+use spider::website::Website;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use spider::website::Website;
 
 use crate::rag::embeddings::preprocessing;
 use crate::rag::{DocumentChunk, DocumentMetadata, RagConfig, SourceType};
@@ -145,13 +145,17 @@ impl Indexer {
 
     /// Index content from a URL with deep crawling support
     pub async fn index_url_deep(
-        &self, 
-        url: String, 
+        &self,
+        url: String,
         max_depth: Option<u32>,
-        max_pages: Option<u32>
+        max_pages: Option<u32>,
     ) -> Result<Vec<DocumentChunk>> {
-        log::info!("Starting deep crawl of URL: {} (max_depth: {:?}, max_pages: {:?})", 
-                   url, max_depth, max_pages);
+        log::info!(
+            "Starting deep crawl of URL: {} (max_depth: {:?}, max_pages: {:?})",
+            url,
+            max_depth,
+            max_pages
+        );
 
         // Validate URL format
         let parsed_url =
@@ -170,14 +174,14 @@ impl Indexer {
 
         // Create and configure spider website
         let mut website = Website::new(&url);
-        
+
         // Configure for documentation-optimized crawling
         website.configuration.respect_robots_txt = false; // Disable for faster crawling
         website.configuration.delay = 50; // Reduce delay for faster crawling
         website.configuration.subdomains = false; // Stay within same domain
         website.configuration.tld = false; // Don't crawl different TLDs
         website.configuration.request_timeout = Some(Box::new(std::time::Duration::from_secs(10))); // Add timeout
-        
+
         // Set crawl depth limit (default to 3 if not specified)
         if let Some(depth) = max_depth {
             website.configuration.depth = depth as usize;
@@ -200,12 +204,14 @@ impl Indexer {
             ".zip".to_string(),
             ".tar".to_string(),
         ];
-        
+
         website.configuration.blacklist_url = Some(
             blacklist_patterns
                 .iter()
-                .map(|pattern| format!("{}{}", parsed_url.origin().ascii_serialization(), pattern).into())
-                .collect()
+                .map(|pattern| {
+                    format!("{}{}", parsed_url.origin().ascii_serialization(), pattern).into()
+                })
+                .collect(),
         );
 
         // Perform the crawl with timeout
@@ -214,34 +220,52 @@ impl Indexer {
             Ok(_) => log::info!("Crawl completed successfully"),
             Err(_) => {
                 log::warn!("Crawl timed out after {} seconds", crawl_timeout.as_secs());
-                return Err(anyhow!("Crawl operation timed out after {} seconds", crawl_timeout.as_secs()));
+                return Err(anyhow!(
+                    "Crawl operation timed out after {} seconds",
+                    crawl_timeout.as_secs()
+                ));
             }
         }
-        
+
         let discovered_links = website.get_links();
         log::info!("Discovered {} URLs during crawl", discovered_links.len());
 
         // Apply page limit if specified
         let links_to_process = if let Some(max) = max_pages {
-            discovered_links.into_iter().take(max as usize).collect::<Vec<_>>()
+            discovered_links
+                .into_iter()
+                .take(max as usize)
+                .collect::<Vec<_>>()
         } else {
             discovered_links.into_iter().collect::<Vec<_>>()
         };
 
-        log::info!("Processing {} URLs for content extraction", links_to_process.len());
+        log::info!(
+            "Processing {} URLs for content extraction",
+            links_to_process.len()
+        );
 
         // Process each discovered page
         let mut all_chunks = Vec::new();
         for (index, link) in links_to_process.iter().enumerate() {
             let page_url = link.as_ref();
-            log::debug!("Processing page {}/{}: {}", index + 1, links_to_process.len(), page_url);
-            
+            log::debug!(
+                "Processing page {}/{}: {}",
+                index + 1,
+                links_to_process.len(),
+                page_url
+            );
+
             match self.process_crawled_page(page_url).await {
                 Ok(chunks) => {
                     let chunk_count = chunks.len();
                     all_chunks.extend(chunks);
-                    log::debug!("Successfully processed page: {} ({} chunks)", page_url, chunk_count);
-                },
+                    log::debug!(
+                        "Successfully processed page: {} ({} chunks)",
+                        page_url,
+                        chunk_count
+                    );
+                }
                 Err(e) => {
                     log::warn!("Failed to process page '{}': {}", page_url, e);
                     // Continue with other pages even if one fails
@@ -265,7 +289,10 @@ impl Indexer {
         let content = fetch_url_content(page_url).await?;
 
         if content.trim().is_empty() {
-            return Err(anyhow!("Page contains no extractable content: {}", page_url));
+            return Err(anyhow!(
+                "Page contains no extractable content: {}",
+                page_url
+            ));
         }
 
         // Create metadata for this page
