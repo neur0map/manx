@@ -23,7 +23,7 @@ Manx transforms from a simple documentation finder into your **personal AI devel
 - **🔍 Official Documentation** - Context7 MCP integration for real-time docs
 - **📁 Your Personal Knowledge** - Index local docs, notes, and wikis
 - **🤖 AI Synthesis** - Multi-provider LLM integration (OpenAI, Anthropic, Groq, etc.)
-- **⚡ Lightning Fast** - under 3 second searches with semantic understanding
+- **⚡ Lightning Fast** - sub-second snippet searches, sub-2 second web searches
 - **🎨 Beautiful UX** - Colorized, scannable terminal output
 
 ---
@@ -394,7 +394,7 @@ manx snippet react hooks  # Much higher limits
 <td width="50%">
 
 **⚡ Performance**
-- **Search Speed**: < 1 second
+- **Search Speed**: < 1 second (snippets), < 2 seconds (web search)
 - **Binary Size**: 2.9MB single file
 - **Memory Usage**: < 10MB RAM
 - **Startup Time**: < 50ms
