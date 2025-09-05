@@ -3,6 +3,13 @@ use anyhow::Result;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 
+#[derive(Debug, Clone)]
+struct ParsedQuery {
+    quoted_phrases: Vec<String>,
+    individual_terms: Vec<String>,
+    original_query: String,
+}
+
 pub struct SearchEngine {
     client: Context7Client,
     matcher: SkimMatcherV2,
@@ -28,19 +35,13 @@ impl SearchEngine {
         // Step 1: Resolve library to Context7 ID
         let (library_id, library_title) = self.client.resolve_library(lib_name).await?;
 
-        // Step 2: Parse the query to extract key terms and phrases
-        let search_terms = self.parse_search_query(query);
-        let optimized_query = search_terms.join(" ");
+        // Step 2: Parse the query to extract phrases and terms
+        let parsed_query = self.parse_search_query(query);
 
-        // Step 3: Get documentation with the optimized query as topic
-        let docs = self
-            .client
-            .get_documentation(&library_id, Some(&optimized_query))
+        // Step 3: Multi-pass search with phrase prioritization
+        let mut results = self
+            .multi_pass_search(&library_id, library, &parsed_query)
             .await?;
-
-        // Step 4: Parse documentation into multiple results and rank them
-        let mut results =
-            self.parse_documentation_into_results(library, query, &docs, &search_terms)?;
 
         // Step 5: Apply limit if specified
         if let Some(limit) = limit {
@@ -49,42 +50,108 @@ impl SearchEngine {
             }
         }
 
-        // Step 6: Cache individual snippets for later retrieval via snippet command
-        // We'll store each section separately so users can access them via "manx snippet doc-N"
+        // Step 4: Cache individual snippets for later retrieval via snippet command  
         if let Ok(cache_manager) = crate::cache::CacheManager::new() {
-            let sections = self.split_into_sections(&docs);
-            for (idx, result) in results.iter().enumerate() {
-                if idx < sections.len() {
-                    let snippet_cache_key = format!("{}_{}", library, &result.id);
-                    // Cache the complete section content, not just the excerpt
-                    let _ = cache_manager
-                        .set("snippets", &snippet_cache_key, &sections[idx])
-                        .await;
-                }
+            for result in &results {
+                let snippet_cache_key = format!("{}_{}", library, &result.id);
+                // Cache the complete excerpt content
+                let _ = cache_manager
+                    .set("snippets", &snippet_cache_key, &result.excerpt)
+                    .await;
             }
         }
 
         Ok((results, library_title, library_id))
     }
 
-    fn parse_search_query(&self, query: &str) -> Vec<String> {
-        let mut terms = Vec::new();
+    async fn multi_pass_search(
+        &self,
+        library_id: &str,
+        library: &str,
+        parsed_query: &ParsedQuery,
+    ) -> Result<Vec<SearchResult>> {
+        let mut all_results = Vec::new();
+        
+        // Pass 1: Phrase-priority search if we have quoted phrases
+        if !parsed_query.quoted_phrases.is_empty() {
+            let phrase_query = self.build_phrase_priority_query(parsed_query);
+            let docs = self
+                .client
+                .get_documentation(library_id, Some(&phrase_query))
+                .await?;
+            
+            let phrase_results = self.parse_documentation_into_results(
+                library,
+                &parsed_query.original_query,
+                &docs,
+                parsed_query,
+                true, // is_phrase_search
+            )?;
+            
+            all_results.extend(phrase_results);
+        }
+        
+        // Pass 2: Individual term search if needed
+        let should_do_term_search = parsed_query.quoted_phrases.is_empty() || all_results.len() < 5;
+        
+        if should_do_term_search && !parsed_query.individual_terms.is_empty() {
+            let term_query = parsed_query.individual_terms.join(" ");
+            let docs = self
+                .client
+                .get_documentation(library_id, Some(&term_query))
+                .await?;
+            
+            let term_results = self.parse_documentation_into_results(
+                library,
+                &parsed_query.original_query,
+                &docs,
+                parsed_query,
+                false, // is_phrase_search
+            )?;
+            
+            all_results.extend(term_results);
+        }
+        
+        // Pass 3: Merge, deduplicate, and rank
+        let merged_results = self.merge_and_rank_results(all_results, parsed_query);
+        
+        Ok(merged_results)
+    }
+
+    fn build_phrase_priority_query(&self, parsed_query: &ParsedQuery) -> String {
+        let mut query_parts = Vec::new();
+        
+        // Add quoted phrases with quotes preserved for Context7
+        for phrase in &parsed_query.quoted_phrases {
+            query_parts.push(format!("\"{}\"", phrase));
+        }
+        
+        // Add individual terms
+        query_parts.extend(parsed_query.individual_terms.clone());
+        
+        query_parts.join(" ")
+    }
+
+    fn parse_search_query(&self, query: &str) -> ParsedQuery {
+        let mut quoted_phrases = Vec::new();
+        let mut individual_terms = Vec::new();
         let mut current_term = String::new();
         let mut in_quotes = false;
-        let chars = query.chars().peekable();
-
-        for ch in chars {
+        
+        for ch in query.chars() {
             match ch {
                 '"' => {
                     in_quotes = !in_quotes;
                     if !in_quotes && !current_term.is_empty() {
-                        terms.push(current_term.clone());
+                        // This was a quoted phrase
+                        quoted_phrases.push(current_term.clone());
                         current_term.clear();
                     }
                 }
                 ' ' if !in_quotes => {
                     if !current_term.is_empty() {
-                        terms.push(current_term.clone());
+                        // This was an individual term
+                        individual_terms.push(current_term.clone());
                         current_term.clear();
                     }
                 }
@@ -94,15 +161,25 @@ impl SearchEngine {
             }
         }
 
+        // Handle any remaining term
         if !current_term.is_empty() {
-            terms.push(current_term);
+            if in_quotes {
+                // Unclosed quote - treat as phrase anyway
+                quoted_phrases.push(current_term);
+            } else {
+                individual_terms.push(current_term);
+            }
         }
 
-        // If no terms found, use the original query
-        if terms.is_empty() {
-            vec![query.to_string()]
-        } else {
-            terms
+        // If no terms found, treat the whole query as individual terms
+        if quoted_phrases.is_empty() && individual_terms.is_empty() {
+            individual_terms.push(query.to_string());
+        }
+
+        ParsedQuery {
+            quoted_phrases,
+            individual_terms,
+            original_query: query.to_string(),
         }
     }
 
@@ -111,7 +188,8 @@ impl SearchEngine {
         library: &str,
         original_query: &str,
         docs: &str,
-        search_terms: &[String],
+        parsed_query: &ParsedQuery,
+        is_phrase_search: bool,
     ) -> Result<Vec<SearchResult>> {
         let mut results = Vec::new();
 
@@ -119,8 +197,8 @@ impl SearchEngine {
         let sections = self.split_into_sections(docs);
 
         for (idx, section) in sections.iter().enumerate() {
-            // Calculate relevance score based on search terms
-            let relevance = self.calculate_section_relevance(section, search_terms);
+            // Calculate relevance score with phrase prioritization
+            let relevance = self.calculate_enhanced_section_relevance(section, parsed_query, is_phrase_search);
 
             // Lower threshold for including results when we have multiple sections
             let relevance_threshold = if sections.len() > 1 { 0.05 } else { 0.1 };
@@ -200,6 +278,148 @@ impl SearchEngine {
         }
 
         Ok(results)
+    }
+
+    fn merge_and_rank_results(
+        &self,
+        mut all_results: Vec<SearchResult>,
+        parsed_query: &ParsedQuery,
+    ) -> Vec<SearchResult> {
+        // Remove duplicates based on content similarity
+        all_results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap());
+        all_results.dedup_by(|a, b| {
+            // Consider results duplicates if titles are very similar
+            let similarity = self.matcher.fuzzy_match(&a.title.to_lowercase(), &b.title.to_lowercase());
+            similarity.unwrap_or(0) > 800 // High similarity threshold
+        });
+
+        // Apply final phrase boost to top results
+        for result in all_results.iter_mut() {
+            if self.contains_quoted_phrases(&result.excerpt, &parsed_query.quoted_phrases) {
+                result.relevance_score *= 1.5; // Final boost for phrase-containing results
+            }
+        }
+
+        // Final sort after boost
+        all_results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap());
+        all_results
+    }
+
+    fn contains_quoted_phrases(&self, text: &str, phrases: &[String]) -> bool {
+        let text_lower = text.to_lowercase();
+        phrases.iter().any(|phrase| text_lower.contains(&phrase.to_lowercase()))
+    }
+
+    fn calculate_enhanced_section_relevance(
+        &self,
+        section: &str,
+        parsed_query: &ParsedQuery,
+        is_phrase_search: bool,
+    ) -> f32 {
+        let section_lower = section.to_lowercase();
+        let mut total_score = 0.0;
+
+        // Score quoted phrases with high priority
+        for phrase in &parsed_query.quoted_phrases {
+            let phrase_lower = phrase.to_lowercase();
+            
+            if section_lower.contains(&phrase_lower) {
+                // Exact phrase match gets highest score
+                let phrase_score = if is_phrase_search { 10.0 } else { 5.0 };
+                total_score += phrase_score;
+
+                // Extra bonus for title matches
+                if let Some(title_line) = section.lines().find(|line| line.starts_with("TITLE: ")) {
+                    if title_line.to_lowercase().contains(&phrase_lower) {
+                        total_score += phrase_score * 0.5;
+                    }
+                }
+
+                // Extra bonus for description matches
+                if let Some(desc_line) = section
+                    .lines()
+                    .find(|line| line.starts_with("DESCRIPTION: "))
+                {
+                    if desc_line.to_lowercase().contains(&phrase_lower) {
+                        total_score += phrase_score * 0.3;
+                    }
+                }
+            } else {
+                // Try partial phrase matching (words close together)
+                let proximity_score = self.calculate_phrase_proximity(section, phrase);
+                total_score += proximity_score;
+            }
+        }
+
+        // Score individual terms with lower priority
+        for term in &parsed_query.individual_terms {
+            let term_lower = term.to_lowercase();
+            
+            if section_lower.contains(&term_lower) {
+                total_score += 1.0;
+                
+                // Bonus for title/description matches
+                if let Some(title_line) = section.lines().find(|line| line.starts_with("TITLE: ")) {
+                    if title_line.to_lowercase().contains(&term_lower) {
+                        total_score += 0.5;
+                    }
+                }
+                if let Some(desc_line) = section
+                    .lines()
+                    .find(|line| line.starts_with("DESCRIPTION: "))
+                {
+                    if desc_line.to_lowercase().contains(&term_lower) {
+                        total_score += 0.3;
+                    }
+                }
+            } else {
+                // Fuzzy match for individual terms
+                if let Some(score) = self.matcher.fuzzy_match(&section_lower, &term_lower) {
+                    total_score += (score as f32) / 1000.0;
+                }
+            }
+        }
+
+        // Normalize by total number of search elements
+        let total_elements = parsed_query.quoted_phrases.len() + parsed_query.individual_terms.len();
+        if total_elements > 0 {
+            total_score / total_elements as f32
+        } else {
+            0.0
+        }
+    }
+
+    fn calculate_phrase_proximity(&self, section: &str, phrase: &str) -> f32 {
+        let words: Vec<&str> = phrase.split_whitespace().collect();
+        if words.len() < 2 {
+            return 0.0;
+        }
+
+        let section_lower = section.to_lowercase();
+        let mut max_proximity_score: f32 = 0.0;
+
+        // Look for words appearing close together
+        for window in section_lower.split_whitespace().collect::<Vec<_>>().windows(words.len()) {
+            let mut proximity_score = 0.0;
+            let mut found_words = 0;
+
+            for (i, &target_word) in words.iter().enumerate() {
+                if let Some(fuzzy_score) = self.matcher.fuzzy_match(window[i], target_word) {
+                    if fuzzy_score > 700 { // Good match threshold
+                        proximity_score += 1.0;
+                        found_words += 1;
+                    }
+                }
+            }
+
+            if found_words > 0 {
+                let proximity_multiplier = found_words as f32 / words.len() as f32;
+                proximity_score = proximity_score * proximity_multiplier * 2.0; // Proximity bonus
+                max_proximity_score = max_proximity_score.max(proximity_score);
+            }
+        }
+
+        max_proximity_score
     }
 
     fn split_into_sections(&self, docs: &str) -> Vec<String> {
@@ -383,48 +603,6 @@ impl SearchEngine {
         }
     }
 
-    fn calculate_section_relevance(&self, section: &str, search_terms: &[String]) -> f32 {
-        let section_lower = section.to_lowercase();
-        let mut total_score = 0.0;
-
-        for term in search_terms {
-            let term_lower = term.to_lowercase();
-
-            // Exact phrase match (highest score)
-            if section_lower.contains(&term_lower) {
-                total_score += 1.0;
-
-                // Bonus for title matches
-                if let Some(title_line) = section.lines().find(|line| line.starts_with("TITLE: ")) {
-                    if title_line.to_lowercase().contains(&term_lower) {
-                        total_score += 0.5;
-                    }
-                }
-
-                // Bonus for description matches
-                if let Some(desc_line) = section
-                    .lines()
-                    .find(|line| line.starts_with("DESCRIPTION: "))
-                {
-                    if desc_line.to_lowercase().contains(&term_lower) {
-                        total_score += 0.3;
-                    }
-                }
-            } else {
-                // Fuzzy match using the existing matcher
-                if let Some(score) = self.matcher.fuzzy_match(&section_lower, &term_lower) {
-                    total_score += (score as f32) / 1000.0; // Normalize fuzzy score
-                }
-            }
-        }
-
-        // Normalize by number of search terms
-        if !search_terms.is_empty() {
-            total_score / search_terms.len() as f32
-        } else {
-            0.0
-        }
-    }
 
     pub async fn get_documentation(&self, library: &str, query: Option<&str>) -> Result<String> {
         let (lib_name, _version) = parse_library_spec(library);

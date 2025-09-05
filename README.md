@@ -223,26 +223,47 @@ wget -qO- https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
 ## Quick Start
 
+### Core Commands
+
 ```bash
-# Search for any library
-manx fastapi
+# Search for code snippets and examples  
+manx snippet react hooks
+manx snippet fastapi middleware
+manx snippet django@4.2 models
 
-# Search with a query
-manx fastapi middleware
+# Browse comprehensive documentation
+manx doc fastapi authentication  
+manx doc react@18 useState
 
-# Version-specific search  
-manx react@18 hooks
+# Retrieve specific results by ID
+manx get doc-3
+manx get snippet-7
+```
 
-# Get full documentation
-manx doc fastapi authentication
+### Enhanced Semantic Search with Quotes
 
+Use quotes to prioritize exact phrase matches with **10x higher relevance**:
+
+```bash
+# Prioritizes exact phrase matches
+manx snippet react "useEffect cleanup"
+manx snippet tauri "table implementations"  
+manx snippet fastapi "async middleware"
+
+# Individual terms search (standard)
+manx snippet react hooks useState
+```
+
+### Additional Options
+
+```bash
 # Limit results (default: 10, use 0 for unlimited)
-manx fastapi --limit 5
-manx react hooks --limit 0
+manx snippet fastapi --limit 5
+manx doc react hooks --limit 0
 
 # Save results to file
-manx fastapi --save 1,3,5
-manx react hooks --save-all --json
+manx snippet fastapi --save 1,3,5
+manx snippet react hooks --save-all --json
 ```
 
 ---
@@ -295,22 +316,34 @@ sudo cp target/release/manx /usr/local/bin/
 <details>
 <summary><strong>📖 Complete Usage Guide</strong></summary>
 
-## Basic Search
+## Command Structure
+
+### Snippet Search
 ```bash
-manx <library>              # Search library docs
-manx <library> <query>      # Search library for specific query
-manx <library>@<version>    # Version-specific search
+manx snippet <library> [query]     # Search for code snippets and examples
+manx snippet <library>@<version>   # Version-specific search
 
 # Examples
-manx fastapi                # All FastAPI docs
-manx fastapi cors           # FastAPI CORS documentation  
-manx react@18              # React v18 documentation
-manx vue@3 composition     # Vue 3 Composition API
+manx snippet fastapi               # All FastAPI snippets
+manx snippet fastapi cors         # FastAPI CORS examples
+manx snippet react@18            # React v18 snippets
+manx snippet vue@3 composition   # Vue 3 Composition API examples
 ```
 
-## Full Documentation
+### Enhanced Semantic Search
 ```bash
-manx doc <library> <query>  # Get comprehensive documentation
+# Use quotes for exact phrase prioritization (10x higher relevance)
+manx snippet react "useEffect cleanup"      # Prioritizes exact phrases
+manx snippet fastapi "async middleware"     # Phrases get higher scoring
+manx snippet django "model relationships"   # Better targeted results
+
+# Individual terms (standard search)
+manx snippet react hooks useState           # Searches individual terms
+```
+
+### Full Documentation
+```bash
+manx doc <library> [topic]     # Get comprehensive documentation
 
 # Examples  
 manx doc fastapi middleware    # Complete FastAPI middleware guide
@@ -318,20 +351,30 @@ manx doc react hooks          # Full React Hooks documentation
 manx doc django orm           # Django ORM complete guide
 ```
 
+### Result Retrieval
+```bash
+manx get <id>                  # Get specific item by ID
+
+# Examples
+manx get doc-3                 # Retrieve documentation result #3
+manx get snippet-7             # Retrieve snippet result #7
+```
+
 ## Result Limiting
 ```bash
-manx fastapi --limit 5         # Show only first 5 results
-manx react hooks --limit 0     # Show all results (unlimited)
-manx vue --limit 15            # Show first 15 results
+manx snippet fastapi --limit 5         # Show only first 5 results
+manx snippet react hooks --limit 0     # Show all results (unlimited)
+manx doc vue --limit 15                # Show first 15 results
 # Default limit is 10 results
 ```
 
 ## Export Options
 ```bash
-manx fastapi --save 1,3,7     # Save specific results as markdown
-manx fastapi --save 1,3,7 --json  # Save as JSON
-manx react --save-all         # Save all results
-manx doc react -o react.md    # Export documentation
+manx snippet fastapi --save 1,3,7      # Save specific results as markdown
+manx snippet fastapi --save 1,3,7 --json  # Save as JSON
+manx snippet react --save-all          # Save all results
+manx doc react -o react.md             # Export documentation
+manx get doc-3 -o section.md           # Export specific result
 ```
 
 ## Cache Management
@@ -344,10 +387,10 @@ manx --clear-cache         # Quick cache clear (global flag)
 
 ## Other Options
 ```bash
-manx --limit 5                 # Limit number of results (default: 10)
-manx --offline                 # Use cache only (no network)
-manx --quiet                   # JSON output (for scripts)
-manx --debug                   # Enable debug logging
+manx snippet react --limit 5           # Limit number of results (default: 10)
+manx snippet fastapi --offline         # Use cache only (no network)
+manx --quiet snippet react             # JSON output (for scripts)
+manx --debug snippet fastapi           # Enable debug logging
 ```
 
 </details>
@@ -391,7 +434,7 @@ export MANX_API_KEY=sk-your-context7-key-here
 manx config --show
 
 # Test with your API key (should be much faster)
-manx fastapi
+manx snippet fastapi
 ```
 
 ### Removing Your API Key
@@ -489,21 +532,21 @@ Real: 0.9s  User: 0.15s  Sys: 0.08s
 ```bash
 # Check if library name is correct
 manx config --show                    # Verify settings
-manx fastapi                          # Try exact library name
-manx python                           # Try broader search
+manx snippet fastapi                  # Try exact library name
+manx snippet python                   # Try broader search
 
 # Clear cache and retry
 manx cache clear
-manx fastapi
+manx snippet fastapi
 ```
 
 #### Network/Connectivity Issues
 ```bash
 # Test with debug mode
-manx --debug fastapi
+manx --debug snippet fastapi
 
 # Use offline mode if you have cache
-manx --offline fastapi
+manx snippet fastapi --offline
 
 # Check Context7 status
 curl -I https://mcp.context7.com/mcp
@@ -516,7 +559,7 @@ manx cache stats
 
 # Clear and rebuild cache
 manx cache clear
-manx fastapi                          # Rebuild cache
+manx snippet fastapi                  # Rebuild cache
 
 # Use custom cache location
 manx config --cache-dir ~/my-cache
@@ -538,7 +581,7 @@ source ~/.bashrc
 
 ```bash
 # Enable debug mode
-manx --debug fastapi 2>&1 | tee debug.log
+manx --debug snippet fastapi 2>&1 | tee debug.log
 
 # Check cache directory
 ls -la ~/.cache/manx/

@@ -5,28 +5,25 @@ use std::path::PathBuf;
 #[command(
     name = "manx",
     about = "A blazing-fast CLI documentation finder",
-    long_about = "🚀 Manx - Fast documentation finder with two modes:
+    long_about = r#"🚀 Fast documentation finder with intelligent semantic search
 
-📝 SEARCH MODE (default): Find specific code snippets and examples
-    manx react hooks              Find React hooks code examples
-    manx fastapi middleware       Search FastAPI middleware snippets  
-    manx django auth --limit 5    Limit search results to 5 entries
+CORE COMMANDS:
+  snippet <lib> [query]          Search code snippets and examples
+  doc <lib> [topic]              Browse comprehensive documentation  
+  get <id>                       Retrieve specific results by ID
 
-📚 DOC MODE: Browse comprehensive guides and documentation
-    manx doc react               Browse full React documentation
-    manx doc fastapi \"async\"     Get FastAPI async documentation
-    manx doc django --limit 3    Show first 3 documentation sections
+SEMANTIC SEARCH - Use quotes to prioritize exact phrases:
+  manx snippet react "useEffect cleanup"   Prioritizes exact phrase matches
+  manx snippet tauri "table implementations" Phrases get 10x higher relevance
+  manx snippet fastapi middleware          Individual terms search
 
-💾 SAVE & EXPORT:
-    manx fastapi --save 1,3,7     Save specific search results
-    manx react --save-all --json Export all results as JSON
-    manx doc react -o react.md   Export docs to markdown
+EXAMPLES:
+  manx snippet react hooks                 Search React hooks examples
+  manx snippet react "useEffect cleanup"   Prioritize exact phrase match
+  manx doc fastapi                         Browse FastAPI documentation  
+  manx get doc-3                           Retrieve search result #3
 
-⚙️  CONFIGURATION:
-    manx config --show           Show current settings
-    manx cache clear            Clear cached data
-
-Use 'manx <command> --help' for detailed command information.",
+Use 'manx <command> --help' for detailed options."#,
     version = get_version_info(),
     author,
     arg_required_else_help = true
@@ -35,34 +32,13 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// Library name to search (examples: 'fastapi', 'react@18', 'vue@3')
-    #[arg(value_name = "LIBRARY", help_heading = "ARGUMENTS")]
-    pub library: Option<String>,
-
-    /// 📝 Search for specific code snippets and examples
-    #[arg(value_name = "QUERY", help_heading = "ARGUMENTS")]
-    pub query: Option<String>,
-
-    /// Export results to file (format auto-detected by extension: .md, .json)
-    #[arg(
-        short = 'o',
-        long,
-        value_name = "FILE",
-        help_heading = "OUTPUT OPTIONS"
-    )]
-    pub output: Option<PathBuf>,
+    /// Show detailed debug information and API requests
+    #[arg(long, help_heading = "DEBUG OPTIONS")]
+    pub debug: bool,
 
     /// Output JSON format (useful for scripts and automation)
     #[arg(short = 'q', long, help_heading = "OUTPUT OPTIONS")]
     pub quiet: bool,
-
-    /// Work offline using only cached results (no network requests)
-    #[arg(long, help_heading = "NETWORK OPTIONS")]
-    pub offline: bool,
-
-    /// Show detailed debug information and API requests
-    #[arg(long, help_heading = "DEBUG OPTIONS")]
-    pub debug: bool,
 
     /// Clear all cached documentation and start fresh
     #[arg(long, help_heading = "CACHE OPTIONS")]
@@ -75,27 +51,6 @@ pub struct Cli {
     /// Disable automatic caching (manual caching only)
     #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_off: bool,
-
-    /// Save specific search results by number (e.g., --save 1,3,7)
-    #[arg(long, value_name = "NUMBERS", help_heading = "SAVE OPTIONS")]
-    pub save: Option<String>,
-
-    /// Save all search results to file
-    #[arg(long, help_heading = "SAVE OPTIONS")]
-    pub save_all: bool,
-
-    /// Export in JSON format instead of Markdown (use with --save or --save-all)
-    #[arg(long, help_heading = "SAVE OPTIONS")]
-    pub json: bool,
-
-    /// Limit number of results shown (default: 10, use 0 for unlimited)
-    #[arg(
-        short = 'l',
-        long,
-        value_name = "NUMBER",
-        help_heading = "OUTPUT OPTIONS"
-    )]
-    pub limit: Option<usize>,
 }
 
 #[derive(Subcommand)]
@@ -116,23 +71,63 @@ pub enum Commands {
         limit: Option<usize>,
     },
 
-    /// Expand and view detailed information for a specific result
+    /// 🔍 Search for code snippets and examples
+    /// 
+    /// SEMANTIC SEARCH FEATURES:
+    ///   • Use quotes for exact phrases: "useEffect cleanup" 
+    ///   • Quoted phrases get 10x higher relevance scores
+    ///   • Individual terms: react hooks useState
+    ///   • Version-specific: react@18, django@4.2
+    ///
+    /// EXAMPLES:
+    ///   manx snippet react "useEffect cleanup"
+    ///   manx snippet fastapi "async middleware" --limit 5
+    ///   manx snippet django@4.2 models --save-all
     Snippet {
-        /// Result ID from previous search output
-        #[arg(value_name = "RESULT_ID")]
+        /// Library name (examples: 'fastapi', 'react@18', 'vue@3')
+        #[arg(value_name = "LIBRARY")]
+        library: String,
+        /// Search query for specific code snippets
+        #[arg(value_name = "QUERY")]
+        query: Option<String>,
+        /// Export results to file (format auto-detected by extension: .md, .json)
+        #[arg(short = 'o', long, value_name = "FILE")]
+        output: Option<PathBuf>,
+        /// Work offline using only cached results (no network requests)
+        #[arg(long)]
+        offline: bool,
+        /// Save specific search results by number (e.g., --save 1,3,7)
+        #[arg(long, value_name = "NUMBERS")]
+        save: Option<String>,
+        /// Save all search results to file
+        #[arg(long)]
+        save_all: bool,
+        /// Export in JSON format instead of Markdown (use with --save or --save-all)
+        #[arg(long)]
+        json: bool,
+        /// Limit number of results shown (default: 10, use 0 for unlimited)
+        #[arg(short = 'l', long, value_name = "NUMBER")]
+        limit: Option<usize>,
+    },
+
+    /// 📥 Get specific item by ID (doc-3, section-5, etc.)
+    Get {
+        /// Item ID from previous search or doc command output
+        #[arg(value_name = "ITEM_ID")]
         id: String,
-        /// Save snippet details to file
+        /// Save retrieved item to file
         #[arg(short = 'o', long, value_name = "FILE")]
         output: Option<PathBuf>,
     },
 
-    /// Manage local documentation cache
+
+    /// 🗂️ Manage local documentation cache
     Cache {
         #[command(subcommand)]
         command: CacheCommands,
     },
 
-    /// Configure Manx settings and preferences
+    /// ⚙️ Configure Manx settings and preferences
     Config {
         /// Display current configuration settings
         #[arg(long)]
@@ -154,7 +149,7 @@ pub enum Commands {
         max_cache_size: Option<u64>,
     },
 
-    /// 🔗 Open a specific documentation section by ID (e.g., 'doc-4')
+    /// 🔗 Open a specific documentation section by ID
     Open {
         /// Section ID from previous doc command output
         #[arg(value_name = "SECTION_ID")]
@@ -164,7 +159,7 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// Update Manx to the latest version from GitHub
+    /// 🔄 Update Manx to the latest version from GitHub
     Update {
         /// Check for updates without installing
         #[arg(long)]
@@ -194,20 +189,20 @@ impl Cli {
 fn get_version_info() -> &'static str {
     concat!(
         "\n",
-        "__| |________________________________________________________________________________| |__\n",
-        "__   ________________________________________________________________________________   __\n",
-        "  | |                                                                                | |  \n",
-        "  | | ███                    ██████   ██████   █████████   ██████   █████ █████ █████| |  \n",
-        "  | |░░░███                 ░░██████ ██████   ███░░░░░███ ░░██████ ░░███ ░░███ ░░███ | |  \n",
-        "  | |  ░░░███                ░███░█████░███  ░███    ░███  ░███░███ ░███  ░░███ ███  | |  \n",
-        "  | |    ░░░███              ░███░░███ ░███  ░███████████  ░███░░███░███   ░░█████   | |  \n",
-        "  | |     ███░               ░███ ░░░  ░███  ░███░░░░░███  ░███ ░░██████    ███░███  | |  \n",
-        "  | |   ███░                 ░███      ░███  ░███    ░███  ░███  ░░█████   ███ ░░███ | |  \n",
-        "  | | ███░      █████████    █████     █████ █████   █████ █████  ░░█████ █████ █████| |  \n",
-        "  | |░░░       ░░░░░░░░░    ░░░░░     ░░░░░ ░░░░░   ░░░░░ ░░░░░    ░░░░░ ░░░░░ ░░░░░ | |  \n",
-        "__| |________________________________________________________________________________| |__\n",
-        "__   ________________________________________________________________________________   __\n",
-        "  | |                                                                                | |  \n",
+        "__| |__________________________________________________________________________| |__\n",
+        "__   __________________________________________________________________________   __\n",
+        "  | |                                                                          | |  \n",
+        "  | |       ███        ██████   ██████   █████████   ██████   █████ █████ █████| |  \n",
+        "  | |      ░░░██      ░░██████ ██████   ███░░░░░███ ░░██████ ░░███ ░░███ ░░███ | |  \n",
+        "  | | ██     ░░██      ░███░█████░███  ░███    ░███  ░███░███ ░███  ░░███ ███  | |  \n",
+        "  | |░░       ░░███    ░███░░███ ░███  ░███████████  ░███░░███░███   ░░█████   | |  \n",
+        "  | |          ██░     ░███ ░░░  ░███  ░███░░░░░███  ░███ ░░██████    ███░███  | |  \n",
+        "  | |         ██       ░███      ░███  ░███    ░███  ░███  ░░█████   ███ ░░███ | |  \n",
+        "  | | ██    ███        █████     █████ █████   █████ █████  ░░█████ █████ █████| |  \n",
+        "  | |░░    ░░░        ░░░░░     ░░░░░ ░░░░░   ░░░░░ ░░░░░    ░░░░░ ░░░░░ ░░░░░ | |  \n",
+        "__| |__________________________________________________________________________| |__\n",
+        "__   __________________________________________________________________________   __\n",
+        "  | |                                                                          | |  \n",
         "\n",
         "  v", env!("CARGO_PKG_VERSION"), " • blazing-fast docs finder\n"
     )
