@@ -10,6 +10,19 @@ license = "MIT"
 readme = "README.md"
 keywords = ["cli", "documentation", "mcp", "context7", "terminal"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    "target/*",
+    "*.onnx",
+    "*.bin",
+    "*.safetensors",
+    ".github/*",
+    "docs/*",
+    "*.log",
+    "debug/*",
+    ".DS_Store",
+    ".vscode/*",
+    ".idea/*",
+]
 
 [[bin]]
 name = "manx"
