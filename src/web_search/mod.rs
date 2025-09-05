@@ -1,9 +1,9 @@
-//! Intelligent documentation search with DuckDuckGo + BERT embeddings
+//! Intelligent documentation search with DuckDuckGo + semantic embeddings
 //!
 //! This module provides official-first documentation search that:
 //! - Prioritizes official documentation sites by default
 //! - Falls back to trusted community sources with clear notifications
-//! - Uses BERT embeddings for semantic relevance filtering
+//! - Uses semantic embeddings for relevance filtering
 //! - Optionally uses LLM for authenticity verification and summarization
 //! - Maintains privacy with anonymous DuckDuckGo searches
 
@@ -107,14 +107,17 @@ impl DocumentationSearchSystem {
             return Err(anyhow!("Documentation search is disabled"));
         }
 
-        // Initialize BERT embeddings for semantic similarity
+        // Initialize semantic embeddings for similarity scoring
         let embedding_model = match crate::rag::embeddings::EmbeddingModel::new().await {
             Ok(model) => {
-                log::info!("BERT embeddings initialized for semantic search");
+                log::info!("Semantic embeddings initialized for search");
                 Some(model)
             }
             Err(e) => {
-                log::warn!("BERT embeddings unavailable, using text matching: {}", e);
+                log::warn!(
+                    "Semantic embeddings unavailable, using text matching: {}",
+                    e
+                );
                 None
             }
         };
@@ -209,9 +212,9 @@ impl DocumentationSearchSystem {
             });
         }
 
-        // Step 4: Process results with BERT semantic filtering and official source ranking
+        // Step 4: Process results with semantic filtering and official source ranking
         let mut processed_results = if let Some(ref embedding_model) = self.embedding_model {
-            result_processor::process_with_bert(
+            result_processor::process_with_embeddings(
                 query,
                 &all_results,
                 embedding_model,
@@ -220,7 +223,11 @@ impl DocumentationSearchSystem {
             )
             .await?
         } else {
-            result_processor::process_without_bert(query, &all_results, &self.official_sources)
+            result_processor::process_without_embeddings(
+                query,
+                &all_results,
+                &self.official_sources,
+            )
         };
 
         // Step 4a: Enhance results with additional metadata

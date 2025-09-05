@@ -1,7 +1,7 @@
-//! Result processing with BERT embeddings and official source ranking
+//! Result processing with semantic embeddings and official source ranking
 //!
 //! This module processes raw search results by:
-//! - Using BERT embeddings for semantic similarity scoring
+//! - Using semantic embeddings for similarity scoring
 //! - Applying official source priority boosts
 //! - Ranking results by combined relevance + authority scores
 
@@ -10,8 +10,8 @@ use crate::web_search::official_sources::{OfficialSourceManager, SourceTier};
 use crate::web_search::{ProcessedSearchResult, RawSearchResult};
 use anyhow::Result;
 
-/// Process search results with BERT semantic similarity
-pub async fn process_with_bert(
+/// Process search results with semantic similarity
+pub async fn process_with_embeddings(
     query: &str,
     raw_results: &[RawSearchResult],
     embedding_model: &EmbeddingModel,
@@ -19,7 +19,7 @@ pub async fn process_with_bert(
     similarity_threshold: f32,
 ) -> Result<Vec<ProcessedSearchResult>> {
     log::info!(
-        "Processing {} results with BERT embeddings",
+        "Processing {} results with semantic embeddings",
         raw_results.len()
     );
 
@@ -101,14 +101,14 @@ pub async fn process_with_bert(
     Ok(processed_results)
 }
 
-/// Process search results without BERT (fallback method)
-pub fn process_without_bert(
+/// Process search results without embeddings (fallback method)
+pub fn process_without_embeddings(
     query: &str,
     raw_results: &[RawSearchResult],
     official_sources: &OfficialSourceManager,
 ) -> Vec<ProcessedSearchResult> {
     log::info!(
-        "Processing {} results with text matching (no BERT)",
+        "Processing {} results with text matching (no embeddings)",
         raw_results.len()
     );
 
@@ -308,7 +308,7 @@ mod tests {
     use chrono::Utc;
 
     #[test]
-    fn test_process_without_bert() {
+    fn test_process_without_embeddings() {
         let official_sources = OfficialSourceManager::new();
 
         let raw_results = vec![
@@ -328,7 +328,7 @@ mod tests {
             },
         ];
 
-        let results = process_without_bert("python", &raw_results, &official_sources);
+        let results = process_without_embeddings("python", &raw_results, &official_sources);
 
         assert_eq!(results.len(), 2);
         assert!(results[0].is_official); // Official source should rank higher

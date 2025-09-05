@@ -14,7 +14,7 @@ use colored::{control, Colorize};
 use std::process;
 
 use crate::cache::CacheManager;
-use crate::cli::{CacheCommands, Cli, Commands, SourceCommands};
+use crate::cli::{CacheCommands, Cli, Commands, EmbeddingCommands, SourceCommands};
 use crate::client::Context7Client;
 use crate::config::Config;
 use crate::export::Exporter;
@@ -103,6 +103,10 @@ async fn run() -> Result<()> {
             llm_api,
             rag,
             add_official_domain,
+            embedding_provider,
+            embedding_api_key,
+            embedding_model_path,
+            embedding_dimension,
         }) => {
             if show {
                 println!("{}", config.display());
@@ -280,6 +284,66 @@ async fn run() -> Result<()> {
                     updated = true;
                 }
 
+                // Embedding configuration
+                if let Some(provider) = embedding_provider {
+                    match config.set_embedding_provider(&provider) {
+                        Ok(_) => {
+                            renderer
+                                .print_success(&format!("Embedding provider set to {}", provider));
+
+                            // Detect and update dimension from the new provider
+                            if let Err(e) = config.rag.embedding.detect_and_update_dimension().await
+                            {
+                                log::warn!("Could not detect dimension for new provider: {}", e);
+                                println!("   ⚠️  Dimension will be detected on first use");
+                            } else {
+                                // Save the updated dimension
+                                if let Err(e) = config.save() {
+                                    log::warn!("Could not save updated dimension: {}", e);
+                                } else {
+                                    println!(
+                                        "   ✅ Detected and updated dimension: {}",
+                                        config.rag.embedding.dimension
+                                    );
+                                }
+                            }
+
+                            updated = true;
+                        }
+                        Err(e) => {
+                            renderer.print_error(&e.to_string());
+                        }
+                    }
+                }
+
+                if let Some(key) = embedding_api_key {
+                    config.set_embedding_api_key(key)?;
+                    renderer.print_success("Embedding API key updated");
+                    updated = true;
+                }
+
+                if let Some(path) = embedding_model_path {
+                    config.set_embedding_model_path(path.clone())?;
+                    renderer
+                        .print_success(&format!("Embedding model path set to {}", path.display()));
+                    updated = true;
+                }
+
+                if let Some(dimension) = embedding_dimension {
+                    match config.set_embedding_dimension(dimension) {
+                        Ok(_) => {
+                            renderer.print_success(&format!(
+                                "Embedding dimension set to {}",
+                                dimension
+                            ));
+                            updated = true;
+                        }
+                        Err(e) => {
+                            renderer.print_error(&e.to_string());
+                        }
+                    }
+                }
+
                 if updated {
                     config.save()?;
                 } else {
@@ -332,18 +396,32 @@ async fn run() -> Result<()> {
             output,
             limit,
             no_llm,
+            rag,
         }) => {
-            handle_doc_command(
-                &library,
-                &query,
-                output.as_ref(),
-                &config,
-                &renderer,
-                false,
-                limit,
-                no_llm,
-            )
-            .await?;
+            if rag {
+                handle_rag_doc_command(
+                    &library,
+                    &query,
+                    output.as_ref(),
+                    &config,
+                    &renderer,
+                    limit.as_ref(),
+                    &no_llm,
+                )
+                .await?;
+            } else {
+                handle_doc_command(
+                    &library,
+                    &query,
+                    output.as_ref(),
+                    &config,
+                    &renderer,
+                    false,
+                    limit,
+                    no_llm,
+                )
+                .await?;
+            }
         }
 
         Some(Commands::Snippet {
@@ -356,22 +434,39 @@ async fn run() -> Result<()> {
             json,
             limit,
             no_llm,
+            rag,
         }) => {
             let query_str = query.unwrap_or_default();
-            handle_search_command(
-                &library,
-                &query_str,
-                output.as_ref(),
-                &config,
-                &renderer,
-                offline,
-                save.as_ref(),
-                save_all,
-                json,
-                limit,
-                no_llm,
-            )
-            .await?;
+            if rag {
+                handle_rag_snippet_command(
+                    &library,
+                    &query_str,
+                    output.as_ref(),
+                    &config,
+                    &renderer,
+                    save.as_ref(),
+                    &save_all,
+                    &json,
+                    limit.as_ref(),
+                    &no_llm,
+                )
+                .await?;
+            } else {
+                handle_search_command(
+                    &library,
+                    &query_str,
+                    output.as_ref(),
+                    &config,
+                    &renderer,
+                    offline,
+                    save.as_ref(),
+                    save_all,
+                    json,
+                    limit,
+                    no_llm,
+                )
+                .await?;
+            }
         }
 
         Some(Commands::Search {
@@ -379,9 +474,15 @@ async fn run() -> Result<()> {
             no_llm,
             output,
             limit,
+            rag,
         }) => {
-            handle_web_search_command(&query, no_llm, output.as_ref(), limit, &config, &renderer)
-                .await?;
+            if rag {
+                handle_rag_search_command(&query, &no_llm, output.as_ref(), limit.as_ref(), &config, &renderer)
+                    .await?;
+            } else {
+                handle_web_search_command(&query, no_llm, output.as_ref(), limit, &config, &renderer)
+                    .await?;
+            }
         }
 
         Some(Commands::Get { id, output }) => {
@@ -426,6 +527,10 @@ async fn run() -> Result<()> {
 
         Some(Commands::Sources { command }) => {
             handle_sources_command(command, &config, &renderer).await?;
+        }
+
+        Some(Commands::Embedding { command }) => {
+            handle_embedding_command(command, &mut config, &renderer).await?;
         }
 
         None => {
@@ -477,13 +582,13 @@ async fn handle_search_command(
         }
     }
 
-    // Initialize BERT-enhanced search engine for snippets
+    // Initialize semantically-enhanced search engine for snippets
     let client = Context7Client::new(config.api_key.clone())?;
-    let search_engine = match SearchEngine::with_bert(client).await {
+    let search_engine = match SearchEngine::with_embeddings(client).await {
         Ok(engine) => {
-            let search_mode = if engine.has_bert() {
+            let search_mode = if engine.has_embeddings() {
                 format!(
-                    "🧠 Searching {} with BERT semantic matching for '{}'",
+                    "🧠 Searching {} with semantic matching for '{}'",
                     library, query
                 )
             } else {
@@ -497,7 +602,10 @@ async fn handle_search_command(
             engine
         }
         Err(e) => {
-            log::warn!("BERT initialization failed, using text-based search: {}", e);
+            log::warn!(
+                "Semantic embeddings initialization failed, using text-based search: {}",
+                e
+            );
             let pb =
                 renderer.show_progress(&format!("📝 Searching {} for '{}'...", library, query));
             pb.finish_and_clear();
@@ -788,21 +896,24 @@ async fn handle_doc_command(
         }
     }
 
-    // Initialize BERT-enhanced search engine
+    // Initialize semantically-enhanced search engine
     let client = Context7Client::new(config.api_key.clone())?;
-    let search_engine = match SearchEngine::with_bert(client).await {
+    let search_engine = match SearchEngine::with_embeddings(client).await {
         Ok(engine) => {
-            let search_mode = if engine.has_bert() {
-                "🧠 Fetching documentation with BERT semantic processing"
+            let search_mode = if engine.has_embeddings() {
+                "🧠 Fetching documentation with semantic processing"
             } else {
-                "📝 Fetching documentation (BERT unavailable)"
+                "📝 Fetching documentation (semantic embeddings unavailable)"
             };
             let pb = renderer.show_progress(search_mode);
             pb.finish_and_clear();
             engine
         }
         Err(e) => {
-            log::warn!("BERT initialization failed, using text-based search: {}", e);
+            log::warn!(
+                "Semantic embeddings initialization failed, using text-based search: {}",
+                e
+            );
             let pb = renderer.show_progress(&format!("📝 Fetching {} documentation...", library));
             pb.finish_and_clear();
             SearchEngine::new(Context7Client::new(config.api_key.clone())?)
@@ -1435,6 +1546,380 @@ fn truncate_text(text: &str, max_length: usize, preserve_sentences: bool) -> Str
     format!("{}...", text[..truncation_point].trim())
 }
 
+/// Handle embedding commands for managing semantic search models
+async fn handle_embedding_command(
+    command: EmbeddingCommands,
+    config: &mut Config,
+    renderer: &Renderer,
+) -> Result<()> {
+    use crate::rag::embeddings::EmbeddingModel;
+
+    match command {
+        EmbeddingCommands::Status => {
+            renderer.print_success("🧠 Embedding Configuration:");
+            println!("  Provider: {:?}", config.rag.embedding.provider);
+            println!("  Dimension: {}", config.rag.embedding.dimension);
+
+            if let Some(model_path) = &config.rag.embedding.model_path {
+                println!("  Model Path: {}", model_path.display());
+            }
+
+            if config.rag.embedding.api_key.is_some() {
+                println!("  API Key: ****");
+            }
+
+            if let Some(endpoint) = &config.rag.embedding.endpoint {
+                println!("  Endpoint: {}", endpoint);
+            }
+
+            // Test if embedding model loads successfully and detect dimension
+            println!("\n🔄 Testing embedding model...");
+            match EmbeddingModel::new_with_config(config.rag.embedding.clone()).await {
+                Ok(model) => {
+                    // Test health check
+                    match model.health_check().await {
+                        Ok(()) => renderer.print_success("✅ Embedding model loads successfully"),
+                        Err(e) => {
+                            renderer.print_error(&format!("❌ Health check failed: {}", e));
+                            return Ok(());
+                        }
+                    }
+
+                    // Get actual dimension
+                    match model.get_dimension().await {
+                        Ok(dim) => {
+                            if dim != config.rag.embedding.dimension {
+                                println!(
+                                    "   ⚠️  Actual dimension: {} (config shows: {})",
+                                    dim, config.rag.embedding.dimension
+                                );
+                            } else {
+                                println!("   ✅ Confirmed dimension: {}", dim);
+                            }
+                        }
+                        Err(e) => {
+                            println!("   ⚠️  Could not detect dimension: {}", e);
+                        }
+                    }
+
+                    // Show provider info
+                    let provider_info = model.get_provider_info();
+                    println!("   Provider: {}", provider_info.name);
+                    println!("   Type: {}", provider_info.provider_type);
+                    if let Some(model_name) = &provider_info.model_name {
+                        println!("   Model: {}", model_name);
+                    }
+                    if let Some(max_len) = provider_info.max_input_length {
+                        println!("   Max input length: {}", max_len);
+                    }
+                    if !provider_info.description.is_empty() {
+                        println!("   Description: {}", provider_info.description);
+                    }
+
+                    // Show current config
+                    let current_config = model.get_config();
+                    if let Some(endpoint) = &current_config.endpoint {
+                        println!("   Configured endpoint: {}", endpoint);
+                    }
+                    if current_config.api_key.is_some() {
+                        println!("   API key configured: Yes");
+                    }
+                }
+                Err(e) => {
+                    renderer.print_error(&format!("❌ Embedding model failed to load: {}", e));
+                    println!("   Tip: Use 'manx embedding download <model>' for ONNX models");
+                    println!("   Tip: Check API keys for cloud providers");
+                }
+            }
+        }
+
+        EmbeddingCommands::Set {
+            provider,
+            api_key,
+            endpoint,
+            dimension,
+        } => {
+            // Set provider
+            match config.set_embedding_provider(&provider) {
+                Ok(_) => {
+                    renderer.print_success(&format!("Embedding provider set to: {}", provider));
+                }
+                Err(e) => {
+                    renderer.print_error(&e.to_string());
+                    return Ok(());
+                }
+            }
+
+            // Set API key if provided
+            if let Some(key) = api_key {
+                config.set_embedding_api_key(key)?;
+                renderer.print_success("Embedding API key updated");
+            }
+
+            // Set endpoint if provided
+            if let Some(url) = endpoint {
+                config.rag.embedding.endpoint = Some(url.clone());
+                config.save()?;
+                renderer.print_success(&format!("Embedding endpoint set to: {}", url));
+            }
+
+            // Set dimension if provided
+            if let Some(dim) = dimension {
+                match config.set_embedding_dimension(dim) {
+                    Ok(_) => {
+                        renderer.print_success(&format!("Embedding dimension set to: {}", dim));
+                    }
+                    Err(e) => {
+                        renderer.print_error(&e.to_string());
+                    }
+                }
+            }
+
+            // Test new configuration
+            println!("\n🔄 Testing new configuration...");
+            match EmbeddingModel::new_with_config(config.rag.embedding.clone()).await {
+                Ok(_) => {
+                    renderer.print_success("✅ New embedding configuration works!");
+                }
+                Err(e) => {
+                    renderer.print_error(&format!("❌ New configuration failed: {}", e));
+                }
+            }
+        }
+
+        EmbeddingCommands::Download { model, force } => {
+            use crate::rag::providers::onnx::OnnxProvider;
+
+            let pb = renderer.show_progress(&format!("Downloading model: {}", model));
+
+            match OnnxProvider::download_model(&model, force).await {
+                Ok(()) => {
+                    pb.finish_and_clear();
+                    renderer.print_success(&format!("✅ Successfully downloaded model: {}", model));
+
+                    // Update config to detect and store the actual dimension
+                    if let Err(e) = config.rag.embedding.detect_and_update_dimension().await {
+                        log::warn!("Could not detect dimension: {}", e);
+                    }
+                }
+                Err(e) => {
+                    pb.finish_and_clear();
+                    renderer.print_error(&format!("❌ Failed to download model: {}", e));
+                }
+            }
+        }
+
+        EmbeddingCommands::List { available } => {
+            if available {
+                use crate::rag::providers::onnx::OnnxProvider;
+
+                renderer.print_success("🌐 Available Models for Download:");
+                let models = OnnxProvider::list_available_models();
+                for model in models {
+                    println!("  • {}", model);
+                }
+                println!("\nUse 'manx embedding download <model-name>' to install.");
+            } else {
+                use crate::rag::model_metadata::ModelMetadataManager;
+
+                match ModelMetadataManager::new() {
+                    Ok(manager) => {
+                        let models = manager.list_models();
+                        if models.is_empty() {
+                            renderer.print_success("💾 No models installed yet.");
+                            println!("Use 'manx embedding download <model>' to install models.");
+                        } else {
+                            renderer
+                                .print_success(&format!("💾 Installed Models ({}):", models.len()));
+                            for model in models {
+                                println!("\n  📦 {}", model.model_name);
+                                println!("     Type: {}", model.provider_type);
+                                println!("     Dimension: {}", model.dimension);
+                                println!("     Size: {:.1} MB", model.size_mb);
+                                println!(
+                                    "     Installed: {}",
+                                    model.installed_date.format("%Y-%m-%d %H:%M:%S")
+                                );
+                                if let Some(last_used) = &model.last_used {
+                                    println!(
+                                        "     Last used: {}",
+                                        last_used.format("%Y-%m-%d %H:%M:%S")
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        renderer.print_error(&format!("Failed to list models: {}", e));
+                    }
+                }
+            }
+        }
+
+        EmbeddingCommands::Test { query, verbose } => {
+            println!("🔄 Testing embedding generation with query: '{}'", query);
+
+            let start_time = std::time::Instant::now();
+
+            match EmbeddingModel::new_with_config(config.rag.embedding.clone()).await {
+                Ok(model) => {
+                    // Show provider info
+                    let provider_info = model.get_provider_info();
+                    println!("🔧 Using provider: {}", provider_info.name);
+                    if let Some(model_name) = &provider_info.model_name {
+                        println!("🏷️  Model: {}", model_name);
+                    }
+
+                    match model.embed_text(&query).await {
+                        Ok(embedding) => {
+                            let duration = start_time.elapsed();
+                            renderer.print_success(&format!(
+                                "✅ Successfully generated embedding with {} dimensions in {:.2}ms",
+                                embedding.len(),
+                                duration.as_millis()
+                            ));
+
+                            // Update config with actual dimension if different
+                            if let Ok(actual_dim) = model.get_dimension().await {
+                                if actual_dim != config.rag.embedding.dimension {
+                                    println!(
+                                        "⚠️  Updating dimension: {} -> {}",
+                                        config.rag.embedding.dimension, actual_dim
+                                    );
+                                    config.rag.embedding.dimension = actual_dim;
+                                    let _ = config.save();
+                                }
+                            }
+
+                            if verbose {
+                                println!("\n📊 Embedding Vector (first 10 values):");
+                                for (i, val) in embedding.iter().take(10).enumerate() {
+                                    println!("  [{}]: {:.6}", i, val);
+                                }
+                                if embedding.len() > 10 {
+                                    println!("  ... ({} more values)", embedding.len() - 10);
+                                }
+
+                                // Calculate vector statistics
+                                let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                                let mean: f32 =
+                                    embedding.iter().sum::<f32>() / embedding.len() as f32;
+                                let variance: f32 =
+                                    embedding.iter().map(|x| (x - mean).powi(2)).sum::<f32>()
+                                        / embedding.len() as f32;
+                                let std_dev = variance.sqrt();
+
+                                println!("\n📐 Vector Statistics:");
+                                println!("  Norm: {:.6}", norm);
+                                println!("  Mean: {:.6}", mean);
+                                println!("  Std Dev: {:.6}", std_dev);
+                                println!(
+                                    "  Min: {:.6}",
+                                    embedding.iter().fold(f32::INFINITY, |a, &b| a.min(b))
+                                );
+                                println!(
+                                    "  Max: {:.6}",
+                                    embedding.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b))
+                                );
+                            }
+
+                            // Test similarity with itself (should be ~1.0)
+                            if let Ok(embedding2) = model.embed_text(&query).await {
+                                let similarity =
+                                    EmbeddingModel::cosine_similarity(&embedding, &embedding2);
+                                println!(
+                                    "\n🔄 Self-similarity test: {:.6} (should be ~1.0)",
+                                    similarity
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            renderer
+                                .print_error(&format!("❌ Failed to generate embedding: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    renderer.print_error(&format!("❌ Failed to load embedding model: {}", e));
+
+                    // Provide helpful error messages based on provider type
+                    match &config.rag.embedding.provider {
+                        crate::rag::EmbeddingProvider::Onnx(model) => {
+                            println!("💡 Try: manx embedding download {}", model);
+                        }
+                        crate::rag::EmbeddingProvider::OpenAI(_) => {
+                            println!("💡 Check: manx config --embedding-api-key <your-openai-key>");
+                        }
+                        crate::rag::EmbeddingProvider::HuggingFace(_) => {
+                            println!("💡 Check: manx config --embedding-api-key <your-hf-key>");
+                        }
+                        crate::rag::EmbeddingProvider::Ollama(_) => {
+                            println!("💡 Check: Is Ollama server running? (ollama serve)");
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        EmbeddingCommands::Remove { model } => {
+            use crate::rag::model_metadata::ModelMetadataManager;
+
+            match ModelMetadataManager::new() {
+                Ok(mut manager) => {
+                    if let Some(metadata) = manager.get_model(&model).cloned() {
+                        // Confirm deletion
+                        println!("⚠️  About to remove model: {}", model);
+                        println!("   Type: {}", metadata.provider_type);
+                        println!("   Size: {:.1} MB", metadata.size_mb);
+
+                        // Simple confirmation (in a real CLI, you might use a proper prompt)
+                        println!("\nAre you sure? Type 'yes' to confirm:");
+                        let mut input = String::new();
+                        if std::io::stdin().read_line(&mut input).is_ok() {
+                            if input.trim().to_lowercase() == "yes" {
+                                // Remove model files if they exist
+                                if let Some(model_path) = &metadata.model_path {
+                                    if model_path.exists() {
+                                        if let Err(e) = std::fs::remove_dir_all(model_path) {
+                                            renderer.print_error(&format!(
+                                                "Failed to remove model files: {}",
+                                                e
+                                            ));
+                                            return Ok(());
+                                        }
+                                    }
+                                }
+
+                                // Remove from metadata
+                                if let Err(e) = manager.remove_model(&model) {
+                                    renderer
+                                        .print_error(&format!("Failed to update metadata: {}", e));
+                                    return Ok(());
+                                }
+
+                                renderer.print_success(&format!(
+                                    "✅ Successfully removed model: {}",
+                                    model
+                                ));
+                            } else {
+                                println!("❌ Cancelled.");
+                            }
+                        }
+                    } else {
+                        renderer.print_error(&format!("Model '{}' not found.", model));
+                    }
+                }
+                Err(e) => {
+                    renderer.print_error(&format!("Failed to access model metadata: {}", e));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Handle web search command for official documentation
 async fn handle_web_search_command(
     query: &str,
@@ -1464,7 +1949,7 @@ async fn handle_web_search_command(
     } else if config.has_llm_configured() {
         "🔍 Searching (LLM disabled by --no-llm)"
     } else {
-        "🔍 Searching with BERT semantic matching"
+        "🔍 Searching with semantic matching"
     };
 
     let pb = renderer.show_progress(&format!("{} for '{}'", search_mode, query));
@@ -1715,5 +2200,456 @@ async fn handle_web_search_command(
         }
     }
 
+    Ok(())
+}
+
+/// Handle RAG search command for searching locally indexed documents
+async fn handle_rag_search_command(
+    query: &str,
+    no_llm: &bool,
+    output: Option<&PathBuf>,
+    limit: Option<&usize>,
+    config: &Config,
+    renderer: &render::Renderer,
+) -> Result<()> {
+    if query.trim().is_empty() {
+        renderer.print_error("Search query cannot be empty");
+        return Ok(());
+    }
+
+    // Check if RAG is enabled
+    if !config.rag.enabled {
+        renderer.print_error("RAG (local document search) is not enabled.");
+        println!("💡 Enable with: manx config --rag-enabled");
+        return Ok(());
+    }
+
+    let search_mode = if config.should_use_llm(*no_llm) {
+        "🔍 Searching indexed documents with AI synthesis"
+    } else {
+        "🔍 Searching indexed documents with semantic matching"
+    };
+
+    let pb = renderer.show_progress(&format!("{} for '{}'", search_mode, query));
+
+    // Initialize RAG system
+    let rag_system = match crate::rag::RagSystem::new(config.rag.clone()).await {
+        Ok(system) => system,
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("Failed to initialize RAG system: {}", e));
+            println!("💡 Try indexing documents first: manx index /path/to/docs");
+            return Ok(());
+        }
+    };
+
+    // Perform search
+    let max_results = limit.copied().unwrap_or(10);
+    match rag_system.search(query, Some(max_results)).await {
+        Ok(results) => {
+            pb.finish_and_clear();
+
+            if results.is_empty() {
+                renderer.print_error("No relevant documents found in local index");
+                println!("💡 Index more documents with: manx index /path/to/docs");
+                return Ok(());
+            }
+
+            renderer.print_success(&format!("✓ Found {} results from indexed documents", results.len()));
+
+            // Apply LLM synthesis if configured
+            if config.should_use_llm(*no_llm) && !results.is_empty() {
+                match synthesize_rag_results(query, &results, config, renderer).await {
+                    Ok(synthesis) => {
+                        println!("\n🤖 AI Analysis:");
+                        println!("{}", synthesis.answer);
+                        
+                        if !synthesis.citations.is_empty() {
+                            println!("\n📖 Sources:");
+                            for citation in synthesis.citations.iter().take(5) {
+                                println!("  • {}", citation.source_title);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("LLM synthesis failed: {}", e);
+                        renderer.print_error("AI synthesis failed, showing search results only");
+                    }
+                }
+            }
+
+            // Display results
+            display_rag_results(&results, renderer);
+
+            // Handle output if specified
+            if let Some(output_path) = output {
+                export_rag_results(&results, output_path, renderer)?;
+            }
+        }
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("RAG search failed: {}", e));
+            println!("💡 Try: manx config --rag-enabled or index documents with: manx index /path");
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle RAG snippet command for searching locally indexed documents with library focus
+async fn handle_rag_snippet_command(
+    library: &str,
+    query: &str,
+    output: Option<&PathBuf>,
+    config: &Config,
+    renderer: &render::Renderer,
+    save: Option<&String>,
+    save_all: &bool,
+    json: &bool,
+    limit: Option<&usize>,
+    no_llm: &bool,
+) -> Result<()> {
+    if query.trim().is_empty() {
+        renderer.print_error("Search query cannot be empty");
+        return Ok(());
+    }
+
+    // Check if RAG is enabled
+    if !config.rag.enabled {
+        renderer.print_error("RAG (local document search) is not enabled.");
+        println!("💡 Enable with: manx config --rag-enabled");
+        return Ok(());
+    }
+
+    // Combine library and query for focused search
+    let focused_query = if !library.is_empty() {
+        format!("{} {}", library, query)
+    } else {
+        query.to_string()
+    };
+
+    let search_mode = if config.should_use_llm(*no_llm) {
+        "🔍 Finding code snippets with AI understanding"
+    } else {
+        "🔍 Finding code snippets with semantic matching"
+    };
+
+    let pb = renderer.show_progress(&format!("{} for '{}'", search_mode, focused_query));
+
+    // Initialize RAG system
+    let rag_system = match crate::rag::RagSystem::new(config.rag.clone()).await {
+        Ok(system) => system,
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("Failed to initialize RAG system: {}", e));
+            return Ok(());
+        }
+    };
+
+    // Perform search
+    let max_results = limit.copied().unwrap_or(10);
+    match rag_system.search(&focused_query, Some(max_results)).await {
+        Ok(results) => {
+            pb.finish_and_clear();
+
+            if results.is_empty() {
+                renderer.print_error(&format!("No code snippets found for '{}' in indexed documents", library));
+                println!("💡 Try: manx index /path/to/code");
+                return Ok(());
+            }
+
+            renderer.print_success(&format!("✓ Found {} snippets for {}", results.len(), library));
+
+            // Apply LLM synthesis if configured
+            if config.should_use_llm(*no_llm) && !results.is_empty() {
+                match synthesize_rag_results(&focused_query, &results, config, renderer).await {
+                    Ok(synthesis) => {
+                        println!("\n🤖 Code Analysis:");
+                        println!("{}", synthesis.answer);
+                    }
+                    Err(e) => {
+                        log::warn!("LLM synthesis failed: {}", e);
+                    }
+                }
+            }
+
+            // Display snippet results
+            display_rag_snippet_results(&results, library, renderer);
+
+            // Handle saving and export
+            handle_snippet_save_and_export(&results, save, save_all, json, output, renderer)?;
+        }
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("RAG snippet search failed: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle RAG doc command for searching locally indexed documents
+async fn handle_rag_doc_command(
+    library: &str,
+    query: &str,
+    output: Option<&PathBuf>,
+    config: &Config,
+    renderer: &render::Renderer,
+    limit: Option<&usize>,
+    no_llm: &bool,
+) -> Result<()> {
+    // Check if RAG is enabled
+    if !config.rag.enabled {
+        renderer.print_error("RAG (local document search) is not enabled.");
+        println!("💡 Enable with: manx config --rag-enabled");
+        return Ok(());
+    }
+
+    let search_query = if !query.is_empty() {
+        format!("{} {}", library, query)
+    } else {
+        library.to_string()
+    };
+
+    let search_mode = if config.should_use_llm(*no_llm) {
+        "📚 Finding documentation with AI understanding"
+    } else {
+        "📚 Finding documentation with semantic matching"
+    };
+
+    let pb = renderer.show_progress(&format!("{} for '{}'", search_mode, search_query));
+
+    // Initialize RAG system
+    let rag_system = match crate::rag::RagSystem::new(config.rag.clone()).await {
+        Ok(system) => system,
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("Failed to initialize RAG system: {}", e));
+            return Ok(());
+        }
+    };
+
+    // Perform search
+    let max_results = limit.copied().unwrap_or(10);
+    match rag_system.search(&search_query, Some(max_results)).await {
+        Ok(results) => {
+            pb.finish_and_clear();
+
+            if results.is_empty() {
+                renderer.print_error(&format!("No documentation found for '{}' in indexed documents", library));
+                return Ok(());
+            }
+
+            renderer.print_success(&format!("✓ Found {} documentation sections for {}", results.len(), library));
+
+            // Apply LLM synthesis if configured
+            if config.should_use_llm(*no_llm) && !results.is_empty() {
+                match synthesize_rag_results(&search_query, &results, config, renderer).await {
+                    Ok(synthesis) => {
+                        println!("\n🤖 Documentation Summary:");
+                        println!("{}", synthesis.answer);
+                    }
+                    Err(e) => {
+                        log::warn!("LLM synthesis failed: {}", e);
+                    }
+                }
+            }
+
+            // Display documentation results
+            display_rag_doc_results(&results, library, renderer);
+
+            // Handle output if specified
+            if let Some(output_path) = output {
+                export_rag_results(&results, output_path, renderer)?;
+            }
+        }
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("RAG doc search failed: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+/// Synthesize RAG results using LLM
+async fn synthesize_rag_results(
+    query: &str,
+    results: &[crate::rag::RagSearchResult],
+    config: &Config,
+    _renderer: &render::Renderer,
+) -> Result<crate::rag::llm::LlmResponse> {
+    let llm_client = crate::rag::llm::LlmClient::new(config.llm.clone())?;
+    llm_client.synthesize_answer(query, results).await
+}
+
+/// Display RAG search results
+fn display_rag_results(results: &[crate::rag::RagSearchResult], _renderer: &render::Renderer) {
+    println!("\n📄 Local Document Results:");
+    for (i, result) in results.iter().enumerate() {
+        println!("\n{}. {} (Score: {:.2})", i + 1, 
+            result.title.as_deref().unwrap_or("Untitled"), 
+            result.score
+        );
+        println!("   📁 {}", result.source_path.display());
+        
+        let preview = if result.content.len() > 150 {
+            format!("{}...", &result.content[..150])
+        } else {
+            result.content.clone()
+        };
+        println!("   {}", preview);
+    }
+}
+
+/// Display RAG snippet results with code focus
+fn display_rag_snippet_results(results: &[crate::rag::RagSearchResult], library: &str, _renderer: &render::Renderer) {
+    println!("\n💻 Code Snippets for {}:", library);
+    for (i, result) in results.iter().enumerate() {
+        println!("\n{}. {} (Score: {:.2})", i + 1,
+            result.title.as_deref().unwrap_or("Code Snippet"),
+            result.score
+        );
+        println!("   📁 {}", result.source_path.display());
+        
+        // Show code content with some formatting
+        println!("   ```");
+        let lines: Vec<&str> = result.content.lines().take(8).collect();
+        for line in lines {
+            println!("   {}", line);
+        }
+        if result.content.lines().count() > 8 {
+            println!("   ... (truncated)");
+        }
+        println!("   ```");
+    }
+}
+
+/// Display RAG documentation results
+fn display_rag_doc_results(results: &[crate::rag::RagSearchResult], library: &str, _renderer: &render::Renderer) {
+    println!("\n📖 Documentation for {}:", library);
+    for (i, result) in results.iter().enumerate() {
+        println!("\n{}. {} (Score: {:.2})", i + 1,
+            result.title.as_deref().unwrap_or("Documentation"),
+            result.score
+        );
+        println!("   📁 {}", result.source_path.display());
+        
+        let preview = if result.content.len() > 200 {
+            format!("{}...", &result.content[..200])
+        } else {
+            result.content.clone()
+        };
+        println!("   {}", preview);
+    }
+}
+
+/// Export RAG results to file
+fn export_rag_results(
+    results: &[crate::rag::RagSearchResult],
+    output_path: &PathBuf,
+    renderer: &render::Renderer,
+) -> Result<()> {
+    let export_content = if output_path.extension().and_then(|s| s.to_str()) == Some("json") {
+        serde_json::to_string_pretty(results)?
+    } else {
+        // Export as markdown
+        let mut content = String::new();
+        content.push_str("# Local Document Search Results\n\n");
+        
+        for (i, result) in results.iter().enumerate() {
+            content.push_str(&format!("## {}. {}\n\n", i + 1, 
+                result.title.as_deref().unwrap_or("Untitled")));
+            content.push_str(&format!("**Source:** `{}`\n", result.source_path.display()));
+            content.push_str(&format!("**Score:** {:.3}\n\n", result.score));
+            content.push_str(&result.content);
+            content.push_str("\n\n---\n\n");
+        }
+        content
+    };
+
+    std::fs::write(output_path, export_content)
+        .context("Failed to write export file")?;
+    renderer.print_success(&format!("Results exported to: {}", output_path.display()));
+    
+    Ok(())
+}
+
+/// Handle snippet saving and export functionality
+fn handle_snippet_save_and_export(
+    results: &[crate::rag::RagSearchResult],
+    save: Option<&String>,
+    save_all: &bool,
+    json: &bool,
+    output: Option<&PathBuf>,
+    renderer: &render::Renderer,
+) -> Result<()> {
+    // Handle individual saves
+    if let Some(save_indices) = save {
+        let indices: Result<Vec<usize>, _> = save_indices
+            .split(',')
+            .map(|s| s.trim().parse::<usize>().map(|i| i.saturating_sub(1)))
+            .collect();
+        
+        match indices {
+            Ok(indices) => {
+                for &idx in &indices {
+                    if let Some(result) = results.get(idx) {
+                        let filename = format!("snippet_{}_{}.{}", 
+                            idx + 1, 
+                            result.source_path.file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("snippet"),
+                            if *json { "json" } else { "md" }
+                        );
+                        
+                        let content = if *json {
+                            serde_json::to_string_pretty(result)?
+                        } else {
+                            format!("# {}\n\n**Source:** `{}`\n\n{}", 
+                                result.title.as_deref().unwrap_or("Code Snippet"),
+                                result.source_path.display(),
+                                result.content
+                            )
+                        };
+                        
+                        std::fs::write(&filename, content)?;
+                        renderer.print_success(&format!("Saved snippet to: {}", filename));
+                    }
+                }
+            }
+            Err(e) => {
+                renderer.print_error(&format!("Invalid save indices: {}", e));
+            }
+        }
+    }
+    
+    // Handle save all
+    if *save_all {
+        let filename = format!("all_snippets.{}", if *json { "json" } else { "md" });
+        let content = if *json {
+            serde_json::to_string_pretty(results)?
+        } else {
+            let mut content = String::new();
+            content.push_str("# All Code Snippets\n\n");
+            for (i, result) in results.iter().enumerate() {
+                content.push_str(&format!("## {}. {}\n\n", i + 1,
+                    result.title.as_deref().unwrap_or("Code Snippet")));
+                content.push_str(&format!("**Source:** `{}`\n\n", result.source_path.display()));
+                content.push_str(&result.content);
+                content.push_str("\n\n---\n\n");
+            }
+            content
+        };
+        
+        std::fs::write(&filename, content)?;
+        renderer.print_success(&format!("Saved all snippets to: {}", filename));
+    }
+    
+    // Handle general output
+    if let Some(output_path) = output {
+        export_rag_results(results, output_path, renderer)?;
+    }
+    
     Ok(())
 }

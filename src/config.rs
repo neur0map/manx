@@ -169,6 +169,25 @@ impl Config {
             }
         ));
 
+        // Embedding Settings
+        output.push_str(&format!(
+            "  Embedding Provider: {:?}\n",
+            self.rag.embedding.provider
+        ));
+        output.push_str(&format!(
+            "  Embedding Dimension: {}\n",
+            self.rag.embedding.dimension
+        ));
+        if let Some(model_path) = &self.rag.embedding.model_path {
+            output.push_str(&format!("  Model Path: {}\n", model_path.display()));
+        }
+        if self.rag.embedding.api_key.is_some() {
+            output.push_str("  API Key: ****\n");
+        }
+        if let Some(endpoint) = &self.rag.embedding.endpoint {
+            output.push_str(&format!("  Custom Endpoint: {}\n", endpoint));
+        }
+
         // LLM Settings
         output.push_str("\nLLM Integration:\n");
         let llm_status = if self.has_llm_configured() {
@@ -368,6 +387,81 @@ impl Config {
     /// Enable/disable local RAG
     pub fn set_rag_enabled(&mut self, enabled: bool) -> Result<()> {
         self.rag.enabled = enabled;
+        self.save()
+    }
+
+    /// Set embedding provider (dimension will be detected dynamically)
+    pub fn set_embedding_provider(&mut self, provider_str: &str) -> Result<()> {
+        use crate::rag::EmbeddingProvider;
+
+        let provider = match provider_str.to_lowercase().as_str() {
+            "hash" => EmbeddingProvider::Hash,
+            _ if provider_str.starts_with("onnx:") => {
+                let model_name = provider_str.strip_prefix("onnx:").unwrap_or("").to_string();
+                if model_name.is_empty() {
+                    anyhow::bail!("ONNX provider requires model name: onnx:model_name");
+                }
+                EmbeddingProvider::Onnx(model_name)
+            },
+            _ if provider_str.starts_with("ollama:") => {
+                let model_name = provider_str.strip_prefix("ollama:").unwrap_or("").to_string();
+                if model_name.is_empty() {
+                    anyhow::bail!("Ollama provider requires model name: ollama:model_name");
+                }
+                EmbeddingProvider::Ollama(model_name)
+            },
+            _ if provider_str.starts_with("openai:") => {
+                let model_name = provider_str.strip_prefix("openai:").unwrap_or("text-embedding-3-small").to_string();
+                EmbeddingProvider::OpenAI(model_name)
+            },
+            _ if provider_str.starts_with("huggingface:") => {
+                let model_name = provider_str.strip_prefix("huggingface:").unwrap_or("").to_string();
+                if model_name.is_empty() {
+                    anyhow::bail!("HuggingFace provider requires model name: huggingface:model_name");
+                }
+                EmbeddingProvider::HuggingFace(model_name)
+            },
+            _ if provider_str.starts_with("custom:") => {
+                let endpoint = provider_str.strip_prefix("custom:").unwrap_or("").to_string();
+                if endpoint.is_empty() {
+                    anyhow::bail!("Custom provider requires endpoint URL: custom:http://...");
+                }
+                EmbeddingProvider::Custom(endpoint)
+            },
+            _ => anyhow::bail!(
+                "Invalid embedding provider '{}'. Use: hash, onnx:model, ollama:model, openai:model, huggingface:model, custom:url", 
+                provider_str
+            ),
+        };
+
+        // Set provider (dimension will be detected on first use)
+        self.rag.embedding.provider = provider;
+
+        self.save()
+    }
+
+    /// Set embedding API key (for API providers)
+    pub fn set_embedding_api_key(&mut self, key: String) -> Result<()> {
+        if key.is_empty() {
+            self.rag.embedding.api_key = None;
+        } else {
+            self.rag.embedding.api_key = Some(key);
+        }
+        self.save()
+    }
+
+    /// Set embedding model path (for local models)
+    pub fn set_embedding_model_path(&mut self, path: std::path::PathBuf) -> Result<()> {
+        self.rag.embedding.model_path = Some(path);
+        self.save()
+    }
+
+    /// Set embedding dimension
+    pub fn set_embedding_dimension(&mut self, dimension: usize) -> Result<()> {
+        if dimension == 0 {
+            anyhow::bail!("Embedding dimension must be greater than 0");
+        }
+        self.rag.embedding.dimension = dimension;
         self.save()
     }
 }

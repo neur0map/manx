@@ -12,6 +12,68 @@ use std::path::PathBuf;
 pub mod embeddings;
 pub mod indexer;
 pub mod llm;
+pub mod model_metadata;
+pub mod providers;
+
+/// Embedding provider types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub enum EmbeddingProvider {
+    #[default]
+    Hash, // Default hash-based embeddings (current implementation)
+    Onnx(String),        // Local ONNX model path
+    Ollama(String),      // Ollama model name
+    OpenAI(String),      // OpenAI model name (requires API key)
+    HuggingFace(String), // HuggingFace model name (requires API key)
+    Custom(String),      // Custom endpoint URL
+}
+
+/// Configuration for embedding generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingConfig {
+    pub provider: EmbeddingProvider,
+    pub dimension: usize,
+    pub model_path: Option<PathBuf>, // For local models
+    pub api_key: Option<String>,     // For API providers
+    pub endpoint: Option<String>,    // For custom endpoints
+    pub timeout_seconds: u64,
+    pub batch_size: usize,
+}
+
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            provider: EmbeddingProvider::Hash,
+            dimension: 384, // Hash provider default (will be updated dynamically for others)
+            model_path: None,
+            api_key: None,
+            endpoint: None,
+            timeout_seconds: 30,
+            batch_size: 32,
+        }
+    }
+}
+
+impl EmbeddingConfig {
+    /// Update dimension from actual provider detection
+    pub async fn detect_and_update_dimension(&mut self) -> Result<()> {
+        use crate::rag::embeddings::EmbeddingModel;
+
+        let model = EmbeddingModel::new_with_config(self.clone()).await?;
+        let detected_dimension = model.get_dimension().await?;
+
+        if self.dimension != detected_dimension {
+            log::info!(
+                "Updating dimension from {} to {} for provider {:?}",
+                self.dimension,
+                detected_dimension,
+                self.provider
+            );
+            self.dimension = detected_dimension;
+        }
+
+        Ok(())
+    }
+}
 
 /// Configuration for the RAG system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +83,7 @@ pub struct RagConfig {
     pub max_results: usize,
     pub similarity_threshold: f32,
     pub allow_pdf_processing: bool,
+    pub embedding: EmbeddingConfig,
 }
 
 impl Default for RagConfig {
@@ -31,6 +94,7 @@ impl Default for RagConfig {
             max_results: 10,
             similarity_threshold: 0.6,
             allow_pdf_processing: false, // Disabled by default for security
+            embedding: EmbeddingConfig::default(),
         }
     }
 }
@@ -199,7 +263,8 @@ impl RagSystem {
         log::info!("Searching local vector storage for: '{}'", query);
 
         // Load the embedding model for semantic search
-        let embedding_model = EmbeddingModel::new().await?;
+        let embedding_model =
+            EmbeddingModel::new_with_config(self.config.embedding.clone()).await?;
         let query_embedding = embedding_model.embed_text(query).await?;
 
         // Search through stored embeddings
@@ -407,7 +472,7 @@ impl RagSystem {
         log::info!("Running RAG system health check...");
 
         // Check if embedding model can be loaded
-        let _embedding_model = EmbeddingModel::new()
+        let _embedding_model = EmbeddingModel::new_with_config(self.config.embedding.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Embedding model unavailable: {}", e))?;
         log::info!("✓ Embedding model loaded successfully");
@@ -480,7 +545,8 @@ impl RagSystem {
         log::info!("Storing {} chunks in local vector storage", chunks.len());
 
         // Initialize embedding model
-        let embedding_model = EmbeddingModel::new().await?;
+        let embedding_model =
+            EmbeddingModel::new_with_config(self.config.embedding.clone()).await?;
 
         // Get index path and create embeddings directory
         let indexer = Indexer::new(&self.config)?;

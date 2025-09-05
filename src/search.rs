@@ -18,7 +18,7 @@ pub struct SearchEngine {
 }
 
 impl SearchEngine {
-    /// Create SearchEngine without BERT (fallback mode)
+    /// Create SearchEngine without embeddings (fallback mode)
     pub fn new(client: Context7Client) -> Self {
         Self {
             client,
@@ -27,16 +27,16 @@ impl SearchEngine {
         }
     }
 
-    /// Create SearchEngine with BERT semantic search
-    pub async fn with_bert(client: Context7Client) -> Result<Self> {
+    /// Create SearchEngine with semantic embeddings
+    pub async fn with_embeddings(client: Context7Client) -> Result<Self> {
         let embedding_model = match EmbeddingModel::new().await {
             Ok(model) => {
-                log::info!("🧠 BERT embeddings initialized for Context7 search");
+                log::info!("🧠 Semantic embeddings initialized for Context7 search");
                 Some(model)
             }
             Err(e) => {
                 log::warn!(
-                    "BERT embeddings unavailable for Context7, using text matching: {}",
+                    "Semantic embeddings unavailable for Context7, using text matching: {}",
                     e
                 );
                 None
@@ -50,8 +50,8 @@ impl SearchEngine {
         })
     }
 
-    /// Check if BERT is available
-    pub fn has_bert(&self) -> bool {
+    /// Check if semantic embeddings are available
+    pub fn has_embeddings(&self) -> bool {
         self.embedding_model.is_some()
     }
 
@@ -233,9 +233,9 @@ impl SearchEngine {
         let sections = self.split_into_sections(docs);
 
         for (idx, section) in sections.iter().enumerate() {
-            // Calculate relevance score with BERT + keyword hybrid scoring
+            // Calculate relevance score with embeddings + keyword hybrid scoring
             let relevance = if self.embedding_model.is_some() {
-                self.calculate_bert_section_relevance(
+                self.calculate_embedding_section_relevance(
                     section,
                     &parsed_query.original_query,
                     parsed_query,
@@ -244,7 +244,7 @@ impl SearchEngine {
                 .await
                 .unwrap_or_else(|e| {
                     log::warn!(
-                        "BERT scoring failed, falling back to keyword matching: {}",
+                        "Embedding scoring failed, falling back to keyword matching: {}",
                         e
                     );
                     self.calculate_enhanced_section_relevance(
@@ -489,8 +489,8 @@ impl SearchEngine {
         max_proximity_score
     }
 
-    /// Calculate section relevance using BERT + keyword hybrid scoring
-    async fn calculate_bert_section_relevance(
+    /// Calculate section relevance using semantic embeddings + keyword hybrid scoring
+    async fn calculate_embedding_section_relevance(
         &self,
         section: &str,
         query: &str,
@@ -500,17 +500,18 @@ impl SearchEngine {
         let embedding_model = self
             .embedding_model
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("BERT model not available"))?;
+            .ok_or_else(|| anyhow::anyhow!("Embedding model not available"))?;
 
-        // Generate BERT embeddings for semantic similarity
+        // Generate embeddings for semantic similarity
         let query_embedding = embedding_model.embed_text(query).await?;
 
         // Create combined text for section (title + content for better context)
         let section_text = self.prepare_section_for_embedding(section);
         let section_embedding = embedding_model.embed_text(&section_text).await?;
 
-        // Calculate BERT semantic similarity (0.0-1.0)
-        let bert_score = EmbeddingModel::cosine_similarity(&query_embedding, &section_embedding);
+        // Calculate semantic similarity (0.0-1.0)
+        let embedding_score =
+            EmbeddingModel::cosine_similarity(&query_embedding, &section_embedding);
 
         // Calculate existing keyword-based relevance (0.0-N)
         let keyword_score =
@@ -519,21 +520,22 @@ impl SearchEngine {
         // Calculate quoted phrase bonus for exact matches
         let phrase_bonus = self.calculate_phrase_bonus(section, parsed_query, is_phrase_search);
 
-        // Hybrid scoring: BERT (70%) + Keywords (20%) + Phrase bonus (10%)
+        // Hybrid scoring: Embeddings (70%) + Keywords (20%) + Phrase bonus (10%)
         // Normalize keyword score to 0-1 range by dividing by reasonable maximum
         let normalized_keyword_score = (keyword_score / 5.0).min(1.0);
         let normalized_phrase_bonus = (phrase_bonus / 10.0).min(1.0);
 
-        let final_score =
-            (bert_score * 0.7) + (normalized_keyword_score * 0.2) + (normalized_phrase_bonus * 0.1);
+        let final_score = (embedding_score * 0.7)
+            + (normalized_keyword_score * 0.2)
+            + (normalized_phrase_bonus * 0.1);
 
-        log::debug!("BERT hybrid scoring for section: BERT={:.3}, Keywords={:.3}, Phrase={:.3}, Final={:.3}",
-            bert_score, normalized_keyword_score, normalized_phrase_bonus, final_score);
+        log::debug!("Embedding hybrid scoring for section: Embedding={:.3}, Keywords={:.3}, Phrase={:.3}, Final={:.3}",
+            embedding_score, normalized_keyword_score, normalized_phrase_bonus, final_score);
 
         Ok(final_score)
     }
 
-    /// Prepare section text for optimal BERT embedding
+    /// Prepare section text for optimal embedding generation
     fn prepare_section_for_embedding(&self, section: &str) -> String {
         // Extract title and first few lines for context
         let lines: Vec<&str> = section.lines().collect();

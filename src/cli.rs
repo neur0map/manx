@@ -18,22 +18,36 @@ LOCAL RAG COMMANDS:
   sources list                   View indexed document sources
   sources clear                  Clear all indexed documents
 
-SEMANTIC SEARCH - BERT-powered understanding with quote prioritization:
-  manx snippet react "useEffect cleanup"   Exact phrase priority (10x relevance)
-  manx snippet "memory issues"             Finds: leaks, cleanup, performance
-  manx snippet fastapi middleware          Individual terms search
+EMBEDDING SYSTEM - Smart semantic search (works great out of the box):
+  embedding status               View current embedding configuration
+  embedding list                 Show installed models
+  embedding download <model>     Install neural models from HuggingFace
+  embedding test <query>         Test embedding quality
 
-AI SYNTHESIS - Get comprehensive answers with citations:
+DEFAULT MODE (No setup required):
+  ⚡ Hash-based embeddings       Built-in algorithm (0ms, offline, 0MB storage)
+  📚 Official documentation      Context7 API integration
+  🔍 Keyword matching           Excellent for exact phrases and terms
+
+ENHANCED MODE (Optional setup for better results):
+  🧠 Neural embeddings          Install: sentence-transformers/all-MiniLM-L6-v2
+  🎯 Semantic understanding     "database connection" = "data storage"
+  📊 Intent matching            Superior relevance ranking
+  🔄 Easy switching             manx config --embedding-provider onnx:model-name
+
+AI SYNTHESIS - Get comprehensive answers with citations (optional):
   manx config --llm-api "sk-key"           Enable AI answer synthesis
   manx snippet react hooks                 Search + AI explanation (if configured)
-  manx snippet react hooks --no-llm        Force retrieval-only
 
-EXAMPLES:
-  manx search "hydra configuration commands"  Search official docs (auto-detects LLM)
-  manx index ~/my-docs/                    Index your documentation  
-  manx snippet "database connection"       Search official + local docs
-  manx config --llm-api "sk-openai-key"    Enable AI synthesis
-  manx snippet react "useEffect cleanup"   Get AI answer with citations
+LOCAL RAG - Search your own documents and code (optional):
+  manx index /path/to/docs                 Index your documentation
+  manx config --rag-enabled                Enable local document search
+  manx search "authentication" --rag       Search indexed documents only
+
+QUICK START:
+  manx snippet react "state management"    Works great with defaults
+  manx embedding download all-MiniLM-L6-v2 Optional: Better semantic search
+  manx config --llm-api "sk-openai-key"    Optional: AI synthesis
 
 Use 'manx <command> --help' for detailed options."#,
     version = get_version_info(),
@@ -97,13 +111,16 @@ pub enum Commands {
         /// Force retrieval-only mode (disable LLM synthesis even if API key configured)
         #[arg(long)]
         no_llm: bool,
+        /// Search locally indexed documents instead of Context7 API
+        #[arg(long)]
+        rag: bool,
     },
 
     /// 🔍 Search code snippets and examples with AI-powered understanding
     ///
     /// ENHANCED SEARCH:
     ///   • Searches official docs (Context7) + your indexed documents (RAG)
-    ///   • BERT semantic understanding finds relevant content with different wording
+    ///   • Semantic understanding finds relevant content with different wording
     ///   • Quote prioritization: "useEffect cleanup" gets 10x higher relevance
     ///   • Optional AI synthesis provides comprehensive answers with citations
     ///
@@ -121,6 +138,7 @@ pub enum Commands {
     ///   manx snippet react "useEffect cleanup"           # Semantic search with phrase priority
     ///   manx snippet "database pooling" --llm-api        # Get AI answer with citations  
     ///   manx snippet fastapi middleware --no-llm         # Raw results only
+    ///   manx snippet python "async functions" --rag      # Search your indexed code files
     Snippet {
         /// Library name (examples: 'fastapi', 'react@18', 'vue@3')
         #[arg(value_name = "LIBRARY")]
@@ -149,13 +167,16 @@ pub enum Commands {
         /// Force retrieval-only mode (disable LLM synthesis even if API key configured)
         #[arg(long)]
         no_llm: bool,
+        /// Search locally indexed documents instead of Context7 API (requires: manx config --rag-enabled)
+        #[arg(long)]
+        rag: bool,
     },
 
     /// 🔍 Search official documentation across the web
     ///
     /// INTELLIGENT WEB SEARCH:
     ///   • Prioritizes official documentation sites (docs.python.org, reactjs.org, etc.)
-    ///   • Uses BERT embeddings for semantic relevance matching  
+    ///   • Uses semantic embeddings for relevance matching  
     ///   • Falls back to trusted community sources with clear notification
     ///   • Optional LLM verification ensures result authenticity
     ///
@@ -167,12 +188,13 @@ pub enum Commands {
     /// EXAMPLES:
     ///   manx search "hydra configuration commands"      # Auto-detects LLM availability  
     ///   manx search "react hooks best practices"        # Uses LLM if API key configured
-    ///   manx search "python async await" --no-llm       # Force BERT-only mode
+    ///   manx search "python async await" --no-llm       # Force embeddings-only mode
+    ///   manx search "authentication" --rag              # Search your indexed documents
     Search {
         /// Search query for official documentation
         #[arg(value_name = "QUERY")]
         query: String,
-        /// Disable LLM verification (use BERT-only mode even if API key is configured)
+        /// Disable LLM verification (use embeddings-only mode even if API key is configured)
         #[arg(long)]
         no_llm: bool,
         /// Export results to file (format auto-detected by extension: .md, .json)
@@ -181,6 +203,9 @@ pub enum Commands {
         /// Limit number of results shown (default: 8)
         #[arg(short = 'l', long, value_name = "NUMBER")]
         limit: Option<usize>,
+        /// Search locally indexed documents instead of web search (requires: manx config --rag-enabled)
+        #[arg(long)]
+        rag: bool,
     },
 
     /// 📥 Get specific item by ID (doc-3, section-5, etc.)
@@ -252,6 +277,18 @@ pub enum Commands {
         /// Add custom official documentation domain (format: domain.com)
         #[arg(long, value_name = "DOMAIN")]
         add_official_domain: Option<String>,
+        /// Set embedding provider for RAG system (hash, onnx:model, ollama:model, openai:model, huggingface:model, custom:url)
+        #[arg(long, value_name = "PROVIDER")]
+        embedding_provider: Option<String>,
+        /// Set embedding API key for API-based providers
+        #[arg(long, value_name = "API_KEY")]
+        embedding_api_key: Option<String>,
+        /// Set embedding model path for local models
+        #[arg(long, value_name = "PATH")]
+        embedding_model_path: Option<PathBuf>,
+        /// Set embedding dimension (default: 384)
+        #[arg(long, value_name = "DIMENSION")]
+        embedding_dimension: Option<usize>,
     },
 
     /// 📁 Index local documents or web URLs for RAG search
@@ -308,6 +345,28 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+
+    /// 🧠 Manage embedding models and providers for semantic search
+    ///
+    /// EMBEDDING PROVIDERS:
+    ///   • hash: Hash-based embeddings (default, fast, lightweight)
+    ///   • onnx:model: Local ONNX models (requires download)
+    ///   • ollama:model: Ollama API (requires Ollama server)
+    ///   • openai:model: OpenAI embeddings API (requires API key)
+    ///   • huggingface:model: HuggingFace embeddings API (requires API key)
+    ///   • custom:url: Custom endpoint API
+    ///
+    /// EXAMPLES:
+    ///   manx embedding status                     # Show current provider and models
+    ///   manx embedding set hash                   # Use hash-based (default)
+    ///   manx embedding set onnx:all-MiniLM-L6-v2 # Use local ONNX model
+    ///   manx embedding set ollama:nomic-embed-text # Use Ollama model
+    ///   manx embedding download all-MiniLM-L6-v2  # Download ONNX model
+    ///   manx embedding test "sample query"        # Test current embedding setup
+    Embedding {
+        #[command(subcommand)]
+        command: EmbeddingCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -334,6 +393,57 @@ pub enum SourceCommands {
     },
     /// Clear all indexed documents
     Clear,
+}
+
+#[derive(Subcommand)]
+pub enum EmbeddingCommands {
+    /// Show current embedding provider status and configuration
+    Status,
+    /// Set embedding provider (hash, onnx:model, ollama:model, openai:model, huggingface:model, custom:url)
+    Set {
+        /// Provider specification
+        #[arg(value_name = "PROVIDER")]
+        provider: String,
+        /// API key for API-based providers
+        #[arg(long, value_name = "API_KEY")]
+        api_key: Option<String>,
+        /// Custom endpoint URL (for custom provider)
+        #[arg(long, value_name = "URL")]
+        endpoint: Option<String>,
+        /// Embedding dimension (default: 384)
+        #[arg(long, value_name = "DIMENSION")]
+        dimension: Option<usize>,
+    },
+    /// Download and install a local ONNX model
+    Download {
+        /// Model name to download (e.g., 'all-MiniLM-L6-v2')
+        #[arg(value_name = "MODEL_NAME")]
+        model: String,
+        /// Force redownload if model already exists
+        #[arg(long)]
+        force: bool,
+    },
+    /// List available models for download or installed models
+    List {
+        /// List available models for download instead of installed models
+        #[arg(long)]
+        available: bool,
+    },
+    /// Test current embedding setup with a sample query
+    Test {
+        /// Query text to test embeddings with
+        #[arg(value_name = "QUERY")]
+        query: String,
+        /// Show detailed embedding vector information
+        #[arg(long)]
+        verbose: bool,
+    },
+    /// Remove downloaded local models
+    Remove {
+        /// Model name to remove
+        #[arg(value_name = "MODEL_NAME")]
+        model: String,
+    },
 }
 
 impl Cli {
