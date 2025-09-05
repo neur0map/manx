@@ -251,7 +251,7 @@ Get instant access to documentation and code examples:
 ```bash
 manx search "rust async programming"
 ```
-*Returns: Instant access to official docs and tutorials*
+*Returns: Instant access to official docs and tutorials via DuckDuckGo*
 
 **📚 Official Documentation Browser**  
 ```bash
@@ -393,7 +393,7 @@ manx search "topic"  # Now includes AI analysis when helpful
 <tr>
 <td width="50%">
 
-**Web Search**
+**Web Search** *(DuckDuckGo-powered)*
 ```bash
 manx search "kubernetes deployment"
 manx search "react hooks patterns"
@@ -952,10 +952,37 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 **Acknowledgments**
 
-- **Context7** - Excellent MCP documentation API
-- **Rust Community** - Outstanding ecosystem and tooling
-- **Contributors** - Making Manx better every day
-- **LLM Providers** - Optional AI enhancement capabilities
+### **🔍 Core Search Infrastructure**
+- **[Context7](https://context7.com)** - Excellent MCP documentation API providing real-time access to official documentation
+- **[DuckDuckGo](https://duckduckgo.com)** - Privacy-focused search engine powering our web search functionality
+- **[Spider-rs](https://github.com/spider-rs/spider)** - High-performance web crawler enabling our deep documentation site indexing
+
+### **🧠 AI & Embedding Systems**
+- **[HuggingFace](https://huggingface.co)** - Transformers and embedding models for semantic search
+- **[ONNX Runtime](https://onnxruntime.ai)** - Cross-platform ML inference for local embedding models
+- **[Ollama](https://ollama.ai)** - Local LLM server integration
+- **[OpenAI](https://openai.com)** & **[Anthropic](https://anthropic.com)** - AI analysis and synthesis capabilities
+
+### **⚙️ Core Rust Libraries**
+- **[Tokio](https://tokio.rs)** - Async runtime powering all network operations
+- **[Reqwest](https://github.com/seanmonstar/reqwest)** - HTTP client for API communications
+- **[Scraper](https://github.com/programble/scraper)** - HTML parsing and content extraction
+- **[Clap](https://github.com/clap-rs/clap)** - Command-line argument parsing
+- **[Serde](https://serde.rs)** - Serialization/deserialization framework
+- **[Colored](https://github.com/mackwic/colored)** - Terminal color output
+- **[Anyhow](https://github.com/dtolnay/anyhow)** - Error handling and context
+- **[Fuzzy-Matcher](https://github.com/lotabout/fuzzy-matcher)** - Fuzzy string matching for enhanced search
+- **[Indicatif](https://github.com/console-rs/indicatif)** - Progress bars and spinners for user feedback
+
+### **📄 Document Processing**
+- **[docx-rs](https://github.com/bokuweb/docx-rs)** - Microsoft Word document processing
+- **[WalkDir](https://github.com/BurntSushi/walkdir)** - Recursive directory traversal
+- **[UUID](https://github.com/uuid-rs/uuid)** - Unique identifier generation
+
+### **🌟 Community & Contributors**
+- **Rust Community** - Outstanding ecosystem, tooling, and documentation
+- **Contributors** - Making Manx better every day through feedback and contributions
+- **Open Source Maintainers** - All the library authors who make projects like this possible
 
 ---
 
