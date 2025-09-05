@@ -1,8 +1,8 @@
 [package]
 name = "manx-cli"
-version = "0.3.5"
+version = "0.4.0"
 edition = "2021"
-authors = ["neur0map <email@example.com>"]
+authors = ["neur0map <neur0map@prowl.sh>"]
 description = "A blazing-fast CLI documentation finder powered by Context7 MCP"
 homepage = "https://github.com/neur0map/manx"
 repository = "https://github.com/neur0map/manx"
