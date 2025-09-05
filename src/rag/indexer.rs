@@ -492,7 +492,7 @@ fn validate_pdf_security(path: &Path) -> Result<()> {
             // Extract major version number
             if let Some(major_char) = version_str.chars().next() {
                 if let Some(major) = major_char.to_digit(10) {
-                    if major < 1 || major > 2 {
+                    if !(1..=2).contains(&major) {
                         // Only allow PDF versions 1.x and 2.x
                         return Err(anyhow!(
                             "PDF file rejected: Unsupported PDF version {}",
@@ -701,9 +701,8 @@ fn extract_text_from_html(html: &str) -> Result<String> {
     // If no main content found, extract from body
     if extracted_text.trim().is_empty() {
         if let Ok(body_selector) = Selector::parse("body") {
-            for element in cleaned_document.select(&body_selector) {
+            if let Some(element) = cleaned_document.select(&body_selector).next() {
                 extracted_text = element.text().collect::<Vec<_>>().join(" ");
-                break;
             }
         }
     }
@@ -759,8 +758,8 @@ fn detect_url_structure(content: &str, url: &str) -> (Option<String>, Vec<String
     .or_else(|| {
         // Fallback: use URL path as title
         if let Ok(parsed_url) = url::Url::parse(url) {
-            if let Some(segments) = parsed_url.path_segments() {
-                if let Some(last_segment) = segments.last() {
+            if let Some(mut segments) = parsed_url.path_segments() {
+                if let Some(last_segment) = segments.next_back() {
                     if !last_segment.is_empty() {
                         return Some(last_segment.replace("-", " ").replace("_", " "));
                     }
@@ -985,10 +984,10 @@ fn detect_structure(content: &str, path: &Path) -> (Option<String>, Vec<String>)
             }
 
             // Collect section headers
-            if trimmed.starts_with("## ") {
-                sections.push(trimmed[3..].trim().to_string());
-            } else if trimmed.starts_with("### ") {
-                sections.push(trimmed[4..].trim().to_string());
+            if let Some(stripped) = trimmed.strip_prefix("## ") {
+                sections.push(stripped.trim().to_string());
+            } else if let Some(stripped) = trimmed.strip_prefix("### ") {
+                sections.push(stripped.trim().to_string());
             }
         }
     }

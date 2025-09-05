@@ -752,6 +752,7 @@ async fn handle_search_command(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_doc_command(
     library: &str,
     query: &str,

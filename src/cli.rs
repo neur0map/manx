@@ -78,6 +78,7 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     /// 📚 Browse comprehensive documentation sections and guides
     Doc {
