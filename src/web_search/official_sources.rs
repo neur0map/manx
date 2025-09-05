@@ -305,12 +305,15 @@ mod tests {
         // Test basic query structure
         assert!(query.contains("python logging"));
         assert!(query.contains("site:"));
-        
+
         // Test that it contains some official domains (HashMap ordering is not guaranteed)
-        let contains_official = query.contains("docs.microsoft.com") 
+        let contains_official = query.contains("docs.microsoft.com")
             || query.contains("nextjs.org")
             || query.contains("docs.djangoproject.com")
             || query.contains("docs.python.org");
-        assert!(contains_official, "Query should contain at least one official domain");
+        assert!(
+            contains_official,
+            "Query should contain at least one official domain"
+        );
     }
 }
