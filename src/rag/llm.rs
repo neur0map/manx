@@ -759,7 +759,7 @@ STYLE:
 
         let response = self
             .http_client
-            .post(&format!("{}/v1/chat/completions", endpoint))
+            .post(format!("{}/v1/chat/completions", endpoint))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()

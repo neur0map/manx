@@ -120,7 +120,7 @@ impl RagSystem {
         let index_path = indexer.get_index_path();
 
         // Create index directory if it doesn't exist
-        std::fs::create_dir_all(&index_path)?;
+        std::fs::create_dir_all(index_path)?;
 
         log::info!(
             "RAG system initialized with local vector storage at {:?}",
@@ -346,8 +346,7 @@ impl RagSystem {
         let total_documents = sources.len();
         let index_size_mb = total_size as f64 / (1024.0 * 1024.0);
 
-        let last_updated =
-            chrono::DateTime::<chrono::Utc>::from(std::time::SystemTime::from(last_modified));
+        let last_updated = chrono::DateTime::<chrono::Utc>::from(last_modified);
 
         let sources_vec: Vec<String> = sources.into_iter().collect();
 
@@ -448,7 +447,7 @@ impl RagSystem {
 
         // Test file system write access
         let test_file = index_path.join(".health_check");
-        match std::fs::create_dir_all(&index_path) {
+        match std::fs::create_dir_all(index_path) {
             Ok(_) => {
                 match std::fs::write(&test_file, "health_check") {
                     Ok(_) => {
