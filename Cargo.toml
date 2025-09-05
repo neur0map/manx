@@ -50,6 +50,23 @@ thiserror = "1.0"
 env_logger = "0.11"
 log = "0.4"
 
+# Web search dependencies
+scraper = "0.18"
+url = "2.4"
+urlencoding = "2.1"
+regex = "1.10"
+
+# RAG dependencies for document processing and vector storage  
+docx-rs = "0.4"
+walkdir = "2.4"
+# pdf = "0.8"  # TODO: Add proper PDF library later
+
+# File-based vector storage
+uuid = { version = "1.6", features = ["v4"] }
+
+# Future LLM dependencies  
+# openai-api-rs = "5.0"
+
 [profile.release]
 # Optimize for small binary size and performance
 opt-level = 3
@@ -63,3 +80,6 @@ panic = "abort"
 inherits = "release"
 strip = false
 debug = true
+
+[features]
+default = []

@@ -90,7 +90,7 @@ impl Renderer {
 
         println!(
             "\n{}",
-            "Tip: Use 'manx snippet <id>' to expand a result.".dimmed()
+            "Tip: Use 'manx get <id>' to expand a result.".dimmed()
         );
         Ok(())
     }
