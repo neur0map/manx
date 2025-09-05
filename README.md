@@ -364,8 +364,8 @@ manx doc fastapi "authentication middleware"
 manx snippet react "custom hooks patterns"
 
 # 📁 Index your personal documentation (optional)
-manx index ~/dev-notes/
-manx config --rag-enabled
+manx index ~/dev-notes/                               # Local directory
+manx index https://docs.fastapi.tiangolo.com --crawl  # Deep crawl documentation site
 manx search "team coding standards" --rag
 ```
 
@@ -435,6 +435,11 @@ manx index ~/documentation/          # Directory
 manx index ./README.md               # Single file  
 manx index https://docs.example.com  # Web URL
 
+# Deep crawl documentation sites (NEW!)
+manx index https://docs.rust-lang.org --crawl                    # Discover all linked pages
+manx index https://fastapi.tiangolo.com --crawl --max-depth 2    # Limited depth crawling
+manx index https://docs.python.org --crawl --max-pages 10        # Limited page count
+
 # Manage indexed sources
 manx sources list                    # View all sources
 manx sources clear                   # Clear all indexed docs
@@ -491,9 +496,14 @@ manx index ~/project-documentation/
 manx index ~/company-wiki/
 manx index ~/internal-procedures/
 
-# Web documentation
+# Web documentation (single page)
 manx index https://your-team-docs.com
 manx index https://internal-api-docs.example.com
+
+# Deep crawl entire documentation sites
+manx index https://docs.your-framework.com --crawl              # Discover all pages automatically
+manx index https://internal-wiki.company.com --crawl --max-depth 3  # Limit crawl depth
+manx index https://team-knowledge.com --crawl --max-pages 50    # Limit total pages crawled
 ```
 
 ### **🔍 Unified Search Experience**
@@ -519,7 +529,8 @@ manx snippet "authentication setup"
 - **Documents**: `.md`, `.txt`, `.docx`, `.pdf`
 - **Web Content**: HTML pages with automatic text extraction
 - **Code Files**: Syntax-aware indexing
-- **URLs**: Automatic content fetching and cleaning
+- **URLs**: Single page or deep crawl entire documentation sites
+- **Deep Crawling**: Automatically discovers and indexes interconnected documentation pages
 
 ---
 

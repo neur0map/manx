@@ -309,7 +309,8 @@ pub enum Commands {
     ///
     /// EXAMPLES:
     ///   manx index ~/my-docs/                              # Index directory
-    ///   manx index https://fastapi.tiangolo.com/tutorial/ # Index web documentation
+    ///   manx index https://docs.python.org --crawl        # Deep crawl documentation site
+    ///   manx index https://fastapi.tiangolo.com --crawl --max-depth 2  # Limited depth crawl
     ///   manx index api.pdf --alias "API Reference"        # Index with custom alias
     Index {
         /// Path to document/directory or URL to index
@@ -318,6 +319,15 @@ pub enum Commands {
         /// Optional alias for the indexed source
         #[arg(long, value_name = "ALIAS")]
         id: Option<String>,
+        /// Enable deep crawling for URLs (follows links to discover more pages)
+        #[arg(long)]
+        crawl: bool,
+        /// Maximum crawl depth for deep crawling (default: 3)
+        #[arg(long, value_name = "DEPTH")]
+        max_depth: Option<u32>,
+        /// Maximum number of pages to crawl (default: no limit)
+        #[arg(long, value_name = "PAGES")]
+        max_pages: Option<u32>,
     },
 
     /// 📂 Manage indexed document sources

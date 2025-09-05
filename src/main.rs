@@ -521,8 +521,8 @@ async fn run() -> Result<()> {
             }
         }
 
-        Some(Commands::Index { path, id }) => {
-            handle_index_command(&path, id, &config, &renderer).await?;
+        Some(Commands::Index { path, id, crawl, max_depth, max_pages }) => {
+            handle_index_command(&path, id, crawl, max_depth, max_pages, &config, &renderer).await?;
         }
 
         Some(Commands::Sources { command }) => {
@@ -1340,6 +1340,9 @@ async fn handle_get_command(
 async fn handle_index_command(
     path_or_url: &str,
     _id: Option<String>,
+    crawl: bool,
+    max_depth: Option<u32>,
+    max_pages: Option<u32>,
     config: &Config,
     renderer: &Renderer,
 ) -> Result<()> {
@@ -1356,7 +1359,17 @@ async fn handle_index_command(
     let is_url = path_or_url.starts_with("http://") || path_or_url.starts_with("https://");
 
     let pb = if is_url {
-        renderer.show_progress(&format!("Fetching and indexing URL: {}", path_or_url))
+        if crawl {
+            let crawl_info = match (max_depth, max_pages) {
+                (Some(depth), Some(pages)) => format!(" (max depth: {}, max pages: {})", depth, pages),
+                (Some(depth), None) => format!(" (max depth: {})", depth),
+                (None, Some(pages)) => format!(" (max pages: {})", pages),
+                (None, None) => " (deep crawl)".to_string(),
+            };
+            renderer.show_progress(&format!("Deep crawling and indexing URL: {}{}", path_or_url, crawl_info))
+        } else {
+            renderer.show_progress(&format!("Fetching and indexing URL: {}", path_or_url))
+        }
     } else {
         renderer.show_progress(&format!("Indexing path: {}", path_or_url))
     };
@@ -1364,8 +1377,14 @@ async fn handle_index_command(
     match RagSystem::new(config.rag.clone()).await {
         Ok(mut rag_system) => {
             let indexed_count = if is_url {
-                // Index URL content
-                rag_system.index_url(path_or_url).await?
+                if crawl {
+                    // Index URL content with deep crawling
+                    rag_system.index_url_deep(path_or_url, max_depth, max_pages).await?
+                } else {
+                    // Index single URL content
+                    rag_system.index_url(path_or_url).await?
+                }
+            
             } else {
                 // Index local file or directory
                 let path = std::path::PathBuf::from(path_or_url);
@@ -1485,7 +1504,7 @@ async fn handle_sources_command(
         }
 
         SourceCommands::Add { path, id: _id } => {
-            handle_index_command(&path.to_string_lossy(), None, config, renderer).await?;
+            handle_index_command(&path.to_string_lossy(), None, false, None, None, config, renderer).await?;
         }
 
         SourceCommands::Clear => {

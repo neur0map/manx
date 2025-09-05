@@ -56,6 +56,9 @@ url = "2.4"
 urlencoding = "2.1"
 regex = "1.10"
 
+# Web crawling
+spider = "2.37"
+
 # RAG dependencies for document processing and vector storage  
 docx-rs = "0.4"
 walkdir = "2.4"

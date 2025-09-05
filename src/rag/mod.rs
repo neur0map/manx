@@ -89,7 +89,7 @@ pub struct RagConfig {
 impl Default for RagConfig {
     fn default() -> Self {
         Self {
-            enabled: false, // Disabled by default
+            enabled: true, // Enabled by default
             index_path: PathBuf::from("~/.cache/manx/rag_index"),
             max_results: 10,
             similarity_threshold: 0.6,
@@ -118,6 +118,7 @@ pub enum SourceType {
     Local,
     Remote,
     Curated,
+    Web,
 }
 
 /// Document metadata
@@ -244,6 +245,32 @@ impl RagSystem {
 
         log::info!(
             "Successfully indexed and stored {} chunks from URL",
+            chunk_count
+        );
+        Ok(chunk_count)
+    }
+
+    pub async fn index_url_deep(
+        &mut self, 
+        url: &str, 
+        max_depth: Option<u32>, 
+        max_pages: Option<u32>
+    ) -> Result<usize> {
+        if !self.config.enabled {
+            return Err(anyhow::anyhow!("RAG system is disabled"));
+        }
+
+        log::info!("Deep indexing URL: {} (depth: {:?}, pages: {:?})", url, max_depth, max_pages);
+
+        let indexer = Indexer::new(&self.config)?;
+        let chunks = indexer.index_url_deep(url.to_string(), max_depth, max_pages).await?;
+        let chunk_count = chunks.len();
+
+        // Store chunks in local vector storage
+        self.store_chunks_locally(&chunks).await?;
+
+        log::info!(
+            "Successfully deep indexed and stored {} chunks from URL",
             chunk_count
         );
         Ok(chunk_count)
