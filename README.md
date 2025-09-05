@@ -18,13 +18,222 @@
 
 ## ✨ What Makes Manx Special?
 
-Manx is the **fastest way to find documentation and code snippets** from your terminal:
+Manx is the **fastest way to find documentation and code snippets** from your terminal with **three levels of capability**:
 
-- **⚡ Lightning Fast** - sub-second snippet searches, sub-2 second web searches
-- **🔍 Official Documentation** - Context7 MCP integration for real-time docs  
-- **📁 Your Personal Knowledge** - Index local docs, notes, and wikis
-- **🎨 Beautiful Terminal UX** - Colorized, scannable output that's easy to read
-- **🤖 Optional AI Enhancement** - Add LLM synthesis when you need deeper analysis
+<table>
+<tr>
+<td width="25%" align="center">
+
+### **🚀 Default Mode**
+**Works immediately - no setup**
+
+⚡ **Hash Embeddings**  
+Built-in algorithm (0ms)
+
+📚 **Official Docs**  
+Context7 integration  
+
+🔍 **Keyword Search**  
+Great exact matching
+
+💾 **Zero Storage**  
+No downloads needed
+
+</td>
+<td width="25%" align="center">
+
+### **🧠 Enhanced Mode**
+**Better search - 1 command setup**
+
+🤖 **Neural Embeddings**  
+HuggingFace models (87-400MB)
+
+🎯 **Semantic Understanding**  
+"database" = "data storage"
+
+📊 **Intent Matching**  
+Superior result relevance
+
+🔄 **Easy Installation**  
+`manx embedding download`
+
+</td>
+<td width="25%" align="center">
+
+### **📂 RAG Mode**
+**Your docs + AI - local setup**
+
+🔒 **Private Documents**  
+Your indexed files only
+
+🎯 **Semantic + AI Search**  
+Your knowledge + LLM synthesis
+
+📁 **Multi-format Support**  
+PDF, Markdown, DOCX, URLs
+
+🔍 **Use `--rag` flag**  
+`manx search "topic" --rag`
+
+</td>
+<td width="25%" align="center">
+
+### **🤖 AI Mode**
+**Full synthesis - API key setup**
+
+🧠 **Neural + AI Analysis**  
+Best of both worlds
+
+💬 **Comprehensive Answers**  
+Code + explanations + citations
+
+🌐 **Multi-Provider Support**  
+OpenAI, Anthropic, Groq, etc.
+
+🎛️ **Fine-grained Control**  
+Per-command AI toggle
+
+</td>
+</tr>
+</table>
+
+**Start with Default → Upgrade to Enhanced → Index your docs (RAG) → Add AI when needed**
+
+## 🔧 **How Manx Works Under the Hood**
+
+### **📊 Search Architecture Flow**
+
+```mermaid
+graph TD
+    A[🔍 User Query] --> B{Search Command}
+    B --> C[snippet/search/doc]
+    C --> D[Query Processing]
+    
+    D --> E{Embedding Provider}
+    E -->|Default| F[🔥 Hash Algorithm]
+    E -->|Enhanced| G[🧠 Neural Model]
+    E -->|API| H[☁️ OpenAI/HF API]
+    
+    F --> I[Vector Generation]
+    G --> I
+    H --> I
+    
+    I --> J{Data Sources}
+    J -->|Official| K[📚 Context7 API]
+    J -->|Local| L[📁 Indexed Docs]
+    J -->|Cache| M[💾 Local Cache]
+    
+    K --> N[Semantic Search]
+    L --> N  
+    M --> N
+    
+    N --> O[Result Ranking]
+    O --> P{AI Enhancement}
+    P -->|Disabled| Q[📝 Documentation Results]
+    P -->|Enabled| R[🤖 LLM Analysis]
+    
+    R --> S[🎯 Enhanced Response]
+    Q --> T[📱 Terminal Output]
+    S --> T
+```
+
+### **⚙️ Embedding System Architecture**
+
+```mermaid
+graph LR
+    A[User Query] --> B{Embedding Config}
+    
+    B -->|hash| C[🔥 Hash Provider<br/>384D, 0ms, 0MB]
+    B -->|onnx:model| D[🧠 ONNX Provider<br/>384-768D, 0ms, 87-400MB]  
+    B -->|openai:model| E[☁️ OpenAI Provider<br/>1536-3072D, ~100ms, API]
+    B -->|ollama:model| F[🏠 Ollama Provider<br/>Variable, ~50ms, Local]
+    
+    C --> G[Word Hashing<br/>+ N-gram Features]
+    D --> H[Neural Network<br/>Inference]
+    E --> I[REST API Call]
+    F --> J[Local Model Server]
+    
+    G --> K[Vector Output]
+    H --> K
+    I --> K
+    J --> K
+    
+    K --> L[Cosine Similarity<br/>Search]
+    L --> M[Ranked Results]
+```
+
+### **🔄 Configuration Workflow**
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as CLI
+    participant M as Model Manager
+    participant P as Provider
+    participant S as Search Engine
+    
+    Note over U,S: Initial Setup (Optional)
+    U->>C: manx embedding list --available
+    C->>U: Show HuggingFace models
+    
+    U->>C: manx embedding download model-name
+    C->>M: Download from HuggingFace
+    M->>M: Extract dimensions from config.json
+    M->>C: Model installed + metadata saved
+    
+    U->>C: manx config --embedding-provider onnx:model-name
+    C->>M: Load model metadata
+    M->>C: Dimension: 768, Path: ~/.cache/manx/models/
+    C->>C: Update config with detected dimension
+    
+    Note over U,S: Daily Usage
+    U->>C: manx snippet react "hooks"
+    C->>P: Initialize provider from config
+    P->>P: Load model (onnx) or use algorithm (hash)
+    P->>S: Generate embeddings
+    S->>U: Search results with semantic ranking
+```
+
+### **💾 Data Flow & Storage**
+
+```mermaid
+graph TB
+    subgraph "🏠 Local Storage"
+        A[~/.config/manx/<br/>config.json]
+        B[~/.cache/manx/models/<br/>ONNX files + metadata]
+        C[~/.cache/manx/rag/<br/>Indexed documents]
+        D[~/.cache/manx/cache/<br/>API responses]
+    end
+    
+    subgraph "🌐 External APIs"
+        E[Context7<br/>Official Docs]
+        F[HuggingFace<br/>Model Downloads]  
+        G[OpenAI/Anthropic<br/>AI Synthesis]
+        H[Ollama<br/>Local LLM Server]
+    end
+    
+    subgraph "🔧 Core Engine"
+        I[Embedding Providers]
+        J[Search Algorithm]
+        K[Result Processor]
+        L[Terminal Renderer]
+    end
+    
+    A --> I
+    B --> I
+    C --> J
+    D --> J
+    
+    E --> J
+    F --> B
+    G --> K
+    H --> I
+    
+    I --> J
+    J --> K
+    K --> L
+    L --> M[🖥️ User Terminal]
+```
 
 ---
 
@@ -59,11 +268,11 @@ manx snippet react "useEffect cleanup"
 ```
 *Returns: Working code examples with clear explanations*
 
-**📁 Personal Knowledge Base**
+**📁 Local Document Search (RAG)**
 ```bash
-manx snippet "authentication setup"
+manx search "authentication" --rag
 ```
-*Returns: Official docs + your indexed notes and wikis*
+*Returns: Semantic search through your indexed documents*
 
 </td>
 </tr>
@@ -101,6 +310,30 @@ manx config --huggingface-api "hf-your-huggingface-key"
 manx config --custom-endpoint "http://localhost:8000/v1"
 ```
 
+### 📂 **Local Document Search (RAG)**
+
+Index and search your own documentation and code files:
+
+```bash
+# 1. Index your documents
+manx index /path/to/your/docs
+manx index /path/to/your/code
+
+# 2. Enable local search
+manx config --rag-enabled
+
+# 3. Search your indexed content
+manx search "authentication patterns" --rag
+manx snippet python "async database" --rag  
+manx doc fastapi "middleware setup" --rag
+```
+
+**Benefits:**
+- 🔒 **Private & Offline** - Your documents never leave your machine
+- 🎯 **Semantic Search** - Uses same embedding models as web search
+- 🤖 **AI Integration** - Optional LLM synthesis from your own docs
+- 📁 **File Formats** - Supports `.md`, `.txt`, `.pdf`, `.docx` + web URLs
+
 ---
 
 ## 🚀 **Quick Start**
@@ -130,9 +363,10 @@ manx doc fastapi "authentication middleware"
 # 💡 Find working code snippets
 manx snippet react "custom hooks patterns"
 
-# 📁 Index your personal documentation
+# 📁 Index your personal documentation (optional)
 manx index ~/dev-notes/
-manx index https://your-team-wiki.com/docs
+manx config --rag-enabled
+manx search "team coding standards" --rag
 ```
 
 ### 3. **Context7 API Configuration (Recommended)**
@@ -412,7 +646,7 @@ manx snippet react hooks  # Much higher limits
 
 **🔧 Technical Features**
 - **Multi-threading**: Parallel search processing
-- **BERT Embeddings**: Semantic search understanding  
+- **Smart Embeddings**: Hash-based (default) + ONNX neural models  
 - **Vector Storage**: Local file-based RAG system
 - **HTTP/2**: Modern API communication
 - **Cross-platform**: Linux, macOS, Windows
@@ -420,6 +654,53 @@ manx snippet react hooks  # Much higher limits
 </td>
 </tr>
 </table>
+
+---
+
+## 🧠 **Semantic Search & Embeddings**
+
+Manx features a **flexible embedding system** that automatically chooses the best search method:
+
+### **🚀 Getting Started (3 Commands)**
+
+```bash
+# 1. Works great immediately (no setup)
+manx snippet react "state management"
+
+# 2. Optional: Install better search (one-time setup)
+manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+
+# 3. Now enjoy superior semantic search
+manx snippet react "state management"  # Much smarter results
+```
+
+### **📊 Capability Comparison**
+
+| Feature | **Hash (Default)** | **Neural Models** |
+|---------|-------------------|-------------------|
+| **Setup** | None required | 1 command |
+| **Speed** | 0ms (instant) | 0ms (after loading) |
+| **Storage** | 0MB | 87-400MB |
+| **Understanding** | Keyword matching | Semantic + contextual |
+| **Privacy** | 100% offline | 100% local processing |
+| **Quality** | Good for exact terms | Excellent for concepts |
+
+### **⚙️ Advanced Configuration**
+
+```bash
+# Management commands
+manx embedding list --available     # See available models
+manx embedding status               # Check current setup
+manx embedding test "your query"    # Test search quality
+
+# Provider switching (instant)
+manx config --embedding-provider hash                    # Default algorithm
+manx config --embedding-provider onnx:all-MiniLM-L6-v2   # Local neural model  
+manx config --embedding-provider openai:text-embedding-3 # API-based (requires key)
+```
+
+**HuggingFace installation recommended** - best search quality + privacy + no API costs.
 
 ---
 

@@ -64,8 +64,15 @@ walkdir = "2.4"
 # File-based vector storage
 uuid = { version = "1.6", features = ["v4"] }
 
-# Future LLM dependencies  
-# openai-api-rs = "5.0"
+# Embedding model dependencies
+ort = { version = "1.16", features = ["load-dynamic"] }
+sha2 = "0.10"
+hf-hub = "0.3"
+tokenizers = "0.15"
+base64 = "0.22"
+bytes = "1.5"
+async-trait = "0.1"
+dirs = "5.0"
 
 [profile.release]
 # Optimize for small binary size and performance

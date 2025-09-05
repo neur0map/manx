@@ -1,85 +1,112 @@
-//! Text embedding generation using simple hash-based embeddings
+//! Text embedding generation using configurable embedding providers
 //!
-//! This module provides basic text embedding functionality for semantic similarity search.
-//! For production use with advanced semantic understanding, users can integrate
-//! external embedding services or install PyTorch-based models separately.
+//! This module provides flexible text embedding functionality for semantic similarity search.
+//! Supports multiple embedding providers: hash-based (default), local models, and API services.
+//! Users can configure their preferred embedding method via `manx config --embedding-provider`.
 
+use crate::rag::providers::{
+    custom, hash, huggingface, ollama, onnx, openai, EmbeddingProvider as ProviderTrait,
+};
+use crate::rag::{EmbeddingConfig, EmbeddingProvider};
 use anyhow::{anyhow, Result};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
-/// Text embedding model wrapper using hash-based embeddings
-/// This is a simplified implementation suitable for basic semantic search.
-/// For advanced BERT-based embeddings, users can integrate external services.
+/// Text embedding model wrapper with configurable providers
+/// Supports hash-based embeddings (default), local ONNX models, and API services.
+/// Users can configure their preferred embedding method via `manx config`.
 pub struct EmbeddingModel {
-    dimension: usize,
+    provider: Box<dyn ProviderTrait + Send + Sync>,
+    config: EmbeddingConfig,
 }
 
 impl EmbeddingModel {
-    /// Create a new embedding model
-    /// Uses hash-based embeddings for basic semantic similarity
+    /// Create a new embedding model with default hash-based provider
     pub async fn new() -> Result<Self> {
-        log::info!("Initializing hash-based embedding model...");
-
-        Ok(Self {
-            dimension: 384, // Standard embedding dimension
-        })
+        Self::new_with_config(EmbeddingConfig::default()).await
     }
 
-    /// Generate embeddings for a single text using hash-based approach
+    /// Create a new embedding model with custom configuration
+    pub async fn new_with_config(config: EmbeddingConfig) -> Result<Self> {
+        log::info!(
+            "Initializing embedding model with provider: {:?}",
+            config.provider
+        );
+
+        let provider: Box<dyn ProviderTrait + Send + Sync> = match &config.provider {
+            EmbeddingProvider::Hash => {
+                log::info!("Using hash-based embeddings (default provider)");
+                Box::new(hash::HashProvider::new(384)) // Hash provider always uses 384 dimensions
+            }
+            EmbeddingProvider::Onnx(model_name) => {
+                log::info!("Loading ONNX model: {}", model_name);
+                let onnx_provider = onnx::OnnxProvider::new(model_name).await?;
+                Box::new(onnx_provider)
+            }
+            EmbeddingProvider::Ollama(model_name) => {
+                log::info!("Connecting to Ollama model: {}", model_name);
+                let ollama_provider =
+                    ollama::OllamaProvider::new(model_name.clone(), config.endpoint.clone());
+                // Test connection
+                ollama_provider.health_check().await?;
+                Box::new(ollama_provider)
+            }
+            EmbeddingProvider::OpenAI(model_name) => {
+                log::info!("Connecting to OpenAI model: {}", model_name);
+                let api_key = config.api_key.as_ref().ok_or_else(|| {
+                    anyhow!("OpenAI API key required. Use 'manx config --embedding-api-key <key>'")
+                })?;
+                let openai_provider =
+                    openai::OpenAiProvider::new(api_key.clone(), model_name.clone());
+                Box::new(openai_provider)
+            }
+            EmbeddingProvider::HuggingFace(model_name) => {
+                log::info!("Connecting to HuggingFace model: {}", model_name);
+                let api_key = config.api_key.as_ref().ok_or_else(|| {
+                    anyhow!(
+                        "HuggingFace API key required. Use 'manx config --embedding-api-key <key>'"
+                    )
+                })?;
+                let hf_provider =
+                    huggingface::HuggingFaceProvider::new(api_key.clone(), model_name.clone());
+                Box::new(hf_provider)
+            }
+            EmbeddingProvider::Custom(endpoint) => {
+                log::info!("Connecting to custom endpoint: {}", endpoint);
+                let custom_provider =
+                    custom::CustomProvider::new(endpoint.clone(), config.api_key.clone());
+                Box::new(custom_provider)
+            }
+        };
+
+        Ok(Self { provider, config })
+    }
+
+    /// Generate embeddings for a single text using configured provider
     pub async fn embed_text(&self, text: &str) -> Result<Vec<f32>> {
         if text.trim().is_empty() {
             return Err(anyhow!("Cannot embed empty text"));
         }
 
-        // Simple hash-based embedding generation
-        // This provides basic similarity matching for identical/similar terms
-        let embedding = self.generate_hash_embedding(text);
-        Ok(embedding)
+        self.provider.embed_text(text).await
     }
 
-    /// Generate hash-based embedding vector
-    fn generate_hash_embedding(&self, text: &str) -> Vec<f32> {
-        let cleaned_text = preprocessing::clean_text(text);
-        let words: Vec<&str> = cleaned_text.split_whitespace().collect();
+    /// Get the dimension of embeddings produced by this model
+    pub async fn get_dimension(&self) -> Result<usize> {
+        self.provider.get_dimension().await
+    }
 
-        let mut embedding = vec![0.0; self.dimension];
+    /// Test if the embedding model is working correctly
+    pub async fn health_check(&self) -> Result<()> {
+        self.provider.health_check().await
+    }
 
-        // Generate hash-based features for each word
-        for word in &words {
-            let mut hasher = DefaultHasher::new();
-            word.to_lowercase().hash(&mut hasher);
-            let hash = hasher.finish();
+    /// Get information about the current provider
+    pub fn get_provider_info(&self) -> crate::rag::providers::ProviderInfo {
+        self.provider.get_info()
+    }
 
-            // Distribute hash across embedding dimensions
-            for i in 0..self.dimension {
-                let feature_hash = (hash.wrapping_mul(i as u64 + 1)) as usize % self.dimension;
-                embedding[feature_hash] += 1.0;
-            }
-        }
-
-        // Add n-gram features for better similarity
-        for window in words.windows(2) {
-            let bigram = format!("{} {}", window[0], window[1]);
-            let mut hasher = DefaultHasher::new();
-            bigram.to_lowercase().hash(&mut hasher);
-            let hash = hasher.finish();
-
-            for i in 0..self.dimension {
-                let feature_hash = (hash.wrapping_mul(i as u64 + 1)) as usize % self.dimension;
-                embedding[feature_hash] += 0.5; // Lower weight for n-grams
-            }
-        }
-
-        // Normalize the embedding vector
-        let norm = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 {
-            for val in &mut embedding {
-                *val /= norm;
-            }
-        }
-
-        embedding
+    /// Get the current configuration
+    pub fn get_config(&self) -> &EmbeddingConfig {
+        &self.config
     }
 
     /// Calculate cosine similarity between two embeddings
@@ -162,7 +189,7 @@ mod tests {
         let text = "This is a test sentence for embedding.";
         let embedding = model.embed_text(text).await.unwrap();
 
-        assert_eq!(embedding.len(), 384);
+        assert_eq!(embedding.len(), 384); // Hash provider default
         assert!(embedding.iter().any(|&x| x != 0.0));
     }
 
