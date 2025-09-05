@@ -477,11 +477,25 @@ async fn run() -> Result<()> {
             rag,
         }) => {
             if rag {
-                handle_rag_search_command(&query, &no_llm, output.as_ref(), limit.as_ref(), &config, &renderer)
-                    .await?;
+                handle_rag_search_command(
+                    &query,
+                    &no_llm,
+                    output.as_ref(),
+                    limit.as_ref(),
+                    &config,
+                    &renderer,
+                )
+                .await?;
             } else {
-                handle_web_search_command(&query, no_llm, output.as_ref(), limit, &config, &renderer)
-                    .await?;
+                handle_web_search_command(
+                    &query,
+                    no_llm,
+                    output.as_ref(),
+                    limit,
+                    &config,
+                    &renderer,
+                )
+                .await?;
             }
         }
 
@@ -521,8 +535,15 @@ async fn run() -> Result<()> {
             }
         }
 
-        Some(Commands::Index { path, id, crawl, max_depth, max_pages }) => {
-            handle_index_command(&path, id, crawl, max_depth, max_pages, &config, &renderer).await?;
+        Some(Commands::Index {
+            path,
+            id,
+            crawl,
+            max_depth,
+            max_pages,
+        }) => {
+            handle_index_command(&path, id, crawl, max_depth, max_pages, &config, &renderer)
+                .await?;
         }
 
         Some(Commands::Sources { command }) => {
@@ -1361,12 +1382,17 @@ async fn handle_index_command(
     let pb = if is_url {
         if crawl {
             let crawl_info = match (max_depth, max_pages) {
-                (Some(depth), Some(pages)) => format!(" (max depth: {}, max pages: {})", depth, pages),
+                (Some(depth), Some(pages)) => {
+                    format!(" (max depth: {}, max pages: {})", depth, pages)
+                }
                 (Some(depth), None) => format!(" (max depth: {})", depth),
                 (None, Some(pages)) => format!(" (max pages: {})", pages),
                 (None, None) => " (deep crawl)".to_string(),
             };
-            renderer.show_progress(&format!("Deep crawling and indexing URL: {}{}", path_or_url, crawl_info))
+            renderer.show_progress(&format!(
+                "Deep crawling and indexing URL: {}{}",
+                path_or_url, crawl_info
+            ))
         } else {
             renderer.show_progress(&format!("Fetching and indexing URL: {}", path_or_url))
         }
@@ -1379,12 +1405,13 @@ async fn handle_index_command(
             let indexed_count = if is_url {
                 if crawl {
                     // Index URL content with deep crawling
-                    rag_system.index_url_deep(path_or_url, max_depth, max_pages).await?
+                    rag_system
+                        .index_url_deep(path_or_url, max_depth, max_pages)
+                        .await?
                 } else {
                     // Index single URL content
                     rag_system.index_url(path_or_url).await?
                 }
-            
             } else {
                 // Index local file or directory
                 let path = std::path::PathBuf::from(path_or_url);
@@ -1504,7 +1531,16 @@ async fn handle_sources_command(
         }
 
         SourceCommands::Add { path, id: _id } => {
-            handle_index_command(&path.to_string_lossy(), None, false, None, None, config, renderer).await?;
+            handle_index_command(
+                &path.to_string_lossy(),
+                None,
+                false,
+                None,
+                None,
+                config,
+                renderer,
+            )
+            .await?;
         }
 
         SourceCommands::Clear => {
@@ -2274,7 +2310,10 @@ async fn handle_rag_search_command(
                 return Ok(());
             }
 
-            renderer.print_success(&format!("✓ Found {} results from indexed documents", results.len()));
+            renderer.print_success(&format!(
+                "✓ Found {} results from indexed documents",
+                results.len()
+            ));
 
             // Apply LLM synthesis if configured
             if config.should_use_llm(*no_llm) && !results.is_empty() {
@@ -2282,7 +2321,7 @@ async fn handle_rag_search_command(
                     Ok(synthesis) => {
                         println!("\n🤖 AI Analysis:");
                         println!("{}", synthesis.answer);
-                        
+
                         if !synthesis.citations.is_empty() {
                             println!("\n📖 Sources:");
                             for citation in synthesis.citations.iter().take(5) {
@@ -2316,6 +2355,7 @@ async fn handle_rag_search_command(
 }
 
 /// Handle RAG snippet command for searching locally indexed documents with library focus
+#[allow(clippy::too_many_arguments)]
 async fn handle_rag_snippet_command(
     library: &str,
     query: &str,
@@ -2372,12 +2412,19 @@ async fn handle_rag_snippet_command(
             pb.finish_and_clear();
 
             if results.is_empty() {
-                renderer.print_error(&format!("No code snippets found for '{}' in indexed documents", library));
+                renderer.print_error(&format!(
+                    "No code snippets found for '{}' in indexed documents",
+                    library
+                ));
                 println!("💡 Try: manx index /path/to/code");
                 return Ok(());
             }
 
-            renderer.print_success(&format!("✓ Found {} snippets for {}", results.len(), library));
+            renderer.print_success(&format!(
+                "✓ Found {} snippets for {}",
+                results.len(),
+                library
+            ));
 
             // Apply LLM synthesis if configured
             if config.should_use_llm(*no_llm) && !results.is_empty() {
@@ -2455,11 +2502,18 @@ async fn handle_rag_doc_command(
             pb.finish_and_clear();
 
             if results.is_empty() {
-                renderer.print_error(&format!("No documentation found for '{}' in indexed documents", library));
+                renderer.print_error(&format!(
+                    "No documentation found for '{}' in indexed documents",
+                    library
+                ));
                 return Ok(());
             }
 
-            renderer.print_success(&format!("✓ Found {} documentation sections for {}", results.len(), library));
+            renderer.print_success(&format!(
+                "✓ Found {} documentation sections for {}",
+                results.len(),
+                library
+            ));
 
             // Apply LLM synthesis if configured
             if config.should_use_llm(*no_llm) && !results.is_empty() {
@@ -2506,12 +2560,14 @@ async fn synthesize_rag_results(
 fn display_rag_results(results: &[crate::rag::RagSearchResult], _renderer: &render::Renderer) {
     println!("\n📄 Local Document Results:");
     for (i, result) in results.iter().enumerate() {
-        println!("\n{}. {} (Score: {:.2})", i + 1, 
-            result.title.as_deref().unwrap_or("Untitled"), 
+        println!(
+            "\n{}. {} (Score: {:.2})",
+            i + 1,
+            result.title.as_deref().unwrap_or("Untitled"),
             result.score
         );
         println!("   📁 {}", result.source_path.display());
-        
+
         let preview = if result.content.len() > 150 {
             format!("{}...", &result.content[..150])
         } else {
@@ -2522,15 +2578,21 @@ fn display_rag_results(results: &[crate::rag::RagSearchResult], _renderer: &rend
 }
 
 /// Display RAG snippet results with code focus
-fn display_rag_snippet_results(results: &[crate::rag::RagSearchResult], library: &str, _renderer: &render::Renderer) {
+fn display_rag_snippet_results(
+    results: &[crate::rag::RagSearchResult],
+    library: &str,
+    _renderer: &render::Renderer,
+) {
     println!("\n💻 Code Snippets for {}:", library);
     for (i, result) in results.iter().enumerate() {
-        println!("\n{}. {} (Score: {:.2})", i + 1,
+        println!(
+            "\n{}. {} (Score: {:.2})",
+            i + 1,
             result.title.as_deref().unwrap_or("Code Snippet"),
             result.score
         );
         println!("   📁 {}", result.source_path.display());
-        
+
         // Show code content with some formatting
         println!("   ```");
         let lines: Vec<&str> = result.content.lines().take(8).collect();
@@ -2545,15 +2607,21 @@ fn display_rag_snippet_results(results: &[crate::rag::RagSearchResult], library:
 }
 
 /// Display RAG documentation results
-fn display_rag_doc_results(results: &[crate::rag::RagSearchResult], library: &str, _renderer: &render::Renderer) {
+fn display_rag_doc_results(
+    results: &[crate::rag::RagSearchResult],
+    library: &str,
+    _renderer: &render::Renderer,
+) {
     println!("\n📖 Documentation for {}:", library);
     for (i, result) in results.iter().enumerate() {
-        println!("\n{}. {} (Score: {:.2})", i + 1,
+        println!(
+            "\n{}. {} (Score: {:.2})",
+            i + 1,
             result.title.as_deref().unwrap_or("Documentation"),
             result.score
         );
         println!("   📁 {}", result.source_path.display());
-        
+
         let preview = if result.content.len() > 200 {
             format!("{}...", &result.content[..200])
         } else {
@@ -2575,10 +2643,13 @@ fn export_rag_results(
         // Export as markdown
         let mut content = String::new();
         content.push_str("# Local Document Search Results\n\n");
-        
+
         for (i, result) in results.iter().enumerate() {
-            content.push_str(&format!("## {}. {}\n\n", i + 1, 
-                result.title.as_deref().unwrap_or("Untitled")));
+            content.push_str(&format!(
+                "## {}. {}\n\n",
+                i + 1,
+                result.title.as_deref().unwrap_or("Untitled")
+            ));
             content.push_str(&format!("**Source:** `{}`\n", result.source_path.display()));
             content.push_str(&format!("**Score:** {:.3}\n\n", result.score));
             content.push_str(&result.content);
@@ -2587,10 +2658,9 @@ fn export_rag_results(
         content
     };
 
-    std::fs::write(output_path, export_content)
-        .context("Failed to write export file")?;
+    std::fs::write(output_path, export_content).context("Failed to write export file")?;
     renderer.print_success(&format!("Results exported to: {}", output_path.display()));
-    
+
     Ok(())
 }
 
@@ -2609,29 +2679,33 @@ fn handle_snippet_save_and_export(
             .split(',')
             .map(|s| s.trim().parse::<usize>().map(|i| i.saturating_sub(1)))
             .collect();
-        
+
         match indices {
             Ok(indices) => {
                 for &idx in &indices {
                     if let Some(result) = results.get(idx) {
-                        let filename = format!("snippet_{}_{}.{}", 
-                            idx + 1, 
-                            result.source_path.file_stem()
+                        let filename = format!(
+                            "snippet_{}_{}.{}",
+                            idx + 1,
+                            result
+                                .source_path
+                                .file_stem()
                                 .and_then(|s| s.to_str())
                                 .unwrap_or("snippet"),
                             if *json { "json" } else { "md" }
                         );
-                        
+
                         let content = if *json {
                             serde_json::to_string_pretty(result)?
                         } else {
-                            format!("# {}\n\n**Source:** `{}`\n\n{}", 
+                            format!(
+                                "# {}\n\n**Source:** `{}`\n\n{}",
                                 result.title.as_deref().unwrap_or("Code Snippet"),
                                 result.source_path.display(),
                                 result.content
                             )
                         };
-                        
+
                         std::fs::write(&filename, content)?;
                         renderer.print_success(&format!("Saved snippet to: {}", filename));
                     }
@@ -2642,7 +2716,7 @@ fn handle_snippet_save_and_export(
             }
         }
     }
-    
+
     // Handle save all
     if *save_all {
         let filename = format!("all_snippets.{}", if *json { "json" } else { "md" });
@@ -2652,23 +2726,29 @@ fn handle_snippet_save_and_export(
             let mut content = String::new();
             content.push_str("# All Code Snippets\n\n");
             for (i, result) in results.iter().enumerate() {
-                content.push_str(&format!("## {}. {}\n\n", i + 1,
-                    result.title.as_deref().unwrap_or("Code Snippet")));
-                content.push_str(&format!("**Source:** `{}`\n\n", result.source_path.display()));
+                content.push_str(&format!(
+                    "## {}. {}\n\n",
+                    i + 1,
+                    result.title.as_deref().unwrap_or("Code Snippet")
+                ));
+                content.push_str(&format!(
+                    "**Source:** `{}`\n\n",
+                    result.source_path.display()
+                ));
                 content.push_str(&result.content);
                 content.push_str("\n\n---\n\n");
             }
             content
         };
-        
+
         std::fs::write(&filename, content)?;
         renderer.print_success(&format!("Saved all snippets to: {}", filename));
     }
-    
+
     // Handle general output
     if let Some(output_path) = output {
         export_rag_results(results, output_path, renderer)?;
     }
-    
+
     Ok(())
 }
