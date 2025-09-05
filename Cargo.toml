@@ -11,17 +11,20 @@ readme = "README.md"
 keywords = ["cli", "documentation", "mcp", "context7", "terminal"]
 categories = ["command-line-utilities", "development-tools"]
 exclude = [
-    "target/*",
+    "target/",
     "*.onnx",
     "*.bin",
     "*.safetensors",
-    ".github/*",
-    "docs/*",
+    "*.mp4",
+    "*.mov", 
+    "*.avi",
+    ".github/",
+    "docs/",
     "*.log",
-    "debug/*",
+    "debug/",
     ".DS_Store",
-    ".vscode/*",
-    ".idea/*",
+    ".vscode/",
+    ".idea/",
 ]
 
 [[bin]]
