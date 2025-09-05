@@ -1085,7 +1085,7 @@ More content.
         let chunks = chunk_content(content, 10, 2); // Small chunks for testing
 
         assert!(chunks.len() > 1);
-        assert!(chunks[0].len() > 0);
+        assert!(!chunks[0].is_empty());
 
         // Check for overlap
         if chunks.len() > 1 {
