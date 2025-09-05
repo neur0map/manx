@@ -40,8 +40,7 @@ async fn run() -> Result<()> {
     // Load configuration
     let mut config = Config::load().unwrap_or_default();
 
-    // Merge CLI arguments with config
-    config.merge_with_cli(None, None, args.offline);
+    // Config is loaded as-is, no CLI arguments to merge
 
     // Handle NO_COLOR environment variable
     if std::env::var("NO_COLOR").is_ok() || !config.color_output {
@@ -195,15 +194,42 @@ async fn run() -> Result<()> {
                 output.as_ref(),
                 &config,
                 &renderer,
-                args.offline,
+                false,
                 limit,
             )
             .await?;
         }
 
-        Some(Commands::Snippet { id, output }) => {
-            handle_snippet_command(&id, output.as_ref(), &config, &renderer, args.offline).await?;
+        Some(Commands::Snippet {
+            library,
+            query,
+            output,
+            offline,
+            save,
+            save_all,
+            json,
+            limit,
+        }) => {
+            let query_str = query.unwrap_or_default();
+            handle_search_command(
+                &library,
+                &query_str,
+                output.as_ref(),
+                &config,
+                &renderer,
+                offline,
+                save.as_ref(),
+                save_all,
+                json,
+                limit,
+            )
+            .await?;
         }
+
+        Some(Commands::Get { id, output }) => {
+            handle_get_command(&id, output.as_ref(), &config, &renderer, false).await?;
+        }
+
 
         Some(Commands::Open { id, output }) => {
             handle_open_command(&id, output.as_ref(), &config, &renderer).await?;
@@ -238,37 +264,9 @@ async fn run() -> Result<()> {
         }
 
         None => {
-            // Default search command
-            if let Some(library) = args.library {
-                let query = args.query.unwrap_or_default();
-                handle_search_command(
-                    &library,
-                    &query,
-                    args.output.as_ref(),
-                    &config,
-                    &renderer,
-                    args.offline,
-                    args.save.as_ref(),
-                    args.save_all,
-                    args.json,
-                    args.limit,
-                )
-                .await?;
-            } else {
-                // Show help if no arguments
-                println!("manx - A blazing-fast CLI documentation finder\n");
-                println!("Usage:");
-                println!("  manx <library> [query]        Search documentation");
-                println!("  manx doc <library> <query>    Get full documentation");
-                println!("  manx snippet <id>             Expand a search result");
-                println!("  manx cache <command>          Manage local cache");
-                println!("  manx config                   Configure settings");
-                println!("\nExamples:");
-                println!("  manx fastapi                  Search FastAPI docs");
-                println!("  manx react@18 hooks           Search React v18 for 'hooks'");
-                println!("  manx doc fastapi middleware   Get FastAPI middleware docs");
-                println!("\nFor more help: manx --help");
-            }
+            // This should never be reached due to arg_required_else_help = true
+            // But just in case, show a simple message
+            println!("Use 'manx --help' for usage information");
         }
     }
 
@@ -657,6 +655,160 @@ async fn handle_open_command(
             renderer.print_success("Try running a doc command first, then use the section ID:");
             renderer.print_success("  manx doc react           # Get React documentation");
             renderer.print_success("  manx open doc-1          # Open first section");
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_get_command(
+    id: &str,
+    output: Option<&std::path::PathBuf>,
+    config: &Config,
+    renderer: &Renderer,
+    _offline: bool,
+) -> Result<()> {
+    let cache_manager = if let Some(dir) = &config.cache_dir {
+        CacheManager::with_custom_dir(dir.clone())?
+    } else {
+        CacheManager::new()?
+    };
+
+    let pb = renderer.show_progress(&format!("Looking for item {}...", id));
+
+    let mut found_content: Option<String> = None;
+    let mut library_name = String::new();
+    let mut content_type = String::new();
+
+    // First, try to find in snippets cache (for doc-N IDs)
+    if id.starts_with("doc-") {
+        content_type = "snippet".to_string();
+        let dummy_path = cache_manager.cache_key("snippets", "dummy");
+        if let Some(snippets_cache_dir) = dummy_path.parent() {
+            if snippets_cache_dir.exists() {
+                let mut matching_files = Vec::new();
+
+                if let Ok(entries) = std::fs::read_dir(snippets_cache_dir) {
+                    for entry in entries.flatten() {
+                        let filename = entry.file_name();
+                        if let Some(filename_str) = filename.to_str() {
+                            if filename_str.ends_with(&format!("{}.json", id)) {
+                                if let Ok(metadata) = entry.metadata() {
+                                    if let Ok(modified) = metadata.modified() {
+                                        matching_files.push((filename_str.to_string(), modified));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                matching_files.sort_by(|a, b| b.1.cmp(&a.1));
+
+                for (filename, _) in matching_files {
+                    if let Some(underscore_pos) = filename.rfind('_') {
+                        library_name = filename[..underscore_pos].to_string();
+                        let snippet_key = format!("{}_{}", library_name, id);
+
+                        if let Ok(Some(content)) =
+                            cache_manager.get::<String>("snippets", &snippet_key).await
+                        {
+                            found_content = Some(content);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // If not found in snippets, try doc_sections cache (for section-N IDs or doc-N fallback)
+    if found_content.is_none() {
+        content_type = "doc_section".to_string();
+        let dummy_path = cache_manager.cache_key("doc_sections", "dummy");
+        if let Some(sections_cache_dir) = dummy_path.parent() {
+            if sections_cache_dir.exists() {
+                let mut matching_files = Vec::new();
+
+                if let Ok(entries) = std::fs::read_dir(sections_cache_dir) {
+                    for entry in entries.flatten() {
+                        let filename = entry.file_name();
+                        if let Some(filename_str) = filename.to_str() {
+                            // Try both the original ID and with section- prefix
+                            let id_variants = if id.starts_with("doc-") {
+                                vec![id.to_string(), id.replace("doc-", "section-")]
+                            } else if id.starts_with("section-") {
+                                vec![id.to_string()]
+                            } else {
+                                vec![format!("section-{}", id)]
+                            };
+
+                            for variant in id_variants {
+                                if filename_str.ends_with(&format!("{}.json", variant)) {
+                                    if let Ok(metadata) = entry.metadata() {
+                                        if let Ok(modified) = metadata.modified() {
+                                            matching_files.push((filename_str.to_string(), modified, variant));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                matching_files.sort_by(|a, b| b.1.cmp(&a.1));
+
+                for (filename, _, variant) in matching_files {
+                    if let Some(underscore_pos) = filename.rfind('_') {
+                        library_name = filename[..underscore_pos].to_string();
+                        let section_key = format!("{}_{}", library_name, variant);
+
+                        if let Ok(Some(content)) = cache_manager
+                            .get::<String>("doc_sections", &section_key)
+                            .await
+                        {
+                            found_content = Some(content);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pb.finish_and_clear();
+
+    match found_content {
+        Some(content) => {
+            let title = format!("{} - {}", library_name, id);
+            
+            // Render based on content type
+            if content_type == "snippet" {
+                renderer.render_context7_documentation(&title, &content)?;
+            } else {
+                renderer.render_open_section(&title, &content)?;
+            }
+
+            // Export if requested
+            if let Some(path) = output {
+                std::fs::write(path, &content)?;
+                renderer.print_success(&format!("Item exported to {:?}", path));
+            }
+        }
+        None => {
+            renderer.print_error(&format!(
+                "Item '{}' not found in cache.", id
+            ));
+            renderer.print_success("💡 Available item types:");
+            renderer.print_success("  • doc-N: Search result snippets (from 'manx snippet' commands)");
+            renderer.print_success("  • section-N: Documentation sections (from 'manx doc' commands)");
+            renderer.print_success("");
+            renderer.print_success("📖 How to get items:");
+            renderer.print_success("  manx snippet fastapi        # Search for snippets");
+            renderer.print_success("  manx get doc-3               # Get snippet result");
+            renderer.print_success("  manx doc react              # Browse documentation"); 
+            renderer.print_success("  manx get section-5           # Get doc section");
         }
     }
 
