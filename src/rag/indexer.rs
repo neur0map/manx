@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use spider::website::Website;
 
 use crate::rag::embeddings::preprocessing;
 use crate::rag::{DocumentChunk, DocumentMetadata, RagConfig, SourceType};
@@ -139,6 +140,163 @@ impl Indexer {
             document_chunks.len(),
             url
         );
+        Ok(document_chunks)
+    }
+
+    /// Index content from a URL with deep crawling support
+    pub async fn index_url_deep(
+        &self, 
+        url: String, 
+        max_depth: Option<u32>,
+        max_pages: Option<u32>
+    ) -> Result<Vec<DocumentChunk>> {
+        log::info!("Starting deep crawl of URL: {} (max_depth: {:?}, max_pages: {:?})", 
+                   url, max_depth, max_pages);
+
+        // Validate URL format
+        let parsed_url =
+            url::Url::parse(&url).map_err(|e| anyhow!("Invalid URL format '{}': {}", url, e))?;
+
+        // Security check - only allow HTTP/HTTPS
+        match parsed_url.scheme() {
+            "http" | "https" => {}
+            scheme => {
+                return Err(anyhow!(
+                    "Unsupported URL scheme '{}'. Only HTTP and HTTPS are allowed.",
+                    scheme
+                ))
+            }
+        }
+
+        // Create and configure spider website
+        let mut website = Website::new(&url);
+        
+        // Configure for documentation-optimized crawling
+        website.configuration.respect_robots_txt = false; // Disable for faster crawling
+        website.configuration.delay = 50; // Reduce delay for faster crawling
+        website.configuration.subdomains = false; // Stay within same domain
+        website.configuration.tld = false; // Don't crawl different TLDs
+        website.configuration.request_timeout = Some(Box::new(std::time::Duration::from_secs(10))); // Add timeout
+        
+        // Set crawl depth limit (default to 3 if not specified)
+        if let Some(depth) = max_depth {
+            website.configuration.depth = depth as usize;
+        } else {
+            website.configuration.depth = 3;
+        }
+
+        // Filter out non-documentation URLs
+        let blacklist_patterns = vec![
+            "/api/".to_string(),
+            "/downloads/".to_string(),
+            "/images/".to_string(),
+            "/assets/".to_string(),
+            "/static/".to_string(),
+            ".jpg".to_string(),
+            ".jpeg".to_string(),
+            ".png".to_string(),
+            ".gif".to_string(),
+            ".pdf".to_string(),
+            ".zip".to_string(),
+            ".tar".to_string(),
+        ];
+        
+        website.configuration.blacklist_url = Some(
+            blacklist_patterns
+                .iter()
+                .map(|pattern| format!("{}{}", parsed_url.origin().ascii_serialization(), pattern).into())
+                .collect()
+        );
+
+        // Perform the crawl with timeout
+        let crawl_timeout = std::time::Duration::from_secs(30);
+        match tokio::time::timeout(crawl_timeout, website.crawl()).await {
+            Ok(_) => log::info!("Crawl completed successfully"),
+            Err(_) => {
+                log::warn!("Crawl timed out after {} seconds", crawl_timeout.as_secs());
+                return Err(anyhow!("Crawl operation timed out after {} seconds", crawl_timeout.as_secs()));
+            }
+        }
+        
+        let discovered_links = website.get_links();
+        log::info!("Discovered {} URLs during crawl", discovered_links.len());
+
+        // Apply page limit if specified
+        let links_to_process = if let Some(max) = max_pages {
+            discovered_links.into_iter().take(max as usize).collect::<Vec<_>>()
+        } else {
+            discovered_links.into_iter().collect::<Vec<_>>()
+        };
+
+        log::info!("Processing {} URLs for content extraction", links_to_process.len());
+
+        // Process each discovered page
+        let mut all_chunks = Vec::new();
+        for (index, link) in links_to_process.iter().enumerate() {
+            let page_url = link.as_ref();
+            log::debug!("Processing page {}/{}: {}", index + 1, links_to_process.len(), page_url);
+            
+            match self.process_crawled_page(page_url).await {
+                Ok(chunks) => {
+                    let chunk_count = chunks.len();
+                    all_chunks.extend(chunks);
+                    log::debug!("Successfully processed page: {} ({} chunks)", page_url, chunk_count);
+                },
+                Err(e) => {
+                    log::warn!("Failed to process page '{}': {}", page_url, e);
+                    // Continue with other pages even if one fails
+                }
+            }
+        }
+
+        log::info!(
+            "Successfully indexed {} chunks from {} pages via deep crawl of: {}",
+            all_chunks.len(),
+            links_to_process.len(),
+            url
+        );
+
+        Ok(all_chunks)
+    }
+
+    /// Process a single crawled page URL and extract content chunks
+    async fn process_crawled_page(&self, page_url: &str) -> Result<Vec<DocumentChunk>> {
+        // Fetch content from the page
+        let content = fetch_url_content(page_url).await?;
+
+        if content.trim().is_empty() {
+            return Err(anyhow!("Page contains no extractable content: {}", page_url));
+        }
+
+        // Create metadata for this page
+        let metadata = create_url_metadata(page_url, &content).await?;
+
+        // Detect document structure (title, sections) from HTML content
+        let (title, sections) = detect_url_structure(&content, page_url);
+
+        // Chunk the content
+        let chunks = chunk_content(&content, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
+
+        // Create document chunks
+        let mut document_chunks = Vec::new();
+        for (i, chunk_content) in chunks.into_iter().enumerate() {
+            // Try to determine which section this chunk belongs to
+            let section = find_section_for_chunk(&chunk_content, &sections);
+
+            let chunk = DocumentChunk {
+                id: format!("{}_{}", page_url, i),
+                content: preprocessing::clean_text(&chunk_content),
+                source_path: PathBuf::from(page_url),
+                source_type: SourceType::Web,
+                title: title.clone(),
+                section: section.clone(),
+                chunk_index: i,
+                metadata: metadata.clone(),
+            };
+
+            document_chunks.push(chunk);
+        }
+
         Ok(document_chunks)
     }
 }
