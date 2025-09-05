@@ -1,4 +1,5 @@
 use crate::client::{Context7Client, SearchResult};
+use crate::rag::embeddings::EmbeddingModel;
 use anyhow::Result;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -13,14 +14,45 @@ struct ParsedQuery {
 pub struct SearchEngine {
     client: Context7Client,
     matcher: SkimMatcherV2,
+    embedding_model: Option<EmbeddingModel>,
 }
 
 impl SearchEngine {
+    /// Create SearchEngine without BERT (fallback mode)
     pub fn new(client: Context7Client) -> Self {
         Self {
             client,
             matcher: SkimMatcherV2::default(),
+            embedding_model: None,
         }
+    }
+
+    /// Create SearchEngine with BERT semantic search
+    pub async fn with_bert(client: Context7Client) -> Result<Self> {
+        let embedding_model = match EmbeddingModel::new().await {
+            Ok(model) => {
+                log::info!("🧠 BERT embeddings initialized for Context7 search");
+                Some(model)
+            }
+            Err(e) => {
+                log::warn!(
+                    "BERT embeddings unavailable for Context7, using text matching: {}",
+                    e
+                );
+                None
+            }
+        };
+
+        Ok(Self {
+            client,
+            matcher: SkimMatcherV2::default(),
+            embedding_model,
+        })
+    }
+
+    /// Check if BERT is available
+    pub fn has_bert(&self) -> bool {
+        self.embedding_model.is_some()
     }
 
     pub async fn search(
@@ -50,7 +82,7 @@ impl SearchEngine {
             }
         }
 
-        // Step 4: Cache individual snippets for later retrieval via snippet command  
+        // Step 4: Cache individual snippets for later retrieval via snippet command
         if let Ok(cache_manager) = crate::cache::CacheManager::new() {
             for result in &results {
                 let snippet_cache_key = format!("{}_{}", library, &result.id);
@@ -71,7 +103,7 @@ impl SearchEngine {
         parsed_query: &ParsedQuery,
     ) -> Result<Vec<SearchResult>> {
         let mut all_results = Vec::new();
-        
+
         // Pass 1: Phrase-priority search if we have quoted phrases
         if !parsed_query.quoted_phrases.is_empty() {
             let phrase_query = self.build_phrase_priority_query(parsed_query);
@@ -79,56 +111,60 @@ impl SearchEngine {
                 .client
                 .get_documentation(library_id, Some(&phrase_query))
                 .await?;
-            
-            let phrase_results = self.parse_documentation_into_results(
-                library,
-                &parsed_query.original_query,
-                &docs,
-                parsed_query,
-                true, // is_phrase_search
-            )?;
-            
+
+            let phrase_results = self
+                .parse_documentation_into_results(
+                    library,
+                    &parsed_query.original_query,
+                    &docs,
+                    parsed_query,
+                    true, // is_phrase_search
+                )
+                .await?;
+
             all_results.extend(phrase_results);
         }
-        
+
         // Pass 2: Individual term search if needed
         let should_do_term_search = parsed_query.quoted_phrases.is_empty() || all_results.len() < 5;
-        
+
         if should_do_term_search && !parsed_query.individual_terms.is_empty() {
             let term_query = parsed_query.individual_terms.join(" ");
             let docs = self
                 .client
                 .get_documentation(library_id, Some(&term_query))
                 .await?;
-            
-            let term_results = self.parse_documentation_into_results(
-                library,
-                &parsed_query.original_query,
-                &docs,
-                parsed_query,
-                false, // is_phrase_search
-            )?;
-            
+
+            let term_results = self
+                .parse_documentation_into_results(
+                    library,
+                    &parsed_query.original_query,
+                    &docs,
+                    parsed_query,
+                    false, // is_phrase_search
+                )
+                .await?;
+
             all_results.extend(term_results);
         }
-        
+
         // Pass 3: Merge, deduplicate, and rank
         let merged_results = self.merge_and_rank_results(all_results, parsed_query);
-        
+
         Ok(merged_results)
     }
 
     fn build_phrase_priority_query(&self, parsed_query: &ParsedQuery) -> String {
         let mut query_parts = Vec::new();
-        
+
         // Add quoted phrases with quotes preserved for Context7
         for phrase in &parsed_query.quoted_phrases {
             query_parts.push(format!("\"{}\"", phrase));
         }
-        
+
         // Add individual terms
         query_parts.extend(parsed_query.individual_terms.clone());
-        
+
         query_parts.join(" ")
     }
 
@@ -137,7 +173,7 @@ impl SearchEngine {
         let mut individual_terms = Vec::new();
         let mut current_term = String::new();
         let mut in_quotes = false;
-        
+
         for ch in query.chars() {
             match ch {
                 '"' => {
@@ -183,7 +219,7 @@ impl SearchEngine {
         }
     }
 
-    fn parse_documentation_into_results(
+    async fn parse_documentation_into_results(
         &self,
         library: &str,
         original_query: &str,
@@ -197,8 +233,29 @@ impl SearchEngine {
         let sections = self.split_into_sections(docs);
 
         for (idx, section) in sections.iter().enumerate() {
-            // Calculate relevance score with phrase prioritization
-            let relevance = self.calculate_enhanced_section_relevance(section, parsed_query, is_phrase_search);
+            // Calculate relevance score with BERT + keyword hybrid scoring
+            let relevance = if self.embedding_model.is_some() {
+                self.calculate_bert_section_relevance(
+                    section,
+                    &parsed_query.original_query,
+                    parsed_query,
+                    is_phrase_search,
+                )
+                .await
+                .unwrap_or_else(|e| {
+                    log::warn!(
+                        "BERT scoring failed, falling back to keyword matching: {}",
+                        e
+                    );
+                    self.calculate_enhanced_section_relevance(
+                        section,
+                        parsed_query,
+                        is_phrase_search,
+                    )
+                })
+            } else {
+                self.calculate_enhanced_section_relevance(section, parsed_query, is_phrase_search)
+            };
 
             // Lower threshold for including results when we have multiple sections
             let relevance_threshold = if sections.len() > 1 { 0.05 } else { 0.1 };
@@ -221,7 +278,7 @@ impl SearchEngine {
                 let excerpt = self.extract_section_excerpt(section);
 
                 results.push(SearchResult {
-                    id: format!("doc-{}", idx + 1),
+                    id: format!("{}-doc-{}", library, idx + 1),
                     library: library.to_string(),
                     title,
                     excerpt,
@@ -289,7 +346,9 @@ impl SearchEngine {
         all_results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap());
         all_results.dedup_by(|a, b| {
             // Consider results duplicates if titles are very similar
-            let similarity = self.matcher.fuzzy_match(&a.title.to_lowercase(), &b.title.to_lowercase());
+            let similarity = self
+                .matcher
+                .fuzzy_match(&a.title.to_lowercase(), &b.title.to_lowercase());
             similarity.unwrap_or(0) > 800 // High similarity threshold
         });
 
@@ -307,7 +366,9 @@ impl SearchEngine {
 
     fn contains_quoted_phrases(&self, text: &str, phrases: &[String]) -> bool {
         let text_lower = text.to_lowercase();
-        phrases.iter().any(|phrase| text_lower.contains(&phrase.to_lowercase()))
+        phrases
+            .iter()
+            .any(|phrase| text_lower.contains(&phrase.to_lowercase()))
     }
 
     fn calculate_enhanced_section_relevance(
@@ -322,7 +383,7 @@ impl SearchEngine {
         // Score quoted phrases with high priority
         for phrase in &parsed_query.quoted_phrases {
             let phrase_lower = phrase.to_lowercase();
-            
+
             if section_lower.contains(&phrase_lower) {
                 // Exact phrase match gets highest score
                 let phrase_score = if is_phrase_search { 10.0 } else { 5.0 };
@@ -354,10 +415,10 @@ impl SearchEngine {
         // Score individual terms with lower priority
         for term in &parsed_query.individual_terms {
             let term_lower = term.to_lowercase();
-            
+
             if section_lower.contains(&term_lower) {
                 total_score += 1.0;
-                
+
                 // Bonus for title/description matches
                 if let Some(title_line) = section.lines().find(|line| line.starts_with("TITLE: ")) {
                     if title_line.to_lowercase().contains(&term_lower) {
@@ -381,7 +442,8 @@ impl SearchEngine {
         }
 
         // Normalize by total number of search elements
-        let total_elements = parsed_query.quoted_phrases.len() + parsed_query.individual_terms.len();
+        let total_elements =
+            parsed_query.quoted_phrases.len() + parsed_query.individual_terms.len();
         if total_elements > 0 {
             total_score / total_elements as f32
         } else {
@@ -399,13 +461,18 @@ impl SearchEngine {
         let mut max_proximity_score: f32 = 0.0;
 
         // Look for words appearing close together
-        for window in section_lower.split_whitespace().collect::<Vec<_>>().windows(words.len()) {
+        for window in section_lower
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .windows(words.len())
+        {
             let mut proximity_score = 0.0;
             let mut found_words = 0;
 
             for (i, &target_word) in words.iter().enumerate() {
                 if let Some(fuzzy_score) = self.matcher.fuzzy_match(window[i], target_word) {
-                    if fuzzy_score > 700 { // Good match threshold
+                    if fuzzy_score > 700 {
+                        // Good match threshold
                         proximity_score += 1.0;
                         found_words += 1;
                     }
@@ -420,6 +487,114 @@ impl SearchEngine {
         }
 
         max_proximity_score
+    }
+
+    /// Calculate section relevance using BERT + keyword hybrid scoring
+    async fn calculate_bert_section_relevance(
+        &self,
+        section: &str,
+        query: &str,
+        parsed_query: &ParsedQuery,
+        is_phrase_search: bool,
+    ) -> Result<f32> {
+        let embedding_model = self
+            .embedding_model
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("BERT model not available"))?;
+
+        // Generate BERT embeddings for semantic similarity
+        let query_embedding = embedding_model.embed_text(query).await?;
+
+        // Create combined text for section (title + content for better context)
+        let section_text = self.prepare_section_for_embedding(section);
+        let section_embedding = embedding_model.embed_text(&section_text).await?;
+
+        // Calculate BERT semantic similarity (0.0-1.0)
+        let bert_score = EmbeddingModel::cosine_similarity(&query_embedding, &section_embedding);
+
+        // Calculate existing keyword-based relevance (0.0-N)
+        let keyword_score =
+            self.calculate_enhanced_section_relevance(section, parsed_query, is_phrase_search);
+
+        // Calculate quoted phrase bonus for exact matches
+        let phrase_bonus = self.calculate_phrase_bonus(section, parsed_query, is_phrase_search);
+
+        // Hybrid scoring: BERT (70%) + Keywords (20%) + Phrase bonus (10%)
+        // Normalize keyword score to 0-1 range by dividing by reasonable maximum
+        let normalized_keyword_score = (keyword_score / 5.0).min(1.0);
+        let normalized_phrase_bonus = (phrase_bonus / 10.0).min(1.0);
+
+        let final_score =
+            (bert_score * 0.7) + (normalized_keyword_score * 0.2) + (normalized_phrase_bonus * 0.1);
+
+        log::debug!("BERT hybrid scoring for section: BERT={:.3}, Keywords={:.3}, Phrase={:.3}, Final={:.3}",
+            bert_score, normalized_keyword_score, normalized_phrase_bonus, final_score);
+
+        Ok(final_score)
+    }
+
+    /// Prepare section text for optimal BERT embedding
+    fn prepare_section_for_embedding(&self, section: &str) -> String {
+        // Extract title and first few lines for context
+        let lines: Vec<&str> = section.lines().collect();
+        let mut embedding_text = String::new();
+
+        // Add title if available
+        if let Some(title_line) = lines.iter().find(|line| line.starts_with("TITLE: ")) {
+            embedding_text.push_str(title_line[7..].trim());
+            embedding_text.push(' ');
+        }
+
+        // Add description if available
+        if let Some(desc_line) = lines.iter().find(|line| line.starts_with("DESCRIPTION: ")) {
+            embedding_text.push_str(desc_line[13..].trim());
+            embedding_text.push(' ');
+        }
+
+        // Add first few content lines (up to 200 chars)
+        let content_lines: Vec<&str> = lines
+            .iter()
+            .filter(|line| !line.starts_with("TITLE: ") && !line.starts_with("DESCRIPTION: "))
+            .take(5)
+            .copied()
+            .collect();
+
+        let content = content_lines.join(" ");
+        let content_preview = if content.len() > 200 {
+            format!("{}...", &content[..200])
+        } else {
+            content
+        };
+
+        embedding_text.push_str(&content_preview);
+        embedding_text.trim().to_string()
+    }
+
+    /// Calculate phrase bonus for quoted phrase exact matches
+    fn calculate_phrase_bonus(
+        &self,
+        section: &str,
+        parsed_query: &ParsedQuery,
+        is_phrase_search: bool,
+    ) -> f32 {
+        let section_lower = section.to_lowercase();
+        let mut phrase_score = 0.0;
+
+        for phrase in &parsed_query.quoted_phrases {
+            let phrase_lower = phrase.to_lowercase();
+            if section_lower.contains(&phrase_lower) {
+                phrase_score += if is_phrase_search { 10.0 } else { 5.0 };
+
+                // Extra bonus for title matches
+                if let Some(title_line) = section.lines().find(|line| line.starts_with("TITLE: ")) {
+                    if title_line.to_lowercase().contains(&phrase_lower) {
+                        phrase_score += 2.0;
+                    }
+                }
+            }
+        }
+
+        phrase_score
     }
 
     fn split_into_sections(&self, docs: &str) -> Vec<String> {
@@ -602,7 +777,6 @@ impl SearchEngine {
             result
         }
     }
-
 
     pub async fn get_documentation(&self, library: &str, query: Option<&str>) -> Result<String> {
         let (lib_name, _version) = parse_library_spec(library);

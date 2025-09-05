@@ -5,23 +5,35 @@ use std::path::PathBuf;
 #[command(
     name = "manx",
     about = "A blazing-fast CLI documentation finder",
-    long_about = r#"🚀 Fast documentation finder with intelligent semantic search
+    long_about = r#"🚀 Intelligent documentation finder with native RAG and AI synthesis
 
 CORE COMMANDS:
-  snippet <lib> [query]          Search code snippets and examples
+  snippet <lib> [query]          Search code snippets and examples (official + local docs)
+  search <query>                 Search official documentation across the web
   doc <lib> [topic]              Browse comprehensive documentation  
   get <id>                       Retrieve specific results by ID
 
-SEMANTIC SEARCH - Use quotes to prioritize exact phrases:
-  manx snippet react "useEffect cleanup"   Prioritizes exact phrase matches
-  manx snippet tauri "table implementations" Phrases get 10x higher relevance
+LOCAL RAG COMMANDS:
+  index <path>                   Index your documents for semantic search
+  sources list                   View indexed document sources
+  sources clear                  Clear all indexed documents
+
+SEMANTIC SEARCH - BERT-powered understanding with quote prioritization:
+  manx snippet react "useEffect cleanup"   Exact phrase priority (10x relevance)
+  manx snippet "memory issues"             Finds: leaks, cleanup, performance
   manx snippet fastapi middleware          Individual terms search
 
+AI SYNTHESIS - Get comprehensive answers with citations:
+  manx config --llm-api "sk-key"           Enable AI answer synthesis
+  manx snippet react hooks                 Search + AI explanation (if configured)
+  manx snippet react hooks --no-llm        Force retrieval-only
+
 EXAMPLES:
-  manx snippet react hooks                 Search React hooks examples
-  manx snippet react "useEffect cleanup"   Prioritize exact phrase match
-  manx doc fastapi                         Browse FastAPI documentation  
-  manx get doc-3                           Retrieve search result #3
+  manx search "hydra configuration commands"  Search official docs (auto-detects LLM)
+  manx index ~/my-docs/                    Index your documentation  
+  manx snippet "database connection"       Search official + local docs
+  manx config --llm-api "sk-openai-key"    Enable AI synthesis
+  manx snippet react "useEffect cleanup"   Get AI answer with citations
 
 Use 'manx <command> --help' for detailed options."#,
     version = get_version_info(),
@@ -51,6 +63,18 @@ pub struct Cli {
     /// Disable automatic caching (manual caching only)
     #[arg(long, help_heading = "CACHE OPTIONS")]
     pub auto_cache_off: bool,
+
+    /// Override API key for this session
+    #[arg(long, help_heading = "GLOBAL OPTIONS")]
+    pub api_key: Option<String>,
+
+    /// Override cache directory for this session
+    #[arg(long, help_heading = "GLOBAL OPTIONS")]
+    pub cache_dir: Option<PathBuf>,
+
+    /// Work offline using only cached results
+    #[arg(long, help_heading = "GLOBAL OPTIONS")]
+    pub offline: bool,
 }
 
 #[derive(Subcommand)]
@@ -69,20 +93,33 @@ pub enum Commands {
         /// Limit number of sections shown (default: 10, use 0 for unlimited)
         #[arg(short = 'l', long, value_name = "NUMBER")]
         limit: Option<usize>,
+        /// Force retrieval-only mode (disable LLM synthesis even if API key configured)
+        #[arg(long)]
+        no_llm: bool,
     },
 
-    /// 🔍 Search for code snippets and examples
-    /// 
-    /// SEMANTIC SEARCH FEATURES:
-    ///   • Use quotes for exact phrases: "useEffect cleanup" 
-    ///   • Quoted phrases get 10x higher relevance scores
-    ///   • Individual terms: react hooks useState
+    /// 🔍 Search code snippets and examples with AI-powered understanding
+    ///
+    /// ENHANCED SEARCH:
+    ///   • Searches official docs (Context7) + your indexed documents (RAG)
+    ///   • BERT semantic understanding finds relevant content with different wording
+    ///   • Quote prioritization: "useEffect cleanup" gets 10x higher relevance
+    ///   • Optional AI synthesis provides comprehensive answers with citations
+    ///
+    /// SEMANTIC FEATURES:
+    ///   • "memory leaks" finds: "memory cleanup", "performance issues", "leak prevention"
+    ///   • "authentication" finds: "auth", "login", "security", "credentials"
     ///   • Version-specific: react@18, django@4.2
     ///
+    /// AI SYNTHESIS:
+    ///   • Configure: manx config --llm-api "sk-your-key"
+    ///   • Get answers: manx snippet "react hooks best practices"
+    ///   • Force retrieval: manx snippet react hooks --no-llm
+    ///
     /// EXAMPLES:
-    ///   manx snippet react "useEffect cleanup"
-    ///   manx snippet fastapi "async middleware" --limit 5
-    ///   manx snippet django@4.2 models --save-all
+    ///   manx snippet react "useEffect cleanup"           # Semantic search with phrase priority
+    ///   manx snippet "database pooling" --llm-api        # Get AI answer with citations  
+    ///   manx snippet fastapi middleware --no-llm         # Raw results only
     Snippet {
         /// Library name (examples: 'fastapi', 'react@18', 'vue@3')
         #[arg(value_name = "LIBRARY")]
@@ -108,6 +145,41 @@ pub enum Commands {
         /// Limit number of results shown (default: 10, use 0 for unlimited)
         #[arg(short = 'l', long, value_name = "NUMBER")]
         limit: Option<usize>,
+        /// Force retrieval-only mode (disable LLM synthesis even if API key configured)
+        #[arg(long)]
+        no_llm: bool,
+    },
+
+    /// 🔍 Search official documentation across the web
+    ///
+    /// INTELLIGENT WEB SEARCH:
+    ///   • Prioritizes official documentation sites (docs.python.org, reactjs.org, etc.)
+    ///   • Uses BERT embeddings for semantic relevance matching  
+    ///   • Falls back to trusted community sources with clear notification
+    ///   • Optional LLM verification ensures result authenticity
+    ///
+    /// OFFICIAL-FIRST STRATEGY:
+    ///   • Always searches official sources first (10x relevance boost)
+    ///   • Expands to community sources only if insufficient official results
+    ///   • Transparent fallback notifications: "⚠️ Expanded to community sources"
+    ///
+    /// EXAMPLES:
+    ///   manx search "hydra configuration commands"      # Auto-detects LLM availability  
+    ///   manx search "react hooks best practices"        # Uses LLM if API key configured
+    ///   manx search "python async await" --no-llm       # Force BERT-only mode
+    Search {
+        /// Search query for official documentation
+        #[arg(value_name = "QUERY")]
+        query: String,
+        /// Disable LLM verification (use BERT-only mode even if API key is configured)
+        #[arg(long)]
+        no_llm: bool,
+        /// Export results to file (format auto-detected by extension: .md, .json)
+        #[arg(short = 'o', long, value_name = "FILE")]
+        output: Option<PathBuf>,
+        /// Limit number of results shown (default: 8)
+        #[arg(short = 'l', long, value_name = "NUMBER")]
+        limit: Option<usize>,
     },
 
     /// 📥 Get specific item by ID (doc-3, section-5, etc.)
@@ -120,14 +192,13 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
-
     /// 🗂️ Manage local documentation cache
     Cache {
         #[command(subcommand)]
         command: CacheCommands,
     },
 
-    /// ⚙️ Configure Manx settings and preferences
+    /// ⚙️ Configure Manx settings, API keys, and AI integration
     Config {
         /// Display current configuration settings
         #[arg(long)]
@@ -147,6 +218,74 @@ pub enum Commands {
         /// Set maximum cache size in MB (default: 100)
         #[arg(long, value_name = "SIZE")]
         max_cache_size: Option<u64>,
+        /// Set OpenAI API key for GPT models
+        #[arg(long, value_name = "API_KEY")]
+        openai_api: Option<String>,
+        /// Set Anthropic API key for Claude models
+        #[arg(long, value_name = "API_KEY")]
+        anthropic_api: Option<String>,
+        /// Set Groq API key for fast inference
+        #[arg(long, value_name = "API_KEY")]
+        groq_api: Option<String>,
+        /// Set OpenRouter API key for multi-model access
+        #[arg(long, value_name = "API_KEY")]
+        openrouter_api: Option<String>,
+        /// Set HuggingFace API key for open-source models
+        #[arg(long, value_name = "API_KEY")]
+        huggingface_api: Option<String>,
+        /// Set custom endpoint URL for self-hosted models
+        #[arg(long, value_name = "URL")]
+        custom_endpoint: Option<String>,
+        /// Set preferred LLM provider (openai, anthropic, groq, openrouter, huggingface, custom, auto)
+        #[arg(long, value_name = "PROVIDER")]
+        llm_provider: Option<String>,
+        /// Set specific model name (overrides provider defaults)
+        #[arg(long, value_name = "MODEL")]
+        llm_model: Option<String>,
+        /// Legacy option - Set LLM API key (deprecated, use provider-specific options)
+        #[arg(long, value_name = "API_KEY")]
+        llm_api: Option<String>,
+        /// Enable/disable local RAG system (values: on, off)
+        #[arg(long, value_name = "MODE")]
+        rag: Option<String>,
+        /// Add custom official documentation domain (format: domain.com)
+        #[arg(long, value_name = "DOMAIN")]
+        add_official_domain: Option<String>,
+    },
+
+    /// 📁 Index local documents or web URLs for RAG search
+    ///
+    /// INDEXING SOURCES:
+    ///   • Local files: manx index ~/docs/api.md
+    ///   • Directories: manx index ~/documentation/  
+    ///   • Web URLs: manx index https://docs.rust-lang.org/book/ch01-01-installation.html
+    ///
+    /// SUPPORTED FORMATS:
+    ///   • Documents: .md, .txt, .docx, .pdf (with security validation)
+    ///   • Web content: HTML pages (auto text extraction)
+    ///
+    /// SECURITY FEATURES:
+    ///   • PDF processing disabled by default (configure to enable)  
+    ///   • URL validation (HTTP/HTTPS only)
+    ///   • Content sanitization and size limits
+    ///
+    /// EXAMPLES:
+    ///   manx index ~/my-docs/                              # Index directory
+    ///   manx index https://fastapi.tiangolo.com/tutorial/ # Index web documentation
+    ///   manx index api.pdf --alias "API Reference"        # Index with custom alias
+    Index {
+        /// Path to document/directory or URL to index
+        #[arg(value_name = "PATH_OR_URL")]
+        path: String,
+        /// Optional alias for the indexed source
+        #[arg(long, value_name = "ALIAS")]
+        id: Option<String>,
+    },
+
+    /// 📂 Manage indexed document sources
+    Sources {
+        #[command(subcommand)]
+        command: SourceCommands,
     },
 
     /// 🔗 Open a specific documentation section by ID
@@ -180,6 +319,22 @@ pub enum CacheCommands {
     List,
 }
 
+#[derive(Subcommand)]
+pub enum SourceCommands {
+    /// List all indexed document sources
+    List,
+    /// Add a document source to the index
+    Add {
+        /// Path to document or directory
+        path: PathBuf,
+        /// Optional alias for the source
+        #[arg(long)]
+        id: Option<String>,
+    },
+    /// Clear all indexed documents
+    Clear,
+}
+
 impl Cli {
     pub fn parse_args() -> Self {
         Cli::parse()
@@ -204,6 +359,8 @@ fn get_version_info() -> &'static str {
         "__   __________________________________________________________________________   __\n",
         "  | |                                                                          | |  \n",
         "\n",
-        "  v", env!("CARGO_PKG_VERSION"), " • blazing-fast docs finder\n"
+        "  v",
+        env!("CARGO_PKG_VERSION"),
+        " • blazing-fast docs finder\n"
     )
 }
