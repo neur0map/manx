@@ -1,6 +1,6 @@
-# 🤖 Manx - AI-Powered Documentation Assistant
+# 🚀 Manx - Lightning-Fast Documentation Finder
 
-> *Blazing-fast CLI documentation finder with AI synthesis, local RAG, and multi-provider LLM support*
+> *Blazing-fast CLI tool for developers to find documentation, code snippets, and answers instantly*
 
 <div align="center">
 
@@ -10,60 +10,60 @@
 ![Crates.io Downloads](https://img.shields.io/crates/d/manx-cli?label=crates.io%20downloads)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Language](https://img.shields.io/badge/language-Rust-orange.svg)
-![Binary Size](https://img.shields.io/badge/binary-2.9MB-blue.svg)
+![Binary Size](https://img.shields.io/badge/binary-5.4MB-blue.svg)
 
-**🚀 [Quick Start](#-quick-start) • 🤖 [AI Setup](#-ai-integration)**
+**🚀 [Quick Start](#-quick-start) • 📚 [Documentation](#-complete-command-reference) • ⚙️ [Configuration](#️-configuration)**
 
 </div>
 
 ## ✨ What Makes Manx Special?
 
-Manx transforms from a simple documentation finder into your **personal AI development assistant** by combining:
+Manx is the **fastest way to find documentation and code snippets** from your terminal:
 
-- **🔍 Official Documentation** - Context7 MCP integration for real-time docs
-- **📁 Your Personal Knowledge** - Index local docs, notes, and wikis
-- **🤖 AI Synthesis** - Multi-provider LLM integration (OpenAI, Anthropic, Groq, etc.)
 - **⚡ Lightning Fast** - sub-second snippet searches, sub-2 second web searches
-- **🎨 Beautiful UX** - Colorized, scannable terminal output
+- **🔍 Official Documentation** - Context7 MCP integration for real-time docs  
+- **📁 Your Personal Knowledge** - Index local docs, notes, and wikis
+- **🎨 Beautiful Terminal UX** - Colorized, scannable output that's easy to read
+- **🤖 Optional AI Enhancement** - Add LLM synthesis when you need deeper analysis
 
 ---
 
-## 🌟 **NEW: Complete AI Integration**
+## 🌟 **Core Features**
 
-### 🤖 **AI-Powered Answers for ALL Commands**
+### 🚀 **Lightning-Fast Documentation Search**
 
-Every command now provides intelligent AI synthesis with beautiful, colorized output (this can be disabled with `--no-llm` or removing the API key from the config file):
+Get instant access to documentation and code examples:
 
 <table>
 <tr>
 <td width="50%">
 
-**🔍 Web Search + AI**
+**🔍 Web Documentation Search**
 ```bash
 manx search "rust async programming"
 ```
-*Returns: Web docs + AI synthesis with citations*
+*Returns: Instant access to official docs and tutorials*
 
-**📚 Documentation + AI**  
+**📚 Official Documentation Browser**  
 ```bash
 manx doc python "async functions"
 ```
-*Returns: Official docs + AI summary with examples*
+*Returns: Real-time official documentation with examples*
 
 </td>
 <td width="50%">
 
-**💡 Code Snippets + AI**
+**💡 Code Snippet Search**
 ```bash
 manx snippet react "useEffect cleanup"
 ```
-*Returns: Code examples + comprehensive AI explanation*
+*Returns: Working code examples with clear explanations*
 
-**📁 Local Docs + AI**
+**📁 Personal Knowledge Base**
 ```bash
 manx snippet "authentication setup"
 ```
-*Returns: Official docs + your notes + AI synthesis*
+*Returns: Official docs + your indexed notes and wikis*
 
 </td>
 </tr>
@@ -71,15 +71,15 @@ manx snippet "authentication setup"
 
 ### 🎨 **Beautiful Terminal Experience**
 
-Every AI response features:
-- **❯ Quick Answer** - Immediate, concise response
-- **❯ Key Points** - Essential information in scannable bullets
-- **❯ Code Example** - Syntax-highlighted, runnable code
-- **📖 Sources** - Clear citations with relevance scores
+Every response features:
+- **📖 Clear Documentation** - Well-formatted, readable content
+- **💡 Code Examples** - Syntax-highlighted, runnable code
+- **📊 Quick Results** - Instant access to what you need
+- **🔗 Source Links** - Direct links to official documentation
 
-### 🔧 **Multi-Provider LLM Support**
+### 🤖 **Optional AI Enhancement**
 
-Choose your AI provider with simple configuration:
+Add AI analysis when you need deeper insights (completely optional):
 
 ```bash
 # OpenAI (GPT-4, GPT-3.5)
@@ -121,13 +121,13 @@ curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bas
 ### 2. **Core Commands**
 
 ```bash
-# 🔍 Search web documentation with AI synthesis
+# 🔍 Search web documentation instantly
 manx search "docker compose production setup"
 
-# 📚 Browse official documentation with AI summaries
+# 📚 Browse official documentation
 manx doc fastapi "authentication middleware"
 
-# 💡 Find code snippets with AI explanations  
+# 💡 Find working code snippets
 manx snippet react "custom hooks patterns"
 
 # 📁 Index your personal documentation
@@ -135,18 +135,18 @@ manx index ~/dev-notes/
 manx index https://your-team-wiki.com/docs
 ```
 
-### 3. **AI Configuration (Optional)**
+### 3. **Context7 API Configuration (Recommended)**
 
 ```bash
-# Configure your preferred AI provider
-manx config --openai-api "sk-your-key-here"
+# Get higher rate limits for documentation access
+manx config --api-key "sk-your-context7-key"
 
-# Verify AI is working
+# Test that everything is working
 manx snippet python "list comprehensions"
-# Now includes beautiful AI synthesis!
 
-# Control AI usage per command
-manx search "topic" --no-llm    # Disable AI for this search
+# Optional: Add AI enhancement
+manx config --openai-api "sk-your-openai-key"
+manx search "topic"  # Now includes AI analysis when helpful
 ```
 
 ---
@@ -162,7 +162,7 @@ manx search "topic" --no-llm    # Disable AI for this search
 **Web Search**
 ```bash
 manx search "kubernetes deployment"
-manx search "react hooks patterns" --no-llm
+manx search "react hooks patterns"
 manx search "python async" --limit 5
 ```
 
@@ -170,7 +170,7 @@ manx search "python async" --limit 5
 ```bash  
 manx doc fastapi "authentication"
 manx doc react@18 "useState patterns"
-manx doc python "async functions" --no-llm
+manx doc python "async functions"
 ```
 
 </td>
@@ -180,7 +180,7 @@ manx doc python "async functions" --no-llm
 ```bash
 manx snippet react "useEffect cleanup"  
 manx snippet fastapi "middleware setup"
-manx snippet python "decorators" --no-llm
+manx snippet python "decorators"
 ```
 
 **Result Retrieval**
@@ -216,15 +216,24 @@ manx cache clear                     # Clear cache
 # View current settings
 manx config --show
 
-# AI Provider Configuration
+# Context7 API (for official docs - recommended)
+manx config --api-key "sk-context7-key"
+
+# AI Provider Configuration (optional)
 manx config --openai-api "sk-key"       # OpenAI
 manx config --anthropic-api "sk-key"    # Anthropic  
 manx config --groq-api "gsk-key"        # Groq
 manx config --llm-provider "groq"       # Set preferred provider
 manx config --llm-model "llama-3.1-8b"  # Set specific model
 
-# Context7 API (for official docs)
-manx config --api-key "sk-context7-key"
+# Switch between models
+manx config --llm-provider "openai" --llm-model "gpt-4"
+manx config --llm-provider "anthropic" --llm-model "claude-3-sonnet"
+
+# Remove API keys / Disable AI
+manx config --openai-api ""             # Remove OpenAI key
+manx config --llm-provider ""           # Disable AI entirely
+manx config --anthropic-api ""          # Remove Anthropic key
 
 # Other Settings
 manx config --cache-dir ~/my-cache      # Custom cache location
@@ -233,9 +242,9 @@ manx config --auto-cache off            # Disable auto-caching
 
 ---
 
-## 🧠 **Local RAG Integration**
+## 🧠 **Personal Knowledge Base**
 
-Transform Manx into your personal knowledge assistant:
+Index your documentation and notes for instant search:
 
 ### **📚 Index Your Knowledge**
 
@@ -262,14 +271,14 @@ manx snippet "authentication setup"
 **Returns:**
 - 🌐 **Official docs** (FastAPI, OAuth, JWT guides)
 - 📁 **Your notes** (team auth procedures, troubleshooting)  
-- 🤖 **AI synthesis** (comprehensive answer with citations)
+- 🔗 **Direct links** to source documentation and files
 
 ### **🛡️ Security Features**
 
 - **PDF Security**: Validates PDFs for malicious content
 - **Content Sanitization**: Cleans and validates all indexed content
 - **Local Processing**: RAG runs entirely locally
-- **Privacy Control**: Use `--no-llm` for zero external API calls
+- **Privacy Control**: Core functionality works entirely offline
 
 ### **💾 Supported Formats**
 
@@ -280,36 +289,34 @@ manx snippet "authentication setup"
 
 ---
 
-## 🤖 **AI Integration Deep Dive**
+## 🤖 **Optional AI Features**
 
-### **🎯 Smart Answer Generation**
+### **🎯 Enhanced Analysis (When Enabled)**
 
-Every AI response follows a consistent, scannable format:
+When you configure an AI provider, responses include deeper analysis:
 
 ```
 ┌─────────────────────────────────────────┐
-│ 🤖 AI Summary                           │
+│ 📖 Documentation Results                │
 └─────────────────────────────────────────┘
-  ❯ Quick Answer
+
+1. React Hooks Introduction
+   https://reactjs.org/docs/hooks-intro.html
+   
+2. useState Hook Documentation  
+   https://reactjs.org/docs/hooks-state.html
+   
+┌─────────────────────────────────────────┐
+│ 🤖 AI Analysis (Optional)               │
+└─────────────────────────────────────────┘
+  ❯ Quick Summary
   React hooks allow you to use state and lifecycle 
   features in functional components.
 
-  ❯ Key Points  
-  • useState manages component state [Source 1]
-  • useEffect handles side effects [Source 2]
-  • Custom hooks enable logic reuse [Source 3]
-
-  ❯ Code Example
-  ```javascript
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    document.title = `Count: ${count}`;
-  }, [count]);
-  ```
-
-  📖 Sources used:
-  • React Hooks Introduction
-  • useState Hook Documentation
+  ❯ Key Insights
+  • useState manages component state
+  • useEffect handles side effects  
+  • Custom hooks enable logic reuse
 ```
 
 ### **🔧 Provider-Specific Features**
@@ -354,10 +361,10 @@ manx config --llm-provider "anthropic"
 manx config --llm-model "claude-3-sonnet"
 
 # Per-command control
-manx search "topic"              # Use configured AI
-manx search "topic" --no-llm     # Force retrieval-only
-manx snippet react hooks        # AI synthesis enabled
-manx snippet react --no-llm     # Raw results only
+manx search "topic"              # Fast documentation search
+manx search "topic" --no-llm     # Force no AI analysis
+manx snippet react hooks        # Code examples with optional AI insights
+manx snippet react --no-llm     # Just the documentation
 ```
 
 ---
@@ -395,8 +402,8 @@ manx snippet react hooks  # Much higher limits
 
 **⚡ Performance**
 - **Search Speed**: < 1 second (snippets), < 2 seconds (web search)
-- **Binary Size**: 2.9MB single file
-- **Memory Usage**: < 10MB RAM
+- **Binary Size**: 5.4MB single file
+- **Memory Usage**: < 15MB RAM
 - **Startup Time**: < 50ms
 - **Cache Support**: Smart auto-caching
 
@@ -423,15 +430,15 @@ manx snippet react hooks  # Much higher limits
 ```bash
 # Morning workflow: Check React patterns
 manx snippet react "performance optimization"
-# Returns: Official React docs + your optimization notes + AI guide
+# Returns: Official React docs + your optimization notes
 
 # Debug session: Memory leak investigation  
 manx search "javascript memory leaks"
-# Returns: MDN docs + Stack Overflow + your debugging notes + AI analysis
+# Returns: MDN docs + Stack Overflow + your debugging notes
 
 # Learning: New framework exploration
 manx doc svelte "component lifecycle"  
-# Returns: Official Svelte docs + AI explanation with examples
+# Returns: Official Svelte docs with clear examples
 ```
 
 ### **👥 Development Team**
@@ -441,11 +448,11 @@ manx doc svelte "component lifecycle"
 manx index ~/team-handbook/
 manx index ~/coding-standards/
 manx snippet "deployment process"
-# Returns: Official CI/CD docs + team procedures + AI walkthrough
+# Returns: Official CI/CD docs + team procedures
 
 # Solve production issue
 manx search "kubernetes pod restart loops"
-# Returns: K8s docs + team runbooks + AI troubleshooting steps
+# Returns: K8s docs + team runbooks + troubleshooting guides
 ```
 
 ### **🔒 Privacy-Focused Usage**
@@ -453,13 +460,12 @@ manx search "kubernetes pod restart loops"
 ```bash
 # Index sensitive documentation locally
 manx index ~/classified-procedures/
-manx snippet "security protocols" --no-llm
-# Pure local search - no external API calls
+manx snippet "security protocols"
+# Pure local search - works completely offline
 
-# Team knowledge without AI
-manx config --llm-provider ""  # Disable AI globally
+# Team knowledge stays private
 manx snippet "internal processes"
-# Uses only local knowledge + official docs
+# Uses only local knowledge + official docs (no AI calls)
 ```
 
 ---
@@ -558,16 +564,29 @@ export MANX_DEBUG=1                  # Enable debug logging
 
 ### Common Issues
 
-**No AI Synthesis Appearing**
+**Want to Add AI Analysis?**
 ```bash
-# Check if LLM provider is configured
+# Check current configuration
 manx config --show
 
-# Set up a provider
+# Set up an AI provider (optional)
 manx config --openai-api "sk-your-key"
 
-# Test AI functionality
+# Test enhanced functionality
 manx snippet python "functions"
+```
+
+**Managing AI Configuration**
+```bash
+# Switch between providers
+manx config --llm-provider "anthropic"
+manx config --llm-model "claude-3-sonnet"
+
+# Disable AI completely
+manx config --llm-provider ""
+
+# Remove specific API keys
+manx config --openai-api ""
 ```
 
 **"No results found"**
@@ -618,7 +637,7 @@ manx cache stats
 
 We welcome contributions! Areas where help is needed:
 
-- **🔌 New AI Providers** - Add support for additional LLM APIs
+- **⚡ Performance** - Make search even faster
 - **📄 Document Parsers** - Support for more file formats  
 - **🎨 Terminal UI** - Enhance the visual experience
 - **🧪 Testing** - Expand test coverage
@@ -642,9 +661,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## 🙏 **Acknowledgments**
 
 - **Context7** - Excellent MCP documentation API
-- **OpenAI, Anthropic, Groq** - Amazing LLM capabilities  
 - **Rust Community** - Outstanding ecosystem and tooling
 - **Contributors** - Making Manx better every day
+- **LLM Providers** - Optional AI enhancement capabilities
 
 ---
 
@@ -661,12 +680,12 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-**Built with ❤️ for developers who live in the terminal**
+**Built with ❤️ for developers who need answers fast**
 
 **[⬆️ Back to Top](#-manx---ai-powered-documentation-assistant)**
 
 ![Manx Demo](https://via.placeholder.com/600x300/1a1a1a/00d4aa?text=🤖+AI+Synthesis+Demo)
 
-*Beautiful, intelligent documentation assistance - right in your terminal*
+*Lightning-fast documentation search - right in your terminal*
 
 </div>
