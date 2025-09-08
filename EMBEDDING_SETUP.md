@@ -1,5 +1,6 @@
 # 🧠 Manx Semantic Embeddings Setup Guide
 
+This is a manual setup, Manx now works out of the box, just download the model.
 This guide will help you set up enhanced semantic embeddings in Manx for better search understanding and relevance.
 
 ## 📊 Quick Comparison
