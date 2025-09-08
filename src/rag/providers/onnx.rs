@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "onnx-embeddings")]
 use std::sync::Arc;
 
 use super::{EmbeddingProvider as ProviderTrait, ProviderInfo};
@@ -212,15 +213,15 @@ impl OnnxProvider {
     }
 
     /// Detect embedding dimension from ONNX model using introspection
-    async fn detect_dimension_from_onnx(onnx_path: &PathBuf) -> Result<usize> {
+    async fn detect_dimension_from_onnx(_onnx_path: &PathBuf) -> Result<usize> {
         #[cfg(feature = "onnx-embeddings")]
         {
-            log::info!("Detecting dimension from ONNX model: {:?}", onnx_path);
+            log::info!("Detecting dimension from ONNX model: {:?}", _onnx_path);
 
             // Create a temporary session to inspect the model
             let session = Session::builder()?
                 .with_optimization_level(GraphOptimizationLevel::Level1)? // Use basic optimization for introspection
-                .commit_from_file(onnx_path)?;
+                .commit_from_file(_onnx_path)?;
 
             // Get model output metadata
             let outputs = &session.outputs;
