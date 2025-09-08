@@ -1,6 +1,6 @@
 [package]
 name = "manx-cli"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["neur0map <neur0map@prowl.sh>"]
 description = "A blazing-fast CLI documentation finder powered by Context7 MCP"
@@ -26,6 +26,10 @@ exclude = [
     ".vscode/",
     ".idea/",
 ]
+
+[lib]
+name = "manx_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "manx"
@@ -78,13 +82,12 @@ spider = "2.37"
 # RAG dependencies for document processing and vector storage  
 docx-rs = "0.4"
 walkdir = "2.4"
-# pdf = "0.8"  # TODO: Add proper PDF library later
 
 # File-based vector storage
 uuid = { version = "1.6", features = ["v4"] }
 
-# Embedding model dependencies
-ort = { version = "1.16", features = ["load-dynamic"], optional = true }
+# Embedding model dependencies  
+ort = { version = "2.0.0-rc.10", features = ["download-binaries", "copy-dylibs"], optional = true }
 sha2 = "0.10"
 hf-hub = { version = "0.3", optional = true }
 tokenizers = { version = "0.15", optional = true }

@@ -280,7 +280,7 @@ async fn run() -> Result<()> {
                         "Custom official domain '{}' added to web search priorities",
                         domain
                     ));
-                    renderer.print_success("Note: Domain added to current session only. Persistent storage coming in future versions");
+                    renderer.print_success("Domain added to current session");
                     updated = true;
                 }
 

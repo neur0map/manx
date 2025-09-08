@@ -72,7 +72,7 @@ impl CustomProvider {
     async fn call_api(&self, text: &str) -> Result<Vec<f32>> {
         let request = CustomEmbeddingRequest {
             text: text.to_string(),
-            model: None, // Could be configurable in the future
+            model: None,
         };
 
         let mut request_builder = self

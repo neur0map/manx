@@ -9,6 +9,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+pub mod benchmarks;
 pub mod embeddings;
 pub mod indexer;
 pub mod llm;
