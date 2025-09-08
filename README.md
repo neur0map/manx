@@ -129,7 +129,21 @@ cargo install manx-cli
 
 - **📖 Documentation**: Check the guides linked above
 - **🐛 Issues**: [GitHub Issues](https://github.com/neur0map/manx/issues) 
-- **💡 Feature Requests**: [Discussions](https://github.com/neur0map/manx/discussions)
+
+## 🙏 Shoutouts
+
+Huge thanks to the amazing open source community and projects that make Manx possible:
+- **[Anthropic](https://anthropic.com)** - For Claude and the incredible Claude Code IDE
+- **[Context7](https://context7.sh)** - For providing the documentation API that powers default search
+- **[Hugging Face](https://huggingface.co)** - For the neural embedding models and infrastructure
+- **[ONNX Runtime](https://onnxruntime.ai)** - For fast, local neural inference
+- **[Rust Community](https://rust-lang.org)** - For the amazing ecosystem and libraries
+
+## 💡 Built with AI
+
+This tool was fully built through "vibe coding" with **[Claude Code](https://claude.ai/code)** 🤖
+
+I'm not a programmer - just a cybersecurity student learning the basics and building tools for my own use under [prowl.sh](https://prowl.sh). If people find these tools useful, I'm more than happy to continue working on them and improving the experience!
 
 ## 📄 License
 
