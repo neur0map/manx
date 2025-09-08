@@ -21,6 +21,12 @@ pub struct OfficialSourceManager {
     official_github_orgs: Vec<String>,
 }
 
+impl Default for OfficialSourceManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OfficialSourceManager {
     /// Create new official source manager with predefined official sources
     pub fn new() -> Self {

@@ -16,16 +16,17 @@ Manx solves the documentation discovery problem that every developer faces:
 
 ### Design Principles
 1. **Privacy First**: Core functionality works entirely offline, your data stays local
-2. **Performance Obsessed**: Sub-second search results, 5.4MB single binary
+2. **Performance Obsessed**: Sub-second search results, optimized neural inference
 3. **Progressive Enhancement**: Works great out-of-the-box, gets better with configuration
 4. **Developer Focused**: Terminal-native, scriptable, automation-friendly
-5. **Security Conscious**: PDF validation, content sanitization, secure defaults
+5. **Security Conscious**: Content sanitization, secure defaults, local processing
 
 ### Technical Foundation
 - **Language**: Rust (for memory safety, performance, and zero-cost abstractions)
-- **Binary Size**: 5.4MB single executable
-- **Memory Usage**: <15MB RAM during operation
-- **Startup Time**: <50ms
+- **Binary Size**: 25MB single executable (includes ONNX Runtime for neural embeddings)
+- **Neural Models**: Downloaded separately (87MB-1.3GB each, user choice)
+- **Memory Usage**: <50MB RAM during operation (varies with model size)
+- **Startup Time**: <50ms (hash mode), <200ms (neural model loading)
 - **Supported Platforms**: Linux, macOS, Windows (x86_64, ARM64)
 
 ## 🚀 Four Capability Levels
@@ -315,8 +316,8 @@ export MANX_DEBUG=1                  # Enable debug logging
 - **Cache retrieval**: <50ms for cached results
 
 ### Resource Usage
-- **Binary size**: 5.4MB (single executable)
-- **Memory usage**: <15MB RAM during operation
+- **Binary size**: 25MB (single executable with ONNX Runtime)
+- **Memory usage**: <50MB RAM during operation (includes neural model loading)
 - **Disk usage**: Configurable cache size (default: 100MB max)
 - **Network**: Only for API calls and web search (optional)
 
@@ -699,7 +700,7 @@ manx cache stats
 
 #### Performance Engineering
 - Rust-powered for memory safety and speed
-- Single 5.4MB binary with no runtime dependencies
+- Single 25MB binary with embedded ONNX Runtime, no additional dependencies
 - Sub-second response times even with large document sets
 
 ## 🎯 Future Roadmap
