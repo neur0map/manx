@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
     let hash_provider = HashProvider::new(384);
     let hash_result = benchmark_provider(&hash_provider, &test_data).await?;
 
-    print_benchmark_results(&[hash_result.clone()]);
+    print_benchmark_results(std::slice::from_ref(&hash_result));
 
     // Benchmark 2: ONNX Provider (if available)
     println!("\n🤖 PHASE 2: ONNX-based Embeddings (Testing)");

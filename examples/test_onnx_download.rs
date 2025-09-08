@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
 }
 
 async fn test_real_inference(onnx_provider: OnnxProvider) -> Result<()> {
-    let test_texts = vec![
+    let test_texts = [
         "React hooks useState for state management",
         "Python Django models for database operations",
         "Machine learning with neural networks",

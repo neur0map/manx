@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test different hash dimensions
     let dimensions = vec![128, 256, 384, 512, 768];
-    let test_data = BenchmarkTestData::default();
+    let test_data = BenchmarkTestData::new_default();
     let extended_data = BenchmarkTestData::extended();
 
     println!("📊 Testing Hash Provider with Different Dimensions");

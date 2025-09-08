@@ -6,12 +6,12 @@ use manx_cli::rag::providers::hash::HashProvider;
 #[tokio::test]
 async fn benchmark_hash_provider() {
     let provider = HashProvider::new(384);
-    let test_data = BenchmarkTestData::default();
+    let test_data = BenchmarkTestData::new_default();
 
     let result = benchmark_provider(&provider, &test_data).await.unwrap();
 
     println!("Hash Provider Benchmark Results:");
-    print_benchmark_results(&[result.clone()]);
+    print_benchmark_results(std::slice::from_ref(&result));
 
     // Assertions for baseline performance
     assert_eq!(result.dimension, 384);
@@ -28,7 +28,7 @@ async fn benchmark_hash_provider() {
     if let Some(quality) = result.semantic_quality_score {
         println!("Semantic quality score: {:.3}", quality);
         assert!(
-            quality >= 0.0 && quality <= 1.0,
+            (0.0..=1.0).contains(&quality),
             "Quality score should be 0-1"
         );
     }
@@ -48,7 +48,7 @@ async fn benchmark_hash_provider_extended() {
 #[tokio::test]
 async fn compare_hash_dimensions() {
     let dimensions = vec![128, 256, 384, 512, 768];
-    let test_data = BenchmarkTestData::default();
+    let test_data = BenchmarkTestData::new_default();
     let mut results = Vec::new();
 
     for dim in dimensions {
