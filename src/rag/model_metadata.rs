@@ -73,6 +73,7 @@ impl ModelMetadataManager {
     }
 
     /// Update last used timestamp for a model
+    #[allow(dead_code)] // Used in ONNX provider when available
     pub fn mark_used(&mut self, model_name: &str) -> Result<()> {
         if let Some(model) = self.models.get_mut(model_name) {
             model.last_used = Some(Utc::now());
