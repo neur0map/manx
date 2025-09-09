@@ -4,6 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
+use std::process::Command;
 
 const REPO: &str = "neur0map/manx";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -15,12 +16,19 @@ struct GitHubRelease {
     // Other fields are ignored by serde when not present
 }
 
+#[derive(Debug, Clone)]
+enum InstallationMethod {
+    Cargo,
+    Github,
+}
+
 #[derive(Debug, Serialize)]
 pub struct UpdateInfo {
     pub current_version: String,
     pub latest_version: String,
     pub update_available: bool,
     pub release_notes: String,
+    pub install_method: Option<String>,
 }
 
 pub struct SelfUpdater {
@@ -65,12 +73,43 @@ impl SelfUpdater {
 
         let update_available = version_compare(latest_version, current_version)?;
 
+        let install_method = self.detect_installation_method();
+        let install_method_str = match install_method {
+            InstallationMethod::Cargo => "cargo".to_string(),
+            InstallationMethod::Github => "github".to_string(),
+        };
+
         Ok(UpdateInfo {
             current_version: current_version.to_string(),
             latest_version: latest_version.to_string(),
             update_available,
             release_notes: release.body,
+            install_method: Some(install_method_str),
         })
+    }
+
+    fn detect_installation_method(&self) -> InstallationMethod {
+        // Check if cargo is available and if manx was installed via cargo
+        if let Ok(current_exe) = env::current_exe() {
+            // Check if the executable is in a .cargo/bin path
+            if current_exe.to_string_lossy().contains(".cargo/bin") {
+                return InstallationMethod::Cargo;
+            }
+        }
+
+        // Check if cargo is available in PATH
+        if Command::new("cargo").arg("--version").output().is_ok() {
+            // Check if manx is installed via cargo
+            if let Ok(output) = Command::new("cargo").args(&["install", "--list"]).output() {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                if output_str.contains("manx-cli") {
+                    return InstallationMethod::Cargo;
+                }
+            }
+        }
+
+        // Default to GitHub binary installation
+        InstallationMethod::Github
     }
 
     pub async fn perform_update(&self, force: bool) -> Result<()> {
@@ -82,10 +121,49 @@ impl SelfUpdater {
             return Ok(());
         }
 
+        let install_method = self.detect_installation_method();
+        
         self.renderer.print_success(&format!(
-            "Updating from v{} to v{}...",
-            update_info.current_version, update_info.latest_version
+            "Updating from v{} to v{} (detected: {} installation)...",
+            update_info.current_version, 
+            update_info.latest_version,
+            match install_method {
+                InstallationMethod::Cargo => "cargo",
+                InstallationMethod::Github => "github binary",
+            }
         ));
+
+        match install_method {
+            InstallationMethod::Cargo => self.update_via_cargo().await,
+            InstallationMethod::Github => self.update_via_github(&update_info).await,
+        }
+    }
+
+    async fn update_via_cargo(&self) -> Result<()> {
+        println!("Using cargo to update manx...");
+        
+        let pb = self.renderer.show_progress("Running cargo install manx-cli...");
+        
+        let output = Command::new("cargo")
+            .args(&["install", "manx-cli", "--force"])
+            .output()
+            .context("Failed to run cargo install")?;
+        
+        pb.finish_and_clear();
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Cargo install failed: {}", stderr);
+        }
+
+        self.renderer.print_success("✅ Successfully updated manx via cargo!");
+        println!("🚀 The update is complete. Run 'manx --version' to verify.");
+        
+        Ok(())
+    }
+
+    async fn update_via_github(&self, update_info: &UpdateInfo) -> Result<()> {
+        println!("Using GitHub binary download to update manx...");
 
         // Get current executable path
         let current_exe = env::current_exe().context("Failed to get current executable path")?;
@@ -110,7 +188,7 @@ impl SelfUpdater {
             .context("Failed to download update")?;
 
         if !response.status().is_success() {
-            anyhow::bail!("Download failed: {}", response.status());
+            anyhow::bail!("Download failed: {}. Note: GitHub releases may not have binaries yet. Try 'cargo install manx-cli --force' instead.", response.status());
         }
 
         let binary_data = response
