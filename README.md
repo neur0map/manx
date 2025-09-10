@@ -13,6 +13,16 @@
 
 </div>
 
+## 🎥 See Manx in Action
+
+<div align="center">
+
+[![Manx Demo Video](https://img.youtube.com/vi/3gINTsmHnYA/0.jpg)](https://www.youtube.com/watch?v=3gINTsmHnYA)
+
+*Click to watch: Complete walkthrough of Manx features and capabilities*
+
+</div>
+
 ## ⚡ Quick Start
 
 ```bash
