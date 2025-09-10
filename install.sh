@@ -181,7 +181,31 @@ install_manx() {
     log_info "Downloading from: $download_url"
     if ! download_file "$download_url" "$temp_file"; then
         log_error "Failed to download Manx binary"
-        exit 1
+        log_info "Binary not available for your platform. Trying cargo install..."
+        
+        # Fallback to cargo install if available
+        if command_exists cargo; then
+            log_info "Installing via cargo..."
+            if cargo install manx-cli; then
+                log_success "🎉 Manx installed successfully via cargo!"
+                echo
+                echo "Quick start:"
+                echo "  manx fastapi              # Search FastAPI docs"
+                echo "  manx react@18 hooks       # Search React 18 hooks"
+                echo "  manx config --api-key KEY # Set Context7 API key"
+                echo "  manx --help               # Show all options"
+                echo
+                log_info "For full documentation: https://github.com/${REPO}#readme"
+                exit 0
+            else
+                log_error "Cargo install failed"
+                exit 1
+            fi
+        else
+            log_error "Please install Rust and Cargo, then run: cargo install manx-cli"
+            log_info "Visit https://rustup.rs/ to install Rust"
+            exit 1
+        fi
     fi
     
     # Make executable

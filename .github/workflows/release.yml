@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-matrix:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - platform: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            
+          # macOS
+          - platform: x86_64-apple-darwin
+            os: macos-latest
+            target: x86_64-apple-darwin
+            
+          - platform: aarch64-apple-darwin
+            os: macos-latest
+            target: aarch64-apple-darwin
+            
+          # Windows
+          - platform: x86_64-pc-windows-msvc
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            
+    steps:
+      - uses: actions/checkout@v4
+        
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+        
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Install cross-compilation dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib
+          
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }} --verbose
+        
+      - name: Prepare binary
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv manx.exe manx-${{ matrix.platform }}.exe
+            echo "BINARY_PATH=target/${{ matrix.target }}/release/manx-${{ matrix.platform }}.exe" >> $GITHUB_ENV
+            echo "BINARY_NAME=manx-${{ matrix.platform }}.exe" >> $GITHUB_ENV
+          else
+            mv manx manx-${{ matrix.platform }}
+            echo "BINARY_PATH=target/${{ matrix.target }}/release/manx-${{ matrix.platform }}" >> $GITHUB_ENV
+            echo "BINARY_NAME=manx-${{ matrix.platform }}" >> $GITHUB_ENV
+          fi
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_PATH }}
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build-matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          
+      - name: Display structure of downloaded files
+        run: ls -R release-assets/
+        
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/*/manx-*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
