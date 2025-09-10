@@ -18,14 +18,20 @@
 ```bash
 # Install
 cargo install manx-cli
+# or directly from GitHub
+curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
 # Find code snippets instantly
 manx snippet react "useState hook"
 manx snippet python "async functions"
 
-# Search documentation
+# Search documentation on the web
 manx search "rust error handling"
 manx doc fastapi "middleware"
+
+# index your local docs or web doc pages.
+manx index /path/to/docs
+manx index https://docs.rs/
 ```
 
 **That's it!** Works immediately with no setup required.
@@ -129,33 +135,6 @@ cargo install manx-cli
 
 ### Manual Download
 - **Binary**: Download from [GitHub Releases](https://github.com/neur0map/manx/releases)
-
-## 🔑 API Configuration
-
-### **Context7 API** (Enhanced Search)
-```bash
-manx config --api-key "ctx7sk-your-context7-key"
-```
-*Get your free API key at [context7.com](https://context7.com)*
-
-### **AI Features** (Optional)
-```bash
-# OpenAI GPT models
-manx config --openai-api "sk-your-openai-key"
-
-# Anthropic Claude models  
-manx config --anthropic-api "sk-ant-your-claude-key"
-
-# Other providers
-manx config --groq-api "gsk-your-groq-key"
-manx config --openrouter-api "sk-or-your-openrouter-key"
-manx config --huggingface-api "hf-your-huggingface-token"
-```
-
-### **View Configuration**
-```bash
-manx config --show
-```
 
 ## 🆘 Getting Help
 
