@@ -316,12 +316,21 @@ STYLE:
 
     /// Extract the actual answer from responses that may contain thinking content
     fn extract_final_answer(&self, response_text: &str) -> String {
-        // Handle models with thinking capabilities (like Claude with <thinking> tags)
+        // Handle models with thinking capabilities - check for both <thinking> and <think> tags
         if response_text.contains("<thinking>") && response_text.contains("</thinking>") {
             // Find the end of the thinking section
             if let Some(thinking_end) = response_text.find("</thinking>") {
                 let after_thinking = &response_text[thinking_end + "</thinking>".len()..];
                 return after_thinking.trim().to_string();
+            }
+        }
+        
+        // Handle models that use <think> tags instead of <thinking>
+        if response_text.contains("<think>") && response_text.contains("</think>") {
+            // Find the end of the think section
+            if let Some(think_end) = response_text.find("</think>") {
+                let after_think = &response_text[think_end + "</think>".len()..];
+                return after_think.trim().to_string();
             }
         }
         
@@ -877,6 +886,34 @@ Rust uses `Result<T, E>` for error handling, where `T` is the success type and `
         assert!(!extracted.contains("</thinking>"));
         assert!(extracted.contains("**Quick Answer**"));
         assert!(extracted.contains("Result<T, E>"));
+    }
+
+    #[test]
+    fn test_extract_final_answer_with_think_tags() {
+        let client = LlmClient::new(LlmConfig::default()).unwrap();
+        
+        let response_with_think = r#"<think>
+This question is about JavaScript async/await patterns.
+
+The user wants to understand how to handle asynchronous operations.
+I should provide clear examples and best practices.
+</think>
+
+**Quick Answer**
+Use `async/await` for handling asynchronous operations in JavaScript.
+
+**Key Points**
+- `async` functions return Promises
+- `await` pauses execution until Promise resolves
+- Use try/catch for error handling
+- Avoid callback hell with Promise chains"#;
+
+        let extracted = client.extract_final_answer(response_with_think);
+        
+        assert!(!extracted.contains("<think>"));
+        assert!(!extracted.contains("</think>"));
+        assert!(extracted.contains("**Quick Answer**"));
+        assert!(extracted.contains("async/await"));
     }
 
     #[test]
