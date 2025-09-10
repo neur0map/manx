@@ -258,6 +258,8 @@ fn get_process_memory_mb() -> f64 {
                 }
             }
         }
+        // Fallback if memory info not found
+        0.0
     }
 
     #[cfg(target_os = "macos")]
