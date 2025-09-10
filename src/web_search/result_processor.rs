@@ -7,32 +7,45 @@
 
 use crate::rag::embeddings::EmbeddingModel;
 use crate::web_search::official_sources::{OfficialSourceManager, SourceTier};
-use crate::web_search::{ProcessedSearchResult, RawSearchResult};
+use crate::web_search::{ProcessedSearchResult, RawSearchResult, query_analyzer};
 use anyhow::Result;
 
-/// Process search results with semantic similarity
-pub async fn process_with_embeddings(
-    query: &str,
+
+/// Process search results with semantic similarity and query analysis context
+pub async fn process_with_embeddings_and_analysis(
+    query_analysis: &query_analyzer::QueryAnalysis,
     raw_results: &[RawSearchResult],
     embedding_model: &EmbeddingModel,
     official_sources: &OfficialSourceManager,
     similarity_threshold: f32,
 ) -> Result<Vec<ProcessedSearchResult>> {
     log::info!(
-        "Processing {} results with semantic embeddings",
-        raw_results.len()
+        "Processing {} results with semantic embeddings + query analysis (framework: {:?})",
+        raw_results.len(),
+        query_analysis.detected_frameworks.first().map(|f| &f.name)
     );
 
-    // Generate query embedding
-    let query_embedding = embedding_model.embed_text(query).await?;
+    // Use enhanced query for embedding generation (better context)
+    let embedding_query = &query_analysis.enhanced_query;
+    let query_embedding = embedding_model.embed_text(embedding_query).await?;
 
     let mut processed_results = Vec::new();
 
     for (index, result) in raw_results.iter().enumerate() {
-        // Create combined text for embedding (title + snippet)
-        let combined_text = format!("{} {}", result.title, result.snippet);
+        // Create enhanced text for embedding with domain context
+        let mut combined_text = format!("{} {}", result.title, result.snippet);
+        
+        // Add framework context to help embeddings understand domain
+        for framework in &query_analysis.detected_frameworks {
+            combined_text.push_str(&format!(" {}", framework.name));
+        }
+        
+        // Add domain context keywords
+        for keyword in &query_analysis.domain_context.context_keywords {
+            combined_text.push_str(&format!(" {}", keyword));
+        }
 
-        // Generate result embedding
+        // Generate result embedding with enhanced context
         let result_embedding = match embedding_model.embed_text(&combined_text).await {
             Ok(embedding) => embedding,
             Err(e) => {
@@ -45,12 +58,21 @@ pub async fn process_with_embeddings(
         let similarity_score =
             EmbeddingModel::cosine_similarity(&query_embedding, &result_embedding);
 
-        // Skip results below similarity threshold
-        if similarity_score < similarity_threshold {
+        // Apply framework-specific similarity threshold adjustment
+        let adjusted_threshold = if !query_analysis.detected_frameworks.is_empty() {
+            // Lower threshold for framework-specific queries (more lenient)
+            similarity_threshold * 0.8
+        } else {
+            similarity_threshold
+        };
+
+        // Skip results below adjusted threshold
+        if similarity_score < adjusted_threshold {
             log::debug!(
-                "Filtering out result with low similarity: {} (score: {:.3})",
+                "Filtering out result with low similarity: {} (score: {:.3}, threshold: {:.3})",
                 result.title,
-                similarity_score
+                similarity_score,
+                adjusted_threshold
             );
             continue;
         }
@@ -62,11 +84,27 @@ pub async fn process_with_embeddings(
             SourceTier::OfficialDocs | SourceTier::OfficialRepos
         );
 
-        // Calculate official source boost
-        let source_boost = official_sources.get_score_boost(&source_tier);
+        // Apply framework-specific boost
+        let mut source_boost = official_sources.get_score_boost(&source_tier);
+        
+        // Extra boost if result matches detected framework domains
+        for framework in &query_analysis.detected_frameworks {
+            if framework.official_sites.iter().any(|site| result.source_domain.contains(site)) {
+                source_boost *= 1.5; // Extra framework match boost
+                log::debug!("Applied framework domain boost for {}", framework.name);
+            }
+        }
 
-        // Calculate final score (similarity * source_boost)
-        let final_score = similarity_score * source_boost;
+        // Apply query type specific adjustments
+        let type_boost = match query_analysis.query_type {
+            query_analyzer::QueryType::Reference => 1.2, // Boost official documentation
+            query_analyzer::QueryType::Example => 1.1,   // Slightly boost examples
+            query_analyzer::QueryType::Troubleshoot => 0.9, // Allow more diverse sources
+            _ => 1.0,
+        };
+
+        // Calculate final score with all boosts
+        let final_score = similarity_score * source_boost * type_boost;
 
         processed_results.push(ProcessedSearchResult {
             title: result.title.clone(),
@@ -81,10 +119,11 @@ pub async fn process_with_embeddings(
         });
 
         log::debug!(
-            "Processed result: {} | Similarity: {:.3} | Boost: {:.1}x | Final: {:.3}",
+            "Enhanced result: {} | Similarity: {:.3} | Source boost: {:.1}x | Type boost: {:.1}x | Final: {:.3}",
             result.source_domain,
             similarity_score,
             source_boost,
+            type_boost,
             final_score
         );
     }
@@ -93,12 +132,77 @@ pub async fn process_with_embeddings(
     processed_results.sort_by(|a, b| b.final_score.partial_cmp(&a.final_score).unwrap());
 
     log::info!(
-        "Processed {} relevant results (filtered {} below threshold)",
+        "Enhanced processing: {} relevant results (filtered {} below threshold)",
         processed_results.len(),
         raw_results.len() - processed_results.len()
     );
 
     Ok(processed_results)
+}
+
+/// Filter out non-technical domains when processing technical queries (LLM-enhanced only)
+pub fn filter_non_technical_domains(
+    results: Vec<ProcessedSearchResult>,
+    query_analysis: &query_analyzer::QueryAnalysis,
+    has_llm: bool,
+) -> Vec<ProcessedSearchResult> {
+    if !has_llm || query_analysis.detected_frameworks.is_empty() {
+        // No filtering without LLM or if not a framework-specific query
+        return results;
+    }
+
+    // Non-technical domains to filter out for technical queries
+    let non_technical_domains = vec![
+        "amazon.com",
+        "ebay.com", 
+        "etsy.com",
+        "walmart.com",
+        "target.com",
+        "houzz.com",
+        "wayfair.com",
+        "overstock.com",
+        "perigold.com",
+        "safavieh.com",
+        "furniture.com",
+        "shopping.com",
+        "bestbuy.com",
+        "lowes.com",
+        "homedepot.com",
+    ];
+
+    let original_count = results.len();
+    let filtered_results: Vec<ProcessedSearchResult> = results
+        .into_iter()
+        .filter(|result| {
+            let domain_lower = result.source_domain.to_lowercase();
+            
+            // Check if it's a non-technical domain
+            let is_non_technical = non_technical_domains
+                .iter()
+                .any(|nt_domain| domain_lower.contains(nt_domain));
+
+            if is_non_technical {
+                log::debug!(
+                    "LLM filter: Removing non-technical result: {} from {}",
+                    result.title,
+                    result.source_domain
+                );
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    let filtered_count = original_count - filtered_results.len();
+    if filtered_count > 0 {
+        log::info!(
+            "🧠 LLM-enhanced filtering: Removed {} non-technical results (e.g., shopping, furniture)",
+            filtered_count
+        );
+    }
+
+    filtered_results
 }
 
 /// Process search results without embeddings (fallback method)

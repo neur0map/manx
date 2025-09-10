@@ -775,7 +775,9 @@ async fn handle_search_command(
                     }
                     Err(e) => {
                         log::warn!("LLM synthesis failed: {}", e);
-                        renderer.print_error("AI synthesis failed, showing search results only");
+                        renderer.print_error(
+                            "AI synthesis failed, showing search results only check API status ",
+                        );
                     }
                 }
             }
@@ -2168,7 +2170,7 @@ async fn handle_web_search_command(
                             Err(e) => {
                                 log::warn!("LLM synthesis failed: {}", e);
                                 renderer.print_error(
-                                    "AI synthesis failed, showing search results only",
+                                    "AI synthesis failed, showing search results only check API status",
                                 );
                             }
                         }
@@ -2331,7 +2333,9 @@ async fn handle_rag_search_command(
                     }
                     Err(e) => {
                         log::warn!("LLM synthesis failed: {}", e);
-                        renderer.print_error("AI synthesis failed, showing search results only");
+                        renderer.print_error(
+                            "AI synthesis failed, showing search results only check API status",
+                        );
                     }
                 }
             }

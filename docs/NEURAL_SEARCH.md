@@ -19,7 +19,7 @@ Neural Search replaces simple keyword matching with **semantic understanding**:
 manx embedding download sentence-transformers/all-MiniLM-L6-v2
 
 # 2. Enable neural search
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding set onnx:sentence-transformers/all-MiniLM-L6-v2
 
 # 3. Test enhanced search
 manx snippet react "state management"  # Much smarter results!
@@ -27,44 +27,60 @@ manx snippet react "state management"  # Much smarter results!
 
 ## 📚 Available Models
 
-### Lightweight & Fast (Recommended)
+### 🚀 Lightweight & Fast (384D)
 ```bash
 # MiniLM - Best balance of speed and quality
 manx embedding download sentence-transformers/all-MiniLM-L6-v2
-# Size: 87MB | Dimensions: 384 | Speed: Very Fast | Quality: Excellent
+# Size: 87MB | Speed: ⚡ Fastest | Quality: 📊 Good | Use: General purpose
+
+# BGE Small - Optimized for technical content  
+manx embedding download BAAI/bge-small-en-v1.5
+# Size: 128MB | Speed: ⚡ Fast | Quality: 📈 Very Good | Use: Code, docs, retrieval
+
+# Multi-QA - Question-answer focused
+manx embedding download sentence-transformers/multi-qa-MiniLM-L6-cos-v1  
+# Size: 87MB | Speed: ⚡ Fast | Quality: 📊 Good | Use: FAQ, troubleshooting
 ```
 
-### High Quality
+### 🎯 High Quality (768D+)
 ```bash
 # MPNet - Superior semantic understanding
 manx embedding download sentence-transformers/all-mpnet-base-v2
-# Size: 400MB | Dimensions: 768 | Speed: Fast | Quality: Superior
-```
+# Size: 416MB | Speed: 🐌 Slower | Quality: 🏆 Best | Use: Research, precision
 
-### Specialized Models
-```bash
-# Question-Answer focused
-manx embedding download sentence-transformers/multi-qa-MiniLM-L6-cos-v1
-# Best for: FAQ-style queries, troubleshooting questions
-
-# Multilingual support
-manx embedding download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-# Best for: Non-English documentation, international teams
-```
-
-### Retrieval-Optimized (BGE Series)
-```bash
-# Small - Fast and efficient
-manx embedding download BAAI/bge-small-en-v1.5
-# Size: 134MB | Dimensions: 384 | Best for: General retrieval
-
-# Base - Balanced performance
+# BGE Base - Excellent for technical content
 manx embedding download BAAI/bge-base-en-v1.5
-# Size: 438MB | Dimensions: 768 | Best for: Production use
+# Size: 440MB | Speed: 🐌 Slower | Quality: 🏆 Best | Use: Professional, technical
 
-# Large - Maximum quality
-manx embedding download BAAI/bge-large-en-v1.5
-# Size: 1.34GB | Dimensions: 1024 | Best for: Research, complex queries
+# BGE Large - Highest quality available
+manx embedding download BAAI/bge-large-en-v1.5  
+# Size: 1.2GB | Speed: 🐌 Slowest | Quality: 🏆 Supreme | Use: Critical accuracy
+```
+
+### 🌐 API-Based Providers (No Download Required)
+```bash
+# OpenAI embeddings
+manx embedding set openai:text-embedding-3-small
+manx config --openai-api "sk-your-key"
+
+# HuggingFace embeddings  
+manx embedding set huggingface:sentence-transformers/all-MiniLM-L6-v2
+manx config --huggingface-api "hf_your-token"
+
+# Ollama (self-hosted)
+manx embedding set ollama:nomic-embed-text
+# Requires: ollama serve + ollama pull nomic-embed-text
+
+# Custom endpoint
+manx embedding set custom:http://localhost:8080/embeddings
+# For self-hosted embedding services
+```
+
+### 🌍 Multilingual Models
+```bash
+# Multilingual MiniLM - Supports 50+ languages
+manx embedding download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+# Size: 278MB | Speed: 🐌 Slower | Quality: 📊 Good | Use: Non-English content
 ```
 
 ## 🔧 Model Installation & Management
