@@ -324,7 +324,7 @@ STYLE:
                 return after_thinking.trim().to_string();
             }
         }
-        
+
         // Handle models that use <think> tags instead of <thinking>
         if response_text.contains("<think>") && response_text.contains("</think>") {
             // Find the end of the think section
@@ -333,10 +333,11 @@ STYLE:
                 return after_think.trim().to_string();
             }
         }
-        
+
         // Handle models that might use other thinking patterns
         // Some models use patterns like "Let me think about this..." followed by the actual answer
-        if response_text.starts_with("Let me think") || response_text.starts_with("I need to think") {
+        if response_text.starts_with("Let me think") || response_text.starts_with("I need to think")
+        {
             // Look for common transition phrases that indicate the start of the actual answer
             let transition_phrases = [
                 "Here's my answer:",
@@ -344,15 +345,15 @@ STYLE:
                 "To answer your question:",
                 "Based on the search results:",
                 "The answer is:",
-                "\n\n**",  // Common formatting transition
+                "\n\n**", // Common formatting transition
                 "\n\nQuick Answer:",
-                "\n\n##",  // Markdown heading transition
+                "\n\n##", // Markdown heading transition
             ];
-            
+
             for phrase in &transition_phrases {
                 if let Some(pos) = response_text.find(phrase) {
                     let answer_start = if phrase.starts_with('\n') {
-                        pos + 2  // Skip the newlines
+                        pos + 2 // Skip the newlines
                     } else {
                         pos + phrase.len()
                     };
@@ -360,7 +361,7 @@ STYLE:
                 }
             }
         }
-        
+
         // For other models or no thinking pattern detected, return the full response
         response_text.to_string()
     }
@@ -754,7 +755,7 @@ STYLE:
                 "Invalid HuggingFace response format: missing choices"
             ));
         };
-        
+
         let answer = self.extract_final_answer(raw_answer);
 
         let citations = self.extract_citations(&answer, results);
@@ -863,7 +864,7 @@ mod tests {
     #[test]
     fn test_extract_final_answer_with_thinking_tags() {
         let client = LlmClient::new(LlmConfig::default()).unwrap();
-        
+
         let response_with_thinking = r#"<thinking>
 Let me analyze this query about Rust error handling.
 
@@ -881,7 +882,7 @@ Rust uses `Result<T, E>` for error handling, where `T` is the success type and `
 - Pattern match with `match` for comprehensive handling"#;
 
         let extracted = client.extract_final_answer(response_with_thinking);
-        
+
         assert!(!extracted.contains("<thinking>"));
         assert!(!extracted.contains("</thinking>"));
         assert!(extracted.contains("**Quick Answer**"));
@@ -891,7 +892,7 @@ Rust uses `Result<T, E>` for error handling, where `T` is the success type and `
     #[test]
     fn test_extract_final_answer_with_think_tags() {
         let client = LlmClient::new(LlmConfig::default()).unwrap();
-        
+
         let response_with_think = r#"<think>
 This question is about JavaScript async/await patterns.
 
@@ -909,7 +910,7 @@ Use `async/await` for handling asynchronous operations in JavaScript.
 - Avoid callback hell with Promise chains"#;
 
         let extracted = client.extract_final_answer(response_with_think);
-        
+
         assert!(!extracted.contains("<think>"));
         assert!(!extracted.contains("</think>"));
         assert!(extracted.contains("**Quick Answer**"));
@@ -919,7 +920,7 @@ Use `async/await` for handling asynchronous operations in JavaScript.
     #[test]
     fn test_extract_final_answer_without_thinking() {
         let client = LlmClient::new(LlmConfig::default()).unwrap();
-        
+
         let normal_response = r#"**Quick Answer**
 This is a normal response without thinking tags.
 
@@ -928,14 +929,14 @@ This is a normal response without thinking tags.
 - Point 2"#;
 
         let extracted = client.extract_final_answer(normal_response);
-        
+
         assert_eq!(extracted, normal_response);
     }
 
     #[test]
     fn test_extract_final_answer_with_thinking_prefix() {
         let client = LlmClient::new(LlmConfig::default()).unwrap();
-        
+
         let response_with_prefix = r#"Let me think about this question carefully...
 
 I need to consider the different aspects of the query.
@@ -950,7 +951,7 @@ Here is the actual answer after thinking.
 - Important point 2"#;
 
         let extracted = client.extract_final_answer(response_with_prefix);
-        
+
         assert!(!extracted.contains("Let me think"));
         assert!(extracted.contains("**Quick Answer**"));
         assert!(extracted.contains("Here is the actual answer"));
