@@ -7,9 +7,8 @@
 
 use crate::rag::embeddings::EmbeddingModel;
 use crate::web_search::official_sources::{OfficialSourceManager, SourceTier};
-use crate::web_search::{ProcessedSearchResult, RawSearchResult, query_analyzer};
+use crate::web_search::{query_analyzer, ProcessedSearchResult, RawSearchResult};
 use anyhow::Result;
-
 
 /// Process search results with semantic similarity and query analysis context
 pub async fn process_with_embeddings_and_analysis(
@@ -34,12 +33,12 @@ pub async fn process_with_embeddings_and_analysis(
     for (index, result) in raw_results.iter().enumerate() {
         // Create enhanced text for embedding with domain context
         let mut combined_text = format!("{} {}", result.title, result.snippet);
-        
+
         // Add framework context to help embeddings understand domain
         for framework in &query_analysis.detected_frameworks {
             combined_text.push_str(&format!(" {}", framework.name));
         }
-        
+
         // Add domain context keywords
         for keyword in &query_analysis.domain_context.context_keywords {
             combined_text.push_str(&format!(" {}", keyword));
@@ -86,10 +85,14 @@ pub async fn process_with_embeddings_and_analysis(
 
         // Apply framework-specific boost
         let mut source_boost = official_sources.get_score_boost(&source_tier);
-        
+
         // Extra boost if result matches detected framework domains
         for framework in &query_analysis.detected_frameworks {
-            if framework.official_sites.iter().any(|site| result.source_domain.contains(site)) {
+            if framework
+                .official_sites
+                .iter()
+                .any(|site| result.source_domain.contains(site))
+            {
                 source_boost *= 1.5; // Extra framework match boost
                 log::debug!("Applied framework domain boost for {}", framework.name);
             }
@@ -154,7 +157,7 @@ pub fn filter_non_technical_domains(
     // Non-technical domains to filter out for technical queries
     let non_technical_domains = vec![
         "amazon.com",
-        "ebay.com", 
+        "ebay.com",
         "etsy.com",
         "walmart.com",
         "target.com",
@@ -175,7 +178,7 @@ pub fn filter_non_technical_domains(
         .into_iter()
         .filter(|result| {
             let domain_lower = result.source_domain.to_lowercase();
-            
+
             // Check if it's a non-technical domain
             let is_non_technical = non_technical_domains
                 .iter()

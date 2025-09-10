@@ -2,7 +2,7 @@
 //!
 //! This module provides intelligent query preprocessing that enhances both
 //! embedding-based semantic search and LLM result synthesis by:
-//! - Detecting framework/library context 
+//! - Detecting framework/library context
 //! - Expanding queries with domain-specific terms
 //! - Suggesting better search strategies
 //! - Working collaboratively with embeddings rather than replacing them
@@ -41,17 +41,22 @@ pub enum FrameworkCategory {
     BackendFramework, // Django, FastAPI, Express
     DesktopFramework, // Tauri, Electron, Flutter
     DatabaseTool,     // PostgreSQL, MongoDB
-    DevTool,         // Docker, Kubernetes
-    Language,        // Rust, Python, JavaScript
-    Library,         // Pandas, NumPy
+    DevTool,          // Docker, Kubernetes
+    Language,         // Rust, Python, JavaScript
+    Library,          // Pandas, NumPy
     Other,
 }
 
 /// Search strategy based on query analysis
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SearchStrategy {
-    FrameworkSpecific { framework: String, sites: Vec<String> },
-    OfficialDocsFirst { frameworks: Vec<String> },
+    FrameworkSpecific {
+        framework: String,
+        sites: Vec<String>,
+    },
+    OfficialDocsFirst {
+        frameworks: Vec<String>,
+    },
     CommunityAndOfficial,
     GeneralSearch,
 }
@@ -59,7 +64,7 @@ pub enum SearchStrategy {
 /// Domain context for better embedding understanding
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainContext {
-    pub primary_domain: String,  // "web-development", "data-science", etc.
+    pub primary_domain: String,   // "web-development", "data-science", etc.
     pub sub_domains: Vec<String>, // "ui-components", "state-management"
     pub technical_level: TechnicalLevel,
     pub context_keywords: Vec<String>, // Additional terms to help embeddings
@@ -108,27 +113,31 @@ impl QueryAnalyzer {
 
         // Step 1: Detect frameworks using pattern matching (fast, deterministic)
         let detected_frameworks = self.detect_frameworks(query);
-        
+
         // Step 2: Determine query type (helps both embeddings and LLM)
         let query_type = self.classify_query_type(query);
-        
+
         // Step 3: Build domain context (enhances embedding understanding)
         let domain_context = self.build_domain_context(query, &detected_frameworks);
-        
+
         // Step 4: Create enhanced query (adds context for better search)
         let enhanced_query = self.enhance_query(query, &detected_frameworks, &domain_context);
-        
+
         // Step 5: Determine search strategy
         let search_strategy = self.determine_search_strategy(&detected_frameworks, &query_type);
-        
+
         // Step 6: Get suggested sites for targeted search
         let suggested_sites = self.get_suggested_sites(&detected_frameworks);
-        
+
         // Step 7: Optional LLM enhancement (if available)
         let (final_enhanced_query, confidence) = if let Some(llm_client) = llm_client {
-            self.llm_enhance_analysis(query, &enhanced_query, &detected_frameworks, llm_client).await?
+            self.llm_enhance_analysis(query, &enhanced_query, &detected_frameworks, llm_client)
+                .await?
         } else {
-            (enhanced_query.clone(), self.calculate_confidence(&detected_frameworks))
+            (
+                enhanced_query.clone(),
+                self.calculate_confidence(&detected_frameworks),
+            )
         };
 
         Ok(QueryAnalysis {
@@ -147,29 +156,29 @@ impl QueryAnalyzer {
     fn detect_frameworks(&self, query: &str) -> Vec<DetectedFramework> {
         let query_lower = query.to_lowercase();
         let mut detected = Vec::new();
-        
+
         for (framework_name, framework_info) in &self.framework_database.frameworks {
             let mut confidence: f32 = 0.0;
-            
+
             // Direct name match (high confidence)
             if query_lower.contains(&framework_name.to_lowercase()) {
                 confidence += 0.8;
             }
-            
+
             // Keyword matches (medium confidence)
             for keyword in &framework_info.keywords {
                 if query_lower.contains(&keyword.to_lowercase()) {
                     confidence += 0.3;
                 }
             }
-            
+
             // Alias matches
             for alias in &framework_info.aliases {
                 if query_lower.contains(&alias.to_lowercase()) {
                     confidence += 0.6;
                 }
             }
-            
+
             // Only include if we have reasonable confidence
             if confidence >= 0.5 {
                 detected.push(DetectedFramework {
@@ -181,7 +190,7 @@ impl QueryAnalyzer {
                 });
             }
         }
-        
+
         // Sort by confidence
         detected.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
         detected
@@ -190,16 +199,28 @@ impl QueryAnalyzer {
     /// Classify the type of query to help both search and LLM processing
     fn classify_query_type(&self, query: &str) -> QueryType {
         let query_lower = query.to_lowercase();
-        
+
         if query_lower.starts_with("how to") || query_lower.contains("how do i") {
             QueryType::HowTo
-        } else if query_lower.contains("api") || query_lower.contains("reference") || query_lower.contains("documentation") {
+        } else if query_lower.contains("api")
+            || query_lower.contains("reference")
+            || query_lower.contains("documentation")
+        {
             QueryType::Reference
-        } else if query_lower.contains("error") || query_lower.contains("not working") || query_lower.contains("issue") {
+        } else if query_lower.contains("error")
+            || query_lower.contains("not working")
+            || query_lower.contains("issue")
+        {
             QueryType::Troubleshoot
-        } else if query_lower.contains("vs") || query_lower.contains("versus") || query_lower.contains("compared to") {
+        } else if query_lower.contains("vs")
+            || query_lower.contains("versus")
+            || query_lower.contains("compared to")
+        {
             QueryType::Comparison
-        } else if query_lower.contains("example") || query_lower.contains("sample") || query_lower.contains("demo") {
+        } else if query_lower.contains("example")
+            || query_lower.contains("sample")
+            || query_lower.contains("demo")
+        {
             QueryType::Example
         } else {
             QueryType::General
@@ -211,11 +232,11 @@ impl QueryAnalyzer {
         let mut context_keywords = Vec::new();
         let mut primary_domain = "software-development".to_string();
         let mut sub_domains = Vec::new();
-        
+
         // Add framework-specific context
         for framework in frameworks {
             context_keywords.extend(framework.common_terms.clone());
-            
+
             // Determine primary domain from framework category
             primary_domain = match framework.category {
                 FrameworkCategory::WebFramework => "web-development".to_string(),
@@ -228,7 +249,7 @@ impl QueryAnalyzer {
                 FrameworkCategory::Other => "software-development".to_string(),
             };
         }
-        
+
         // Detect sub-domains from query content
         let query_lower = query.to_lowercase();
         if query_lower.contains("table") || query_lower.contains("grid") {
@@ -241,18 +262,19 @@ impl QueryAnalyzer {
         if query_lower.contains("state") {
             sub_domains.push("state-management".to_string());
         }
-        
+
         // Determine technical level
-        let technical_level = if query_lower.contains("beginner") || query_lower.contains("tutorial") {
-            TechnicalLevel::Beginner
-        } else if query_lower.contains("advanced") || query_lower.contains("internals") {
-            TechnicalLevel::Advanced
-        } else if query_lower.contains("api") || query_lower.contains("reference") {
-            TechnicalLevel::Reference
-        } else {
-            TechnicalLevel::Intermediate
-        };
-        
+        let technical_level =
+            if query_lower.contains("beginner") || query_lower.contains("tutorial") {
+                TechnicalLevel::Beginner
+            } else if query_lower.contains("advanced") || query_lower.contains("internals") {
+                TechnicalLevel::Advanced
+            } else if query_lower.contains("api") || query_lower.contains("reference") {
+                TechnicalLevel::Reference
+            } else {
+                TechnicalLevel::Intermediate
+            };
+
         DomainContext {
             primary_domain,
             sub_domains,
@@ -262,16 +284,24 @@ impl QueryAnalyzer {
     }
 
     /// Enhance query with additional context without losing original meaning
-    fn enhance_query(&self, original_query: &str, frameworks: &[DetectedFramework], context: &DomainContext) -> String {
+    fn enhance_query(
+        &self,
+        original_query: &str,
+        frameworks: &[DetectedFramework],
+        context: &DomainContext,
+    ) -> String {
         let mut enhanced = original_query.to_string();
-        
+
         // Add framework context if detected
         if let Some(main_framework) = frameworks.first() {
             // Add official name if query used alias
-            if !original_query.to_lowercase().contains(&main_framework.name.to_lowercase()) {
+            if !original_query
+                .to_lowercase()
+                .contains(&main_framework.name.to_lowercase())
+            {
                 enhanced = format!("{} {}", main_framework.name, enhanced);
             }
-            
+
             // Add category context
             let category_term = match main_framework.category {
                 FrameworkCategory::DesktopFramework => "desktop application",
@@ -279,24 +309,28 @@ impl QueryAnalyzer {
                 FrameworkCategory::BackendFramework => "backend development",
                 _ => "",
             };
-            
+
             if !category_term.is_empty() && !enhanced.to_lowercase().contains(category_term) {
                 enhanced = format!("{} {}", enhanced, category_term);
             }
         }
-        
+
         // Add domain context keywords
         for keyword in &context.context_keywords {
             if !enhanced.to_lowercase().contains(&keyword.to_lowercase()) {
                 enhanced = format!("{} {}", enhanced, keyword);
             }
         }
-        
+
         enhanced
     }
 
     /// Determine search strategy based on detected frameworks
-    fn determine_search_strategy(&self, frameworks: &[DetectedFramework], query_type: &QueryType) -> SearchStrategy {
+    fn determine_search_strategy(
+        &self,
+        frameworks: &[DetectedFramework],
+        query_type: &QueryType,
+    ) -> SearchStrategy {
         if let Some(main_framework) = frameworks.first() {
             if main_framework.confidence > 0.8 {
                 return SearchStrategy::FrameworkSpecific {
@@ -309,7 +343,7 @@ impl QueryAnalyzer {
                 };
             }
         }
-        
+
         match query_type {
             QueryType::Reference => SearchStrategy::OfficialDocsFirst {
                 frameworks: frameworks.iter().map(|f| f.name.clone()).collect(),
@@ -322,11 +356,11 @@ impl QueryAnalyzer {
     /// Get suggested sites for targeted search
     fn get_suggested_sites(&self, frameworks: &[DetectedFramework]) -> Vec<String> {
         let mut sites = Vec::new();
-        
+
         for framework in frameworks {
             sites.extend(framework.official_sites.clone());
         }
-        
+
         // Remove duplicates
         sites.sort();
         sites.dedup();
@@ -355,7 +389,8 @@ impl QueryAnalyzer {
         } else {
             format!(
                 "Detected frameworks: {}",
-                frameworks.iter()
+                frameworks
+                    .iter()
                     .map(|f| format!("{} ({}%)", f.name, (f.confidence * 100.0) as u8))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -398,7 +433,10 @@ If the current enhanced query is already good, return it as-is."#,
             },
         }];
 
-        match llm_client.synthesize_answer("enhance query", &mock_results).await {
+        match llm_client
+            .synthesize_answer("enhance query", &mock_results)
+            .await
+        {
             Ok(response) => {
                 let enhanced = response.answer.trim().to_string();
                 Ok((enhanced, 0.9)) // High confidence with LLM enhancement
@@ -427,36 +465,61 @@ struct FrameworkInfo {
 impl Default for FrameworkDatabase {
     fn default() -> Self {
         let mut frameworks = HashMap::new();
-        
+
         // Tauri framework
-        frameworks.insert("Tauri".to_string(), FrameworkInfo {
-            category: FrameworkCategory::DesktopFramework,
-            keywords: vec!["rust".to_string(), "desktop".to_string(), "app".to_string()],
-            aliases: vec!["tauri-app".to_string()],
-            official_sites: vec!["tauri.app".to_string(), "docs.rs/tauri".to_string()],
-            common_terms: vec!["webview".to_string(), "native".to_string(), "cross-platform".to_string()],
-        });
-        
+        frameworks.insert(
+            "Tauri".to_string(),
+            FrameworkInfo {
+                category: FrameworkCategory::DesktopFramework,
+                keywords: vec!["rust".to_string(), "desktop".to_string(), "app".to_string()],
+                aliases: vec!["tauri-app".to_string()],
+                official_sites: vec!["tauri.app".to_string(), "docs.rs/tauri".to_string()],
+                common_terms: vec![
+                    "webview".to_string(),
+                    "native".to_string(),
+                    "cross-platform".to_string(),
+                ],
+            },
+        );
+
         // React
-        frameworks.insert("React".to_string(), FrameworkInfo {
-            category: FrameworkCategory::WebFramework,
-            keywords: vec!["jsx".to_string(), "component".to_string(), "hook".to_string()],
-            aliases: vec!["react.js".to_string(), "reactjs".to_string()],
-            official_sites: vec!["reactjs.org".to_string(), "react.dev".to_string()],
-            common_terms: vec!["virtual-dom".to_string(), "state".to_string(), "props".to_string()],
-        });
-        
+        frameworks.insert(
+            "React".to_string(),
+            FrameworkInfo {
+                category: FrameworkCategory::WebFramework,
+                keywords: vec![
+                    "jsx".to_string(),
+                    "component".to_string(),
+                    "hook".to_string(),
+                ],
+                aliases: vec!["react.js".to_string(), "reactjs".to_string()],
+                official_sites: vec!["reactjs.org".to_string(), "react.dev".to_string()],
+                common_terms: vec![
+                    "virtual-dom".to_string(),
+                    "state".to_string(),
+                    "props".to_string(),
+                ],
+            },
+        );
+
         // FastAPI
-        frameworks.insert("FastAPI".to_string(), FrameworkInfo {
-            category: FrameworkCategory::BackendFramework,
-            keywords: vec!["python".to_string(), "api".to_string(), "async".to_string()],
-            aliases: vec!["fast-api".to_string()],
-            official_sites: vec!["fastapi.tiangolo.com".to_string()],
-            common_terms: vec!["pydantic".to_string(), "swagger".to_string(), "openapi".to_string()],
-        });
-        
+        frameworks.insert(
+            "FastAPI".to_string(),
+            FrameworkInfo {
+                category: FrameworkCategory::BackendFramework,
+                keywords: vec!["python".to_string(), "api".to_string(), "async".to_string()],
+                aliases: vec!["fast-api".to_string()],
+                official_sites: vec!["fastapi.tiangolo.com".to_string()],
+                common_terms: vec![
+                    "pydantic".to_string(),
+                    "swagger".to_string(),
+                    "openapi".to_string(),
+                ],
+            },
+        );
+
         // Add more frameworks as needed...
-        
+
         Self { frameworks }
     }
 }

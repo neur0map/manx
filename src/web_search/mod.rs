@@ -159,7 +159,10 @@ impl DocumentationSearchSystem {
         log::info!("🔍 Searching official documentation for: {}", query);
 
         // Step 0: Analyze query intent to enhance search strategy
-        let query_analysis = self.query_analyzer.analyze_query(query, self.llm_client.as_ref()).await?;
+        let query_analysis = self
+            .query_analyzer
+            .analyze_query(query, self.llm_client.as_ref())
+            .await?;
         log::info!(
             "🧠 Query analysis: {} -> {} (confidence: {:.1}%)",
             query_analysis.original_query,
@@ -178,7 +181,10 @@ impl DocumentationSearchSystem {
                     self.build_technical_search_query(search_query, sites)
                 }
                 query_analyzer::SearchStrategy::OfficialDocsFirst { frameworks } => {
-                    log::info!("📚 Using LLM-enhanced prioritized search for: {}", frameworks.join(", "));
+                    log::info!(
+                        "📚 Using LLM-enhanced prioritized search for: {}",
+                        frameworks.join(", ")
+                    );
                     self.build_dev_focused_query(search_query, frameworks)
                 }
                 _ => {
@@ -287,9 +293,9 @@ impl DocumentationSearchSystem {
 
         // Step 4b: Filter out non-technical domains (LLM-enhanced only)
         processed_results = result_processor::filter_non_technical_domains(
-            processed_results, 
-            &query_analysis, 
-            self.llm_client.is_some()
+            processed_results,
+            &query_analysis,
+            self.llm_client.is_some(),
         );
 
         // Step 4c: Filter out low-quality results
@@ -488,7 +494,7 @@ impl DocumentationSearchSystem {
         // Technical domains to prioritize
         let tech_domains = vec![
             "site:github.com",
-            "site:stackoverflow.com", 
+            "site:stackoverflow.com",
             "site:docs.rs",
             "site:developer.mozilla.org",
             "site:dev.to",
@@ -501,15 +507,21 @@ impl DocumentationSearchSystem {
     /// Check if query is technical based on analysis
     fn is_technical_query(&self, analysis: &query_analyzer::QueryAnalysis) -> bool {
         // Technical indicators
-        !analysis.detected_frameworks.is_empty() ||
-        analysis.domain_context.primary_domain.contains("development") ||
-        analysis.domain_context.primary_domain.contains("programming") ||
-        analysis.query_type == query_analyzer::QueryType::Reference ||
-        analysis.original_query.to_lowercase().contains("api") ||
-        analysis.original_query.to_lowercase().contains("code") ||
-        analysis.original_query.to_lowercase().contains("library") ||
-        analysis.original_query.to_lowercase().contains("function") ||
-        analysis.original_query.to_lowercase().contains("method") ||
-        analysis.original_query.to_lowercase().contains("component")
+        !analysis.detected_frameworks.is_empty()
+            || analysis
+                .domain_context
+                .primary_domain
+                .contains("development")
+            || analysis
+                .domain_context
+                .primary_domain
+                .contains("programming")
+            || analysis.query_type == query_analyzer::QueryType::Reference
+            || analysis.original_query.to_lowercase().contains("api")
+            || analysis.original_query.to_lowercase().contains("code")
+            || analysis.original_query.to_lowercase().contains("library")
+            || analysis.original_query.to_lowercase().contains("function")
+            || analysis.original_query.to_lowercase().contains("method")
+            || analysis.original_query.to_lowercase().contains("component")
     }
 }
