@@ -447,7 +447,7 @@ impl DocumentationSearchSystem {
 
     /// Build technical search query prioritizing dev docs, GitHub, StackOverflow
     fn build_technical_search_query(&self, query: &str, framework_sites: &[String]) -> String {
-        let dev_domains = vec![
+        let dev_domains = [
             "github.com",
             "stackoverflow.com",
             "docs.rs",
@@ -492,7 +492,7 @@ impl DocumentationSearchSystem {
         }
 
         // Technical domains to prioritize
-        let tech_domains = vec![
+        let tech_domains = [
             "site:github.com",
             "site:stackoverflow.com",
             "site:docs.rs",

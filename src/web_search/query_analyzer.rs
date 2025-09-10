@@ -95,6 +95,12 @@ pub struct QueryAnalyzer {
     framework_database: FrameworkDatabase,
 }
 
+impl Default for QueryAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryAnalyzer {
     /// Create new query analyzer
     pub fn new() -> Self {
