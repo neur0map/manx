@@ -33,21 +33,22 @@ ENHANCED MODE (Optional setup for better results):
   🧠 Neural embeddings          Install: sentence-transformers/all-MiniLM-L6-v2
   🎯 Semantic understanding     "database connection" = "data storage"
   📊 Intent matching            Superior relevance ranking
-  🔄 Easy switching             manx config --embedding-provider onnx:model-name
+  🔄 Easy switching             manx embedding set onnx:model-name
 
 AI SYNTHESIS - Get comprehensive answers with citations (optional):
-  manx config --llm-api "sk-key"           Enable AI answer synthesis
+  manx config --openai-api "sk-your-key"   Enable OpenAI GPT models
+  manx config --anthropic-api "sk-ant-key" Enable Anthropic Claude models
   manx snippet react hooks                 Search + AI explanation (if configured)
 
 LOCAL RAG - Search your own documents and code (optional):
   manx index /path/to/docs                 Index your documentation
-  manx config --rag-enabled                Enable local document search
+  manx config --rag on                     Enable local document search
   manx search "authentication" --rag       Search indexed documents only
 
 QUICK START:
   manx snippet react "state management"    Works great with defaults
   manx embedding download all-MiniLM-L6-v2 Optional: Better semantic search
-  manx config --llm-api "sk-openai-key"    Optional: AI synthesis
+  manx config --openai-api "sk-your-key"   Optional: AI synthesis
 
 Use 'manx <command> --help' for detailed options."#,
     version = get_version_info(),

@@ -130,6 +130,33 @@ cargo install manx-cli
 ### Manual Download
 - **Binary**: Download from [GitHub Releases](https://github.com/neur0map/manx/releases)
 
+## 🔑 API Configuration
+
+### **Context7 API** (Enhanced Search)
+```bash
+manx config --api-key "ctx7sk-your-context7-key"
+```
+*Get your free API key at [context7.com](https://context7.com)*
+
+### **AI Features** (Optional)
+```bash
+# OpenAI GPT models
+manx config --openai-api "sk-your-openai-key"
+
+# Anthropic Claude models  
+manx config --anthropic-api "sk-ant-your-claude-key"
+
+# Other providers
+manx config --groq-api "gsk-your-groq-key"
+manx config --openrouter-api "sk-or-your-openrouter-key"
+manx config --huggingface-api "hf-your-huggingface-token"
+```
+
+### **View Configuration**
+```bash
+manx config --show
+```
+
 ## 🆘 Getting Help
 
 - **📖 Documentation**: Check the guides linked above
@@ -149,6 +176,20 @@ Huge thanks to the amazing open source community and projects that make Manx pos
 This tool was fully built through "vibe coding" with **[Claude Code](https://claude.ai/code)** 🤖
 
 I'm not a programmer - just a cybersecurity student learning the basics and building tools for my own use under [prowl.sh](https://prowl.sh). If people find these tools useful, I'm more than happy to continue working on them and improving the experience!
+
+## 📋 Todo
+
+### Release Binaries
+The install script currently falls back to cargo compilation when pre-built binaries aren't available. Future releases should include binaries for:
+
+- ✅ `x86_64-unknown-linux-gnu` (Intel/AMD Linux)
+- ✅ `x86_64-apple-darwin` (Intel Mac)  
+- ✅ `aarch64-apple-darwin` (Apple Silicon Mac)
+- ✅ `x86_64-pc-windows-msvc` (Windows x64)
+- ⏳ `aarch64-unknown-linux-gnu` (ARM64 Linux - Raspberry Pi, ARM servers)
+- ⏳ `x86_64-unknown-linux-musl` (Alpine Linux, static binaries)
+
+This will make installation faster and eliminate the need for Rust/Cargo on target systems.
 
 ## 📄 License
 
