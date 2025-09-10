@@ -29,9 +29,9 @@ manx snippet python "async functions"
 manx search "rust error handling"
 manx doc fastapi "middleware"
 
-# index your local docs or web doc pages.
+# Index your local docs or crawl documentation sites
 manx index /path/to/docs
-manx index https://docs.rs/
+manx index https://docs.rs/ --crawl
 ```
 
 **That's it!** Works immediately with no setup required.
@@ -55,12 +55,12 @@ Start simple → Add semantic search → Index your docs → Enable AI
 ### **Code Snippet Search**
 ```bash
 manx snippet react "custom hooks"
-manx snippet python "decorators" 
+manx snippet python "decorators"
 manx snippet rust "error handling"
 ```
 *Get working code examples with explanations from official documentation*
 
-### **Documentation Search** 
+### **Documentation Search**
 ```bash
 manx search "authentication best practices"
 manx doc fastapi "dependency injection"
@@ -69,10 +69,29 @@ manx doc fastapi "dependency injection"
 
 ### **Personal Knowledge Base**
 ```bash
+# Index local documentation
 manx index ~/dev-notes/
+
+# Index and crawl web documentation
+manx index https://docs.python.org --crawl --max-depth 2
+
+# Search indexed content
 manx search "team coding standards" --rag
 ```
-*Index and search your own documentation with semantic understanding*
+*Index local files or crawl websites, then search with semantic understanding*
+
+### **Web Documentation Crawling**
+```bash
+# Basic URL indexing
+manx index https://docs.fastapi.tiangolo.com
+
+# Deep crawl with depth control
+manx index https://docs.python.org --crawl --max-depth 3
+
+# Limited crawl with page limits
+manx index https://company-wiki.com --crawl --max-pages 100
+```
+*Automatically discover and index entire documentation sites*
 
 ### **AI-Powered Analysis** *(Optional)*
 ```bash
@@ -84,7 +103,7 @@ manx snippet react hooks  # Now includes AI explanations
 ## 📚 Learn More
 
 - **🔧 [Setup Guide](docs/SETUP_GUIDE.md)** - Complete installation and configuration
-- **📖 [Commands Reference](docs/COMMANDS.md)** - All commands with examples  
+- **📖 [Commands Reference](docs/COMMANDS.md)** - All commands with examples
 - **⚙️ [Configuration](docs/CONFIGURATION.md)** - Customize settings and providers
 - **🧠 [AI Features](docs/AI_FEATURES.md)** - LLM integration and capabilities
 - **📁 [RAG Mode](docs/RAG_GUIDE.md)** - Index and search personal documentation
@@ -95,14 +114,15 @@ manx snippet react hooks  # Now includes AI explanations
 ### **Quick Development**
 ```bash
 manx snippet python "list comprehensions"     # Learning
-manx search "javascript memory leaks"         # Debugging  
+manx search "javascript memory leaks"         # Debugging
 manx doc svelte "component lifecycle"         # Reference
 ```
 
 ### **Team Knowledge**
 ```bash
-manx index ~/team-docs/                       # One-time setup
-manx search "deployment checklist" --rag      # Daily usage
+manx index ~/team-docs/                       # Index local docs
+manx index https://company-docs.com --crawl   # Crawl internal wiki
+manx search "deployment checklist" --rag      # Search all indexed content
 ```
 
 ### **Research Mode**
@@ -139,7 +159,7 @@ cargo install manx-cli
 ## 🆘 Getting Help
 
 - **📖 Documentation**: Check the guides linked above
-- **🐛 Issues**: [GitHub Issues](https://github.com/neur0map/manx/issues) 
+- **🐛 Issues**: [GitHub Issues](https://github.com/neur0map/manx/issues)
 
 ## 🙏 Shoutouts
 
@@ -162,16 +182,16 @@ I'm not a programmer - just a cybersecurity student learning the basics and buil
 The install script currently falls back to cargo compilation when pre-built binaries aren't available. Future releases should include binaries for:
 
 - ✅ `x86_64-unknown-linux-gnu` (Intel/AMD Linux)
-- ✅ `x86_64-apple-darwin` (Intel Mac)  
+- ✅ `x86_64-apple-darwin` (Intel Mac)
 - ✅ `aarch64-apple-darwin` (Apple Silicon Mac)
 - ✅ `x86_64-pc-windows-msvc` (Windows x64)
-- ⏳ `aarch64-unknown-linux-gnu` (ARM64 Linux - Raspberry Pi, ARM servers)
+- `aarch64-unknown-linux-gnu` (ARM64 Linux - Raspberry Pi, ARM servers)
 - ⏳ `x86_64-unknown-linux-musl` (Alpine Linux, static binaries)
 
 This will make installation faster and eliminate the need for Rust/Cargo on target systems.
 
-### GitHub MCP Database
-Future enhancement integrating GitHub as a searchable knowledge base with Manx's intelligence models:
+### GitHub Repository Search
+Future enhancement to search directly within GitHub repositories for code examples and implementation patterns:
 
 - ⏳ **GitHub Access**: Search repositories, issues, and discussions from the CLI
 - ⏳ **Code Search**: Look through repo code with the option to add extra context using embeddings
