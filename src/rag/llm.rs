@@ -314,6 +314,48 @@ STYLE:
         prompt
     }
 
+    /// Extract the actual answer from responses that may contain thinking content
+    fn extract_final_answer(&self, response_text: &str) -> String {
+        // Handle models with thinking capabilities (like Claude with <thinking> tags)
+        if response_text.contains("<thinking>") && response_text.contains("</thinking>") {
+            // Find the end of the thinking section
+            if let Some(thinking_end) = response_text.find("</thinking>") {
+                let after_thinking = &response_text[thinking_end + "</thinking>".len()..];
+                return after_thinking.trim().to_string();
+            }
+        }
+        
+        // Handle models that might use other thinking patterns
+        // Some models use patterns like "Let me think about this..." followed by the actual answer
+        if response_text.starts_with("Let me think") || response_text.starts_with("I need to think") {
+            // Look for common transition phrases that indicate the start of the actual answer
+            let transition_phrases = [
+                "Here's my answer:",
+                "My answer is:",
+                "To answer your question:",
+                "Based on the search results:",
+                "The answer is:",
+                "\n\n**",  // Common formatting transition
+                "\n\nQuick Answer:",
+                "\n\n##",  // Markdown heading transition
+            ];
+            
+            for phrase in &transition_phrases {
+                if let Some(pos) = response_text.find(phrase) {
+                    let answer_start = if phrase.starts_with('\n') {
+                        pos + 2  // Skip the newlines
+                    } else {
+                        pos + phrase.len()
+                    };
+                    return response_text[answer_start..].trim().to_string();
+                }
+            }
+        }
+        
+        // For other models or no thinking pattern detected, return the full response
+        response_text.to_string()
+    }
+
     /// Extract citations from LLM response
     fn extract_citations(&self, response_text: &str, results: &[RagSearchResult]) -> Vec<Citation> {
         let mut citations = Vec::new();
@@ -387,10 +429,10 @@ STYLE:
 
         let response_json: serde_json::Value = response.json().await?;
 
-        let answer = response_json["choices"][0]["message"]["content"]
+        let raw_answer = response_json["choices"][0]["message"]["content"]
             .as_str()
-            .ok_or_else(|| anyhow!("Invalid OpenAI response format"))?
-            .to_string();
+            .ok_or_else(|| anyhow!("Invalid OpenAI response format"))?;
+        let answer = self.extract_final_answer(raw_answer);
 
         let usage = &response_json["usage"];
         let tokens_used = usage["total_tokens"].as_u64().map(|t| t as u32);
@@ -459,10 +501,10 @@ STYLE:
 
         let response_json: serde_json::Value = response.json().await?;
 
-        let answer = response_json["content"][0]["text"]
+        let raw_answer = response_json["content"][0]["text"]
             .as_str()
-            .ok_or_else(|| anyhow!("Invalid Anthropic response format"))?
-            .to_string();
+            .ok_or_else(|| anyhow!("Invalid Anthropic response format"))?;
+        let answer = self.extract_final_answer(raw_answer);
 
         let usage = &response_json["usage"];
         let tokens_used = usage["output_tokens"].as_u64().map(|t| t as u32);
@@ -538,10 +580,10 @@ STYLE:
 
         let response_json: serde_json::Value = response.json().await?;
 
-        let answer = response_json["choices"][0]["message"]["content"]
+        let raw_answer = response_json["choices"][0]["message"]["content"]
             .as_str()
-            .ok_or_else(|| anyhow!("Invalid Groq response format"))?
-            .to_string();
+            .ok_or_else(|| anyhow!("Invalid Groq response format"))?;
+        let answer = self.extract_final_answer(raw_answer);
 
         let usage = &response_json["usage"];
         let tokens_used = usage["total_tokens"].as_u64().map(|t| t as u32);
@@ -615,10 +657,10 @@ STYLE:
 
         let response_json: serde_json::Value = response.json().await?;
 
-        let answer = response_json["choices"][0]["message"]["content"]
+        let raw_answer = response_json["choices"][0]["message"]["content"]
             .as_str()
-            .ok_or_else(|| anyhow!("Invalid OpenRouter response format"))?
-            .to_string();
+            .ok_or_else(|| anyhow!("Invalid OpenRouter response format"))?;
+        let answer = self.extract_final_answer(raw_answer);
 
         let usage = &response_json["usage"];
         let tokens_used = usage["total_tokens"].as_u64().map(|t| t as u32);
@@ -684,10 +726,10 @@ STYLE:
 
         let response_json: serde_json::Value = response.json().await?;
 
-        let answer = if let Some(choices) = response_json["choices"].as_array() {
+        let raw_answer = if let Some(choices) = response_json["choices"].as_array() {
             if let Some(first_choice) = choices.first() {
                 if let Some(message) = first_choice["message"].as_object() {
-                    message["content"].as_str().unwrap_or("").to_string()
+                    message["content"].as_str().unwrap_or("")
                 } else {
                     return Err(anyhow!(
                         "Invalid HuggingFace response format: missing message"
@@ -703,6 +745,8 @@ STYLE:
                 "Invalid HuggingFace response format: missing choices"
             ));
         };
+        
+        let answer = self.extract_final_answer(raw_answer);
 
         let citations = self.extract_citations(&answer, results);
 
@@ -772,10 +816,10 @@ STYLE:
 
         let response_json: serde_json::Value = response.json().await?;
 
-        let answer = response_json["choices"][0]["message"]["content"]
+        let raw_answer = response_json["choices"][0]["message"]["content"]
             .as_str()
-            .ok_or_else(|| anyhow!("Invalid custom endpoint response format"))?
-            .to_string();
+            .ok_or_else(|| anyhow!("Invalid custom endpoint response format"))?;
+        let answer = self.extract_final_answer(raw_answer);
 
         let usage = &response_json["usage"];
         let tokens_used = usage
@@ -800,5 +844,78 @@ STYLE:
             finish_reason,
             citations,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_final_answer_with_thinking_tags() {
+        let client = LlmClient::new(LlmConfig::default()).unwrap();
+        
+        let response_with_thinking = r#"<thinking>
+Let me analyze this query about Rust error handling.
+
+The user is asking about Result types and how to handle errors properly.
+I should explain the basics of Result<T, E> and common patterns.
+</thinking>
+
+**Quick Answer**
+Rust uses `Result<T, E>` for error handling, where `T` is the success type and `E` is the error type.
+
+**Key Points**
+- Use `?` operator for error propagation
+- `unwrap()` panics on error, avoid in production
+- `expect()` provides custom panic message
+- Pattern match with `match` for comprehensive handling"#;
+
+        let extracted = client.extract_final_answer(response_with_thinking);
+        
+        assert!(!extracted.contains("<thinking>"));
+        assert!(!extracted.contains("</thinking>"));
+        assert!(extracted.contains("**Quick Answer**"));
+        assert!(extracted.contains("Result<T, E>"));
+    }
+
+    #[test]
+    fn test_extract_final_answer_without_thinking() {
+        let client = LlmClient::new(LlmConfig::default()).unwrap();
+        
+        let normal_response = r#"**Quick Answer**
+This is a normal response without thinking tags.
+
+**Key Points**
+- Point 1
+- Point 2"#;
+
+        let extracted = client.extract_final_answer(normal_response);
+        
+        assert_eq!(extracted, normal_response);
+    }
+
+    #[test]
+    fn test_extract_final_answer_with_thinking_prefix() {
+        let client = LlmClient::new(LlmConfig::default()).unwrap();
+        
+        let response_with_prefix = r#"Let me think about this question carefully...
+
+I need to consider the different aspects of the query.
+
+Based on the search results:
+
+**Quick Answer**
+Here is the actual answer after thinking.
+
+**Key Points**
+- Important point 1
+- Important point 2"#;
+
+        let extracted = client.extract_final_answer(response_with_prefix);
+        
+        assert!(!extracted.contains("Let me think"));
+        assert!(extracted.contains("**Quick Answer**"));
+        assert!(extracted.contains("Here is the actual answer"));
     }
 }
