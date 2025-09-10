@@ -9,7 +9,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Language](https://img.shields.io/badge/language-Rust-orange.svg)
 
-**📚 [Setup Guide](SETUP_GUIDE.md) • 🔍 [Commands](COMMANDS.md) • ⚙️ [Configuration](CONFIGURATION.md) • 🧠 [AI Features](AI_FEATURES.md)**
+**📚 [Setup Guide](docs/SETUP_GUIDE.md) • 🔍 [Commands](docs/COMMANDS.md) • ⚙️ [Configuration](docs/CONFIGURATION.md) • 🧠 [AI Features](docs/AI_FEATURES.md)**
 
 </div>
 
@@ -77,12 +77,12 @@ manx snippet react hooks  # Now includes AI explanations
 
 ## 📚 Learn More
 
-- **🔧 [Setup Guide](SETUP_GUIDE.md)** - Complete installation and configuration
-- **📖 [Commands Reference](COMMANDS.md)** - All commands with examples  
-- **⚙️ [Configuration](CONFIGURATION.md)** - Customize settings and providers
-- **🧠 [AI Features](AI_FEATURES.md)** - LLM integration and capabilities
-- **📁 [RAG Mode](RAG_GUIDE.md)** - Index and search personal documentation
-- **🔍 [Neural Search](NEURAL_SEARCH.md)** - Enhanced semantic understanding
+- **🔧 [Setup Guide](docs/SETUP_GUIDE.md)** - Complete installation and configuration
+- **📖 [Commands Reference](docs/COMMANDS.md)** - All commands with examples  
+- **⚙️ [Configuration](docs/CONFIGURATION.md)** - Customize settings and providers
+- **🧠 [AI Features](docs/AI_FEATURES.md)** - LLM integration and capabilities
+- **📁 [RAG Mode](docs/RAG_GUIDE.md)** - Index and search personal documentation
+- **🔍 [Neural Search](docs/NEURAL_SEARCH.md)** - Enhanced semantic understanding
 
 ## 🏃‍♂️ Daily Workflows
 
@@ -116,14 +116,19 @@ manx search "microservices architecture"      # Get comprehensive analysis
 
 ## 📦 Installation
 
-### Cargo (Recommended)
+### Quick Install Script
+```bash
+curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
+```
+*Automatically detects your platform and installs the latest release*
+
+### Cargo (Alternative)
 ```bash
 cargo install manx-cli
 ```
 
-### Other Options
+### Manual Download
 - **Binary**: Download from [GitHub Releases](https://github.com/neur0map/manx/releases)
-- **Script**: `curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash`
 
 ## 🆘 Getting Help
 
