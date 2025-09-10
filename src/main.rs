@@ -673,6 +673,15 @@ async fn handle_search_command(
     // Cache results only if auto-caching is enabled
     if config.auto_cache_enabled {
         cache_manager.set("search", &cache_key, &results).await.ok();
+
+        // Cache individual snippets for get command
+        for result in &results {
+            let snippet_key = format!("{}_{}", result.library, result.id);
+            cache_manager
+                .set("snippets", &snippet_key, &result.excerpt)
+                .await
+                .ok();
+        }
     }
 
     // Apply LLM synthesis if configured and not disabled
@@ -1341,18 +1350,89 @@ async fn handle_get_command(
             }
         }
         None => {
-            renderer.print_error(&format!("Item '{}' not found in cache.", id));
-            renderer.print_success("💡 Available item types:");
-            renderer
-                .print_success("  • doc-N: Search result snippets (from 'manx snippet' commands)");
-            renderer
-                .print_success("  • section-N: Documentation sections (from 'manx doc' commands)");
-            renderer.print_success("");
-            renderer.print_success("📖 How to get items:");
-            renderer.print_success("  manx snippet fastapi        # Search for snippets");
-            renderer.print_success("  manx get doc-3               # Get snippet result");
-            renderer.print_success("  manx doc react              # Browse documentation");
-            renderer.print_success("  manx get section-5           # Get doc section");
+            // Try fallback: look for recent search results that might contain this ID
+            let mut fallback_content: Option<String> = None;
+            let mut fallback_title = String::new();
+
+            // Check recent search caches for any results matching this ID
+            let dummy_path = cache_manager.cache_key("search", "dummy");
+            if let Some(search_cache_dir) = dummy_path.parent() {
+                if search_cache_dir.exists() {
+                    if let Ok(entries) = std::fs::read_dir(search_cache_dir) {
+                        for entry in entries.flatten() {
+                            let filename = entry.file_name();
+                            if let Some(filename_str) = filename.to_str() {
+                                if filename_str.ends_with(".json") {
+                                    // Extract cache key from filename
+                                    let cache_key = filename_str.trim_end_matches(".json");
+
+                                    // Try to get the cached search results
+                                    if let Ok(Some(search_results)) = cache_manager
+                                        .get::<Vec<crate::client::SearchResult>>(
+                                            "search", cache_key,
+                                        )
+                                        .await
+                                    {
+                                        // Look for the matching ID in these results
+                                        for result in search_results {
+                                            if result.id == id
+                                                || result.id.ends_with(&id)
+                                                || id.ends_with(&result.id)
+                                            {
+                                                fallback_content = Some(result.excerpt);
+                                                fallback_title = format!(
+                                                    "{} - {}",
+                                                    result.library, result.title
+                                                );
+                                                break;
+                                            }
+                                        }
+                                        if fallback_content.is_some() {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(content) = fallback_content {
+                // Found in recent search results, display it
+                renderer.render_context7_documentation(&fallback_title, &content)?;
+
+                // Also cache it for future use if auto-cache is enabled
+                if config.auto_cache_enabled {
+                    let snippet_key = format!("fallback_{}", id);
+                    cache_manager
+                        .set("snippets", &snippet_key, &content)
+                        .await
+                        .ok();
+                }
+
+                // Export if requested
+                if let Some(path) = output {
+                    std::fs::write(path, &content)?;
+                    renderer.print_success(&format!("Item exported to {:?}", path));
+                }
+            } else {
+                // Not found even in fallback, show error and help
+                renderer.print_error(&format!("Item '{}' not found in cache.", id));
+                renderer.print_success("💡 Available item types:");
+                renderer.print_success(
+                    "  • doc-N: Search result snippets (from 'manx snippet' commands)",
+                );
+                renderer.print_success(
+                    "  • section-N: Documentation sections (from 'manx doc' commands)",
+                );
+                renderer.print_success("");
+                renderer.print_success("📖 How to get items:");
+                renderer.print_success("  manx snippet fastapi        # Search for snippets");
+                renderer.print_success("  manx get doc-3               # Get snippet result");
+                renderer.print_success("  manx doc react              # Browse documentation");
+                renderer.print_success("  manx get section-5           # Get doc section");
+            }
         }
     }
 
