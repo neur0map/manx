@@ -100,7 +100,7 @@ impl SelfUpdater {
         // Check if cargo is available in PATH
         if Command::new("cargo").arg("--version").output().is_ok() {
             // Check if manx is installed via cargo
-            if let Ok(output) = Command::new("cargo").args(&["install", "--list"]).output() {
+            if let Ok(output) = Command::new("cargo").args(["install", "--list"]).output() {
                 let output_str = String::from_utf8_lossy(&output.stdout);
                 if output_str.contains("manx-cli") {
                     return InstallationMethod::Cargo;
@@ -122,10 +122,10 @@ impl SelfUpdater {
         }
 
         let install_method = self.detect_installation_method();
-        
+
         self.renderer.print_success(&format!(
             "Updating from v{} to v{} (detected: {} installation)...",
-            update_info.current_version, 
+            update_info.current_version,
             update_info.latest_version,
             match install_method {
                 InstallationMethod::Cargo => "cargo",
@@ -141,14 +141,16 @@ impl SelfUpdater {
 
     async fn update_via_cargo(&self) -> Result<()> {
         println!("Using cargo to update manx...");
-        
-        let pb = self.renderer.show_progress("Running cargo install manx-cli...");
-        
+
+        let pb = self
+            .renderer
+            .show_progress("Running cargo install manx-cli...");
+
         let output = Command::new("cargo")
-            .args(&["install", "manx-cli", "--force"])
+            .args(["install", "manx-cli", "--force"])
             .output()
             .context("Failed to run cargo install")?;
-        
+
         pb.finish_and_clear();
 
         if !output.status.success() {
@@ -156,9 +158,10 @@ impl SelfUpdater {
             anyhow::bail!("Cargo install failed: {}", stderr);
         }
 
-        self.renderer.print_success("✅ Successfully updated manx via cargo!");
+        self.renderer
+            .print_success("✅ Successfully updated manx via cargo!");
         println!("🚀 The update is complete. Run 'manx --version' to verify.");
-        
+
         Ok(())
     }
 
