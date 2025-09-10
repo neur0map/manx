@@ -170,6 +170,24 @@ The install script currently falls back to cargo compilation when pre-built bina
 
 This will make installation faster and eliminate the need for Rust/Cargo on target systems.
 
+### GitHub MCP Database
+Future enhancement integrating GitHub as a searchable knowledge base with Manx's intelligence models:
+
+- ⏳ **GitHub Access**: Search repositories, issues, and discussions from the CLI
+- ⏳ **Code Search**: Look through repo code with the option to add extra context using embeddings
+- ⏳ **Issue Tracking**: Pull in issues and make them easier to reference alongside other results
+- ⏳ **Docs Indexing**: Treat READMEs and repo docs as part of the searchable database
+- ⏳ **Extra Context**: When needed, let an LLM help summarize or clarify what the search finds
+
+**Integration with Manx Intelligence:**
+- 🧠 **Embedding-Enhanced Code Search**: Neural embeddings understand code similarity and patterns
+- 🤖 **LLM Code Analysis**: Synthesize solutions from multiple repos with explanations
+- 🎯 **Smart Query Routing**: Framework detection automatically searches relevant repositories  
+- 📊 **Hybrid Results**: Combine web docs + GitHub code + issue discussions in unified answers
+- 🔍 **Semantic Issue Search**: Find related problems even with different terminology
+
+Example: `manx search "Tauri tables"` would search official docs AND `tauri-apps/tauri` repo for real implementations.
+
 ## 📄 License
 
 MIT © [neur0map](https://github.com/neur0map)

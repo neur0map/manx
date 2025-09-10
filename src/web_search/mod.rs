@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod llm_verifier;
 pub mod official_sources;
+pub mod query_analyzer;
 pub mod result_processor;
 pub mod search_engine;
 
@@ -95,6 +96,7 @@ pub struct DocumentationSearchSystem {
     embedding_model: Option<crate::rag::embeddings::EmbeddingModel>,
     llm_client: Option<crate::rag::llm::LlmClient>,
     official_sources: official_sources::OfficialSourceManager,
+    query_analyzer: query_analyzer::QueryAnalyzer,
 }
 
 impl DocumentationSearchSystem {
@@ -139,12 +141,14 @@ impl DocumentationSearchSystem {
         };
 
         let official_sources = official_sources::OfficialSourceManager::new();
+        let query_analyzer = query_analyzer::QueryAnalyzer::new();
 
         Ok(Self {
             config,
             embedding_model,
             llm_client,
             official_sources,
+            query_analyzer,
         })
     }
 
@@ -154,8 +158,43 @@ impl DocumentationSearchSystem {
 
         log::info!("🔍 Searching official documentation for: {}", query);
 
-        // Step 1: Search official documentation sites first
-        let official_query = self.official_sources.build_official_query(query);
+        // Step 0: Analyze query intent to enhance search strategy
+        let query_analysis = self.query_analyzer.analyze_query(query, self.llm_client.as_ref()).await?;
+        log::info!(
+            "🧠 Query analysis: {} -> {} (confidence: {:.1}%)",
+            query_analysis.original_query,
+            query_analysis.enhanced_query,
+            query_analysis.confidence * 100.0
+        );
+
+        // Use enhanced query for better search results
+        let search_query = &query_analysis.enhanced_query;
+
+        // Step 1: Apply smart search strategy (only when LLM is available)
+        let official_query = if self.llm_client.is_some() {
+            match &query_analysis.search_strategy {
+                query_analyzer::SearchStrategy::FrameworkSpecific { framework, sites } => {
+                    log::info!("🎯 Using LLM-enhanced framework search for {}", framework);
+                    self.build_technical_search_query(search_query, sites)
+                }
+                query_analyzer::SearchStrategy::OfficialDocsFirst { frameworks } => {
+                    log::info!("📚 Using LLM-enhanced prioritized search for: {}", frameworks.join(", "));
+                    self.build_dev_focused_query(search_query, frameworks)
+                }
+                _ => {
+                    if self.is_technical_query(&query_analysis) {
+                        log::info!("🔧 Using LLM-enhanced technical search");
+                        self.build_dev_focused_query(search_query, &[])
+                    } else {
+                        self.official_sources.build_official_query(search_query)
+                    }
+                }
+            }
+        } else {
+            // Default behavior when no LLM - unchanged original functionality
+            log::debug!("Using standard search (no LLM configured)");
+            self.official_sources.build_official_query(search_query)
+        };
         let mut all_results = search_engine::search_duckduckgo(
             &official_query,
             self.config.max_results,
@@ -212,10 +251,10 @@ impl DocumentationSearchSystem {
             });
         }
 
-        // Step 4: Process results with semantic filtering and official source ranking
+        // Step 4: Process results with enhanced semantic filtering and query analysis
         let mut processed_results = if let Some(ref embedding_model) = self.embedding_model {
-            result_processor::process_with_embeddings(
-                query,
+            result_processor::process_with_embeddings_and_analysis(
+                &query_analysis,
                 &all_results,
                 embedding_model,
                 &self.official_sources,
@@ -246,10 +285,17 @@ impl DocumentationSearchSystem {
             );
         }
 
-        // Step 4b: Filter out low-quality results
+        // Step 4b: Filter out non-technical domains (LLM-enhanced only)
+        processed_results = result_processor::filter_non_technical_domains(
+            processed_results, 
+            &query_analysis, 
+            self.llm_client.is_some()
+        );
+
+        // Step 4c: Filter out low-quality results
         processed_results = result_processor::filter_quality_results(processed_results, 30);
 
-        // Step 4c: Remove duplicates
+        // Step 4d: Remove duplicates
         let processed_results = result_processor::deduplicate_results(processed_results);
 
         // Step 5: LLM verification if available
@@ -391,5 +437,79 @@ impl DocumentationSearchSystem {
     /// Get configuration
     pub fn config(&self) -> &WebSearchConfig {
         &self.config
+    }
+
+    /// Build technical search query prioritizing dev docs, GitHub, StackOverflow
+    fn build_technical_search_query(&self, query: &str, framework_sites: &[String]) -> String {
+        let dev_domains = vec![
+            "github.com",
+            "stackoverflow.com",
+            "docs.rs",
+            "developer.mozilla.org",
+            "reactjs.org",
+            "nodejs.org",
+            "python.org",
+            "rust-lang.org",
+            "tauri.app",
+            "electronjs.org",
+            "dev.to",
+            "medium.com/@",
+        ];
+
+        // Combine framework-specific sites with general dev domains
+        let mut all_sites = framework_sites.to_vec();
+        all_sites.extend(dev_domains.iter().map(|s| s.to_string()));
+
+        // Remove duplicates
+        all_sites.sort();
+        all_sites.dedup();
+
+        // Build site-restricted query
+        let site_filters: String = all_sites
+            .iter()
+            .map(|site| format!("site:{}", site))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+
+        format!("({}) {}", site_filters, query)
+    }
+
+    /// Build developer-focused query with technical domain prioritization
+    fn build_dev_focused_query(&self, query: &str, frameworks: &[String]) -> String {
+        let mut dev_query = query.to_string();
+
+        // Add framework-specific terms to boost relevance
+        for framework in frameworks {
+            if !dev_query.to_lowercase().contains(&framework.to_lowercase()) {
+                dev_query = format!("{} {}", framework, dev_query);
+            }
+        }
+
+        // Technical domains to prioritize
+        let tech_domains = vec![
+            "site:github.com",
+            "site:stackoverflow.com", 
+            "site:docs.rs",
+            "site:developer.mozilla.org",
+            "site:dev.to",
+        ];
+
+        // Add technical domain boost (not exclusive, just prioritized)
+        format!("({}) OR {}", tech_domains.join(" OR "), dev_query)
+    }
+
+    /// Check if query is technical based on analysis
+    fn is_technical_query(&self, analysis: &query_analyzer::QueryAnalysis) -> bool {
+        // Technical indicators
+        !analysis.detected_frameworks.is_empty() ||
+        analysis.domain_context.primary_domain.contains("development") ||
+        analysis.domain_context.primary_domain.contains("programming") ||
+        analysis.query_type == query_analyzer::QueryType::Reference ||
+        analysis.original_query.to_lowercase().contains("api") ||
+        analysis.original_query.to_lowercase().contains("code") ||
+        analysis.original_query.to_lowercase().contains("library") ||
+        analysis.original_query.to_lowercase().contains("function") ||
+        analysis.original_query.to_lowercase().contains("method") ||
+        analysis.original_query.to_lowercase().contains("component")
     }
 }

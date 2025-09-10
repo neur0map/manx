@@ -76,7 +76,7 @@ manx embedding download sentence-transformers/all-mpnet-base-v2   # 768D, better
 manx embedding download BAAI/bge-small-en-v1.5                   # 384D, good balance
 
 # Set as active provider
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding set onnx:sentence-transformers/all-MiniLM-L6-v2
 
 # Test it works
 manx embedding test "React hooks useState"
@@ -102,12 +102,12 @@ Compare hash vs ONNX embeddings:
 
 ```bash
 # Test with hash embeddings
-manx config --embedding-provider hash
+manx embedding set hash
 manx search --rag "database operations"
 # Note the ranking and scores
 
 # Test with ONNX embeddings  
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding set onnx:sentence-transformers/all-MiniLM-L6-v2
 manx search --rag "database operations"  
 # Note the improved semantic ranking
 ```
@@ -165,7 +165,7 @@ manx embedding test "test query"
 # If showing "Hash-based", ONNX setup failed
 
 # Switch back to hash if needed
-manx config --embedding-provider hash
+manx embedding set hash
 ```
 
 ## 🎯 Usage Recommendations
