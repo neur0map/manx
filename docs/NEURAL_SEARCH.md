@@ -16,10 +16,10 @@ Neural Search replaces simple keyword matching with **semantic understanding**:
 
 ```bash
 # 1. Download a neural model (one-time setup)
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 
 # 2. Enable neural search
-manx embedding set onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # 3. Test enhanced search
 manx snippet react "state management"  # Much smarter results!
@@ -30,49 +30,49 @@ manx snippet react "state management"  # Much smarter results!
 ### 🚀 Lightweight & Fast (384D)
 ```bash
 # MiniLM - Best balance of speed and quality
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 # Size: 87MB | Speed: ⚡ Fastest | Quality: 📊 Good | Use: General purpose
 
 # BGE Small - Optimized for technical content  
-manx embedding download BAAI/bge-small-en-v1.5
+manx embedding download bge-small-en-v1.5
 # Size: 128MB | Speed: ⚡ Fast | Quality: 📈 Very Good | Use: Code, docs, retrieval
 
 # Multi-QA - Question-answer focused
-manx embedding download sentence-transformers/multi-qa-MiniLM-L6-cos-v1  
+manx embedding download multi-qa-MiniLM-L6-cos-v1  
 # Size: 87MB | Speed: ⚡ Fast | Quality: 📊 Good | Use: FAQ, troubleshooting
 ```
 
 ### 🎯 High Quality (768D+)
 ```bash
 # MPNet - Superior semantic understanding
-manx embedding download sentence-transformers/all-mpnet-base-v2
+manx embedding download all-mpnet-base-v2
 # Size: 416MB | Speed: 🐌 Slower | Quality: 🏆 Best | Use: Research, precision
 
 # BGE Base - Excellent for technical content
-manx embedding download BAAI/bge-base-en-v1.5
+manx embedding download bge-base-en-v1.5
 # Size: 440MB | Speed: 🐌 Slower | Quality: 🏆 Best | Use: Professional, technical
 
 # BGE Large - Highest quality available
-manx embedding download BAAI/bge-large-en-v1.5  
+manx embedding download bge-large-en-v1.5  
 # Size: 1.2GB | Speed: 🐌 Slowest | Quality: 🏆 Supreme | Use: Critical accuracy
 ```
 
 ### 🌐 API-Based Providers (No Download Required)
 ```bash
 # OpenAI embeddings
-manx embedding set openai:text-embedding-3-small
-manx config --openai-api "sk-your-key"
+manx config --embedding-provider openai:text-embedding-3-small
+manx config --embedding-api-key "sk-your-openai-key"
 
 # HuggingFace embeddings  
-manx embedding set huggingface:sentence-transformers/all-MiniLM-L6-v2
-manx config --huggingface-api "hf_your-token"
+manx config --embedding-provider huggingface:all-MiniLM-L6-v2
+manx config --embedding-api-key "hf_your-token"
 
 # Ollama (self-hosted)
-manx embedding set ollama:nomic-embed-text
+manx config --embedding-provider ollama:nomic-embed-text
 # Requires: ollama serve + ollama pull nomic-embed-text
 
 # Custom endpoint
-manx embedding set custom:http://localhost:8080/embeddings
+manx config --embedding-provider custom:http://localhost:8080/embeddings
 # For self-hosted embedding services
 ```
 
@@ -100,7 +100,7 @@ manx embedding download sentence-transformers/all-MiniLM-L6-v2 --force
 ### Configure Active Model
 ```bash
 # Set active embedding provider
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Verify configuration
 manx embedding status
@@ -109,10 +109,10 @@ manx embedding status
 ### Switch Between Models
 ```bash
 # Switch to high-quality model for research
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 
 # Switch to fast model for daily use
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Back to hash embeddings (disable neural search)
 manx config --embedding-provider hash
@@ -123,8 +123,8 @@ manx config --embedding-provider hash
 # Test embedding generation
 manx embedding test "machine learning algorithms"
 
-# Check inference speed and quality
-manx embedding benchmark
+# Note: Benchmark functionality not currently implemented
+# Use embedding test for basic verification
 ```
 
 ## 🎯 Semantic Search Examples
@@ -198,13 +198,13 @@ manx search "database connections"
 
 **Daily Development (Speed Priority):**
 ```bash
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 # 87MB, 384D, ~50ms inference time
 ```
 
 **Research & Analysis (Quality Priority):**
 ```bash
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 # 400MB, 768D, ~150ms inference time
 ```
 
@@ -263,7 +263,7 @@ Based on semantic search benchmarks:
 ### Combining with RAG
 ```bash
 # 1. Enable neural search
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # 2. Index your documents (uses neural embeddings)
 manx index ~/team-docs/
@@ -287,7 +287,7 @@ manx search "exact phrase match" --embedding-provider hash
 ### Model Experimentation
 ```bash
 # Compare models on the same query
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx search "microservices architecture" > miniLM_results.txt
 
 manx config --embedding-provider onnx:BAAI/bge-base-en-v1.5  
@@ -325,7 +325,7 @@ manx search "database optimization"       # Too broad
 ```bash
 # If results aren't relevant:
 # 1. Try different models
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 
 # 2. Use more specific queries
 manx search "specific error message here"
@@ -355,7 +355,7 @@ manx search "rust vs go for microservices"
 ```bash
 # Setup semantic search for team docs
 manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx index ~/team-handbook/
 
 # Team members can now find information semantically
@@ -366,7 +366,7 @@ manx search "incident response" --rag   # Finds: runbooks, escalation procedures
 ### Research & Learning
 ```bash
 # Use high-quality model for learning
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 
 # Comprehensive topic exploration
 manx search "distributed systems consensus algorithms"
@@ -391,7 +391,7 @@ df -h ~/.cache/manx/models/
 ### Performance Issues
 ```bash
 # Use smaller model
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Reduce inference threads
 manx config --embedding-threads 2
@@ -403,7 +403,7 @@ manx cache clear --embeddings-only
 ### Quality Issues
 ```bash
 # Try higher-quality model
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 
 # Use more specific queries
 manx search "react functional component state management"
@@ -418,7 +418,7 @@ manx embedding status
 manx embedding status --memory
 
 # Use smaller model
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Reduce cache size
 manx config --embedding-cache-size 500

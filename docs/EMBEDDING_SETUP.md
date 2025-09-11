@@ -1,7 +1,8 @@
 # 🧠 Manx Semantic Embeddings Setup Guide
 
-This is a manual setup, Manx now works out of the box, just download the model.
-This guide will help you set up enhanced semantic embeddings in Manx for better search understanding and relevance.
+**DEPRECATED**: This manual setup guide is no longer needed. Manx now includes ONNX Runtime and works out of the box.
+
+For modern setup, see [SIMPLE_EMBEDDING_SETUP.md](SIMPLE_EMBEDDING_SETUP.md) instead.
 
 ## 📊 Quick Comparison
 
@@ -28,55 +29,17 @@ manx snippet "database connection"
 
 Only set this up if you need **superior semantic understanding** and can accept slower performance.
 
-### Step 1: Install ONNX Runtime
+### Modern Setup (Recommended)
 
-**macOS (Homebrew):**
-```bash
-brew install onnxruntime
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-wget https://github.com/microsoft/onnxruntime/releases/download/v1.22.2/onnxruntime-linux-x64-1.22.2.tgz
-tar -xzf onnxruntime-linux-x64-1.22.2.tgz
-sudo cp onnxruntime-linux-x64-1.22.2/lib/* /usr/local/lib/
-sudo ldconfig
-```
-
-**Windows:**
-```powershell
-# Download and install from: https://github.com/microsoft/onnxruntime/releases
-# Add to PATH: C:\Program Files\onnxruntime\lib
-```
-
-### Step 2: Set Environment Variables
-
-**macOS/Linux:**
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-export DYLD_LIBRARY_PATH="/opt/homebrew/Cellar/onnxruntime/1.22.2_2/lib:$DYLD_LIBRARY_PATH"
-export ORT_DYLIB_PATH="/opt/homebrew/Cellar/onnxruntime/1.22.2_2/lib/libonnxruntime.dylib"
-
-# Reload shell
-source ~/.bashrc  # or ~/.zshrc
-```
-
-**Windows:**
-```powershell
-setx PATH "%PATH%;C:\Program Files\onnxruntime\lib"
-setx ORT_DYLIB_PATH "C:\Program Files\onnxruntime\lib\onnxruntime.dll"
-```
-
-### Step 3: Download and Configure Model
+**No manual installation needed!** ONNX Runtime is bundled with manx:
 
 ```bash
-# Download a semantic model (choose one)
-manx embedding download sentence-transformers/all-MiniLM-L6-v2    # 384D, fastest
-manx embedding download sentence-transformers/all-mpnet-base-v2   # 768D, better quality
-manx embedding download BAAI/bge-small-en-v1.5                   # 384D, good balance
+# Simple two-step setup:
+# 1. Download a model
+manx embedding download all-MiniLM-L6-v2
 
-# Set as active provider
-manx embedding set onnx:sentence-transformers/all-MiniLM-L6-v2
+# 2. Configure manx to use it
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Test it works
 manx embedding test "React hooks useState"
@@ -102,12 +65,12 @@ Compare hash vs ONNX embeddings:
 
 ```bash
 # Test with hash embeddings
-manx embedding set hash
+manx config --embedding-provider hash
 manx search --rag "database operations"
 # Note the ranking and scores
 
 # Test with ONNX embeddings  
-manx embedding set onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx search --rag "database operations"  
 # Note the improved semantic ranking
 ```
@@ -165,7 +128,7 @@ manx embedding test "test query"
 # If showing "Hash-based", ONNX setup failed
 
 # Switch back to hash if needed
-manx embedding set hash
+manx config --embedding-provider hash
 ```
 
 ## 🎯 Usage Recommendations

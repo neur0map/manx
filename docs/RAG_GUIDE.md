@@ -117,10 +117,11 @@ manx sources list
 3. fastapi-docs (https://docs.fastapi.tiangolo.com) - 156 chunks, 8.7MB
 ```
 
-### Remove Specific Sources
+### Add Document Sources
 ```bash
-manx sources remove team-handbook
-manx sources remove 1  # Remove by index number
+# Add a document source to the index
+manx sources add ~/team-docs/ --id "team-handbook"
+manx sources add ~/important-guide.md
 ```
 
 ### Clear All Sources
@@ -140,8 +141,8 @@ manx index https://docs.updated-site.com --force
 ### Enable Semantic Search
 ```bash
 # Download a neural model for better semantic understanding
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 ```
 
 ### Why Neural + RAG is Powerful
@@ -244,38 +245,26 @@ manx search "deployment rollback procedure" --rag
 
 ## ⚙️ RAG Configuration
 
-### Default RAG Behavior
+### RAG Configuration
 ```bash
-# Always search indexed docs by default
-manx config --rag-default
+# Enable RAG mode
+manx config --rag on
 
-# Use hybrid search (both indexed + official docs)
-manx config --rag-hybrid  
+# Disable RAG mode  
+manx config --rag off
 
-# Disable RAG by default (explicit --rag flag needed)
-manx config --rag-disabled
+# Set embedding provider for better semantic search
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
+
+# Configure embedding dimensions
+manx config --embedding-dimension 384
 ```
 
-### RAG Performance Tuning
+### RAG Storage
 ```bash
-# Increase chunk size for longer documents
-manx config --rag-chunk-size 2048
-
-# Adjust overlap between chunks
-manx config --rag-chunk-overlap 200
-
-# Control number of results from indexed docs
-manx config --rag-max-results 10
-```
-
-### Storage Configuration
-```bash
-# Custom storage location
-manx config --rag-storage-dir "~/custom-rag-storage"
-
-# Compression settings
-manx config --rag-compression enabled
-manx config --rag-index-compression-level 6
+# Note: Advanced RAG configuration options like chunk size,
+# compression, and custom storage directories are not currently
+# implemented. RAG uses default settings optimized for most use cases.
 ```
 
 ## 🔒 Privacy & Security
@@ -299,40 +288,31 @@ manx config --rag-index-compression-level 6
 
 ## 🚀 Advanced RAG Features
 
-### Metadata Filtering
+### Advanced Features
 ```bash
-# Search specific document types
-manx search "deployment" --rag --filter "type:runbook"
-
-# Search by date range  
-manx search "security updates" --rag --filter "date:2024"
-
-# Search specific authors
-manx search "api design" --rag --filter "author:john"
+# Note: Metadata filtering with --filter flags is not currently
+# implemented. Use specific search terms instead:
+manx search "deployment runbook" --rag
+manx search "security updates 2024" --rag
 ```
 
-### Smart Re-indexing
+### Re-indexing
 ```bash
-# Automatically re-index changed files
-manx config --rag-auto-reindex
+# Re-index by running the index command again
+manx index ~/team-docs/ --id "team-handbook"
 
-# Watch directories for changes
-manx index ~/team-docs/ --watch
-
-# Incremental indexing (only changed files)
-manx index ~/docs/ --incremental
+# Note: Auto re-indexing, watch mode, and incremental indexing
+# are not currently implemented. Re-run index command manually
+# when documents change.
 ```
 
-### RAG Analytics
+### RAG Management
 ```bash
-# View indexing statistics
-manx sources stats
+# View indexed sources
+manx sources list
 
-# Most searched content
-manx sources popular
-
-# Search performance metrics
-manx sources performance
+# Note: Advanced analytics like popular content and performance
+# metrics are not currently implemented.
 ```
 
 ## ❓ Troubleshooting RAG
@@ -366,8 +346,8 @@ manx index ~/docs/ --force
 **"Poor search results"**
 ```bash
 # Use neural embeddings for better semantic search
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Check chunk size settings
 manx config --rag-chunk-size 1024  # Smaller chunks for precise matching

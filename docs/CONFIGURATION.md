@@ -11,7 +11,9 @@ manx config --show
 
 ### Reset to Defaults
 ```bash
-manx config --reset
+# Note: Reset functionality not currently implemented
+# To reset, delete the config file:
+rm ~/.config/manx/config.json
 ```
 
 ## 🧠 Embedding Configuration
@@ -19,7 +21,7 @@ manx config --reset
 ### Set Embedding Provider
 ```bash
 # Use neural models for semantic search
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Use built-in hash embeddings (default)
 manx config --embedding-provider hash
@@ -28,10 +30,10 @@ manx config --embedding-provider hash
 ### Download and Configure Models
 ```bash
 # 1. Download model
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 
 # 2. Set as active provider
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # 3. Verify configuration
 manx embedding status
@@ -63,28 +65,27 @@ manx config --llm-model "llama-3.1-8b-instant"       # Default
 manx config --llm-model "llama-3.1-70b-versatile"    # More capable
 ```
 
-### Google (Gemini)
+### HuggingFace
 ```bash
-manx config --llm-provider "google"
-manx config --google-api "your-google-key"
-manx config --llm-model "gemini-1.5-flash"           # Default
-manx config --llm-model "gemini-1.5-pro"             # More capable
+manx config --llm-provider "huggingface"
+manx config --huggingface-api "your-huggingface-token"
+manx config --llm-model "meta-llama/Llama-2-7b-chat-hf"
 ```
 
-### Azure OpenAI
+### OpenRouter
 ```bash
-manx config --llm-provider "azure"
-manx config --azure-api "your-azure-key"
-manx config --azure-endpoint "https://your-resource.openai.azure.com/"
-manx config --llm-model "gpt-4o"
+manx config --llm-provider "openrouter"
+manx config --openrouter-api "sk-or-your-key"
+manx config --llm-model "openai/gpt-4o"
 ```
 
-### Ollama (Local Models)
+### Custom Endpoints
 ```bash
-manx config --llm-provider "ollama"
-manx config --ollama-endpoint "http://localhost:11434"
-manx config --llm-model "llama3.1:8b"
+manx config --llm-provider "custom"
+manx config --custom-endpoint "https://your-api-endpoint.com"
+manx config --llm-model "your-model-name"
 ```
+
 
 ### Disable LLM
 ```bash
@@ -103,24 +104,21 @@ manx config --api-key "sk-your-context7-key"
 
 ### Test API Connections
 ```bash
-manx config --test-llm       # Test LLM connection
-manx config --test-context7  # Test Context7 connection
+# Note: API testing functionality not currently implemented
+# Test manually by running a simple command:
+manx search "test query" --limit 1
 ```
 
 ## 📁 RAG Configuration
 
 ### Enable RAG Mode
 ```bash
-manx config --rag-enabled
+manx config --rag on
 ```
 
-### Default RAG Behavior
+### Disable RAG Mode
 ```bash
-# Always use RAG for searches
-manx config --rag-default
-
-# Use hybrid search (RAG + official docs)
-manx config --rag-hybrid
+manx config --rag off
 ```
 
 ## 🎛️ Advanced Settings
@@ -128,68 +126,55 @@ manx config --rag-hybrid
 ### Cache Configuration
 ```bash
 manx config --cache-dir "~/custom-cache/"
-manx config --cache-max-size "5GB"
-manx config --cache-ttl "7d"  # Time to live
-```
-
-### Performance Tuning
-```bash
-manx config --max-results 20
-manx config --timeout 30s
-manx config --concurrent-requests 5
-```
-
-### Output Formatting
-```bash
-manx config --output-format "markdown"  # or "json", "plain"
-manx config --color-output true
-manx config --compact-results false
+manx config --max-cache-size 5000  # Size in MB
+manx config --cache-ttl 168  # Time to live in hours
+manx config --auto-cache on  # Enable auto-caching
 ```
 
 ## 🔧 Environment Variables
 
-You can also configure manx using environment variables:
+Limited environment variable support:
 
 ```bash
-export MANX_API_KEY="sk-your-context7-key"
-export MANX_OPENAI_API="sk-your-openai-key"
-export MANX_ANTHROPIC_API="your-anthropic-key"
-export MANX_CACHE_DIR="~/custom-cache"
-export MANX_LLM_PROVIDER="openai"
-export MANX_LLM_MODEL="gpt-4o"
-export MANX_EMBEDDING_PROVIDER="onnx:sentence-transformers/all-MiniLM-L6-v2"
+# Only NO_COLOR is currently supported for disabling color output
+export NO_COLOR=1
+
+# Note: MANX_* environment variables are not implemented yet
+# Use the config command instead: manx config --show
 ```
 
 ## 📁 Configuration File
 
-Manx stores configuration in `~/.config/manx/config.toml`:
+Manx stores configuration in `~/.config/manx/config.json`:
 
-```toml
-[api]
-context7_key = "sk-your-context7-key"
-openai_key = "sk-your-openai-key"
-
-[llm]
-provider = "openai"
-model = "gpt-4o"
-
-[embeddings]
-provider = "onnx:sentence-transformers/all-MiniLM-L6-v2"
-
-[cache]
-directory = "~/.cache/manx"
-max_size = "2GB"
-ttl = "7d"
-
-[rag]
-enabled = true
-default_mode = false
-hybrid_search = true
-
-[output]
-format = "markdown"
-color = true
-compact = false
+```json
+{
+  "api_key": "sk-your-context7-key",
+  "cache_dir": null,
+  "default_limit": 10,
+  "offline_mode": false,
+  "color_output": true,
+  "auto_cache_enabled": true,
+  "cache_ttl_hours": 24,
+  "max_cache_size_mb": 100,
+  "rag": {
+    "enabled": false,
+    "embedding_provider": "hash",
+    "embedding_api_key": null,
+    "embedding_model_path": null,
+    "embedding_dimension": 384
+  },
+  "llm": {
+    "provider": "auto",
+    "model": null,
+    "openai_api_key": null,
+    "anthropic_api_key": null,
+    "groq_api_key": null,
+    "openrouter_api_key": null,
+    "huggingface_api_key": null,
+    "custom_endpoint": null
+  }
+}
 ```
 
 ## 🎯 Configuration Presets
@@ -204,15 +189,15 @@ manx snippet python "functions"
 ### Enhanced Search
 ```bash
 # Better semantic understanding
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 ```
 
 ### Team Collaboration
 ```bash
 # Semantic search + team docs
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx config --rag-enabled
 manx index ~/team-docs/
 ```
@@ -237,7 +222,7 @@ manx config --rag-default  # Use only indexed docs
 ## 🔒 Security Considerations
 
 ### API Key Storage
-- Keys are stored in `~/.config/manx/config.toml`
+- Keys are stored in `~/.config/manx/config.json`
 - File permissions are set to user-only (600)
 - Keys are never logged or transmitted except to configured providers
 
@@ -255,22 +240,18 @@ manx config --rag-default  # Use only indexed docs
 
 ### Backup Configuration
 ```bash
-cp ~/.config/manx/config.toml ~/manx-config-backup.toml
+cp ~/.config/manx/config.json ~/manx-config-backup.json
 ```
 
 ### Restore Configuration
 ```bash
-cp ~/manx-config-backup.toml ~/.config/manx/config.toml
+cp ~/manx-config-backup.json ~/.config/manx/config.json
 ```
 
-### Export Settings
+### Export/Import Settings
 ```bash
-manx config --export > my-manx-settings.json
-```
-
-### Import Settings
-```bash
-manx config --import my-manx-settings.json
+# Note: Export/import functionality not currently implemented
+# Manual backup and restore using cp commands above
 ```
 
 ## ❓ Configuration Troubleshooting
@@ -278,20 +259,18 @@ manx config --import my-manx-settings.json
 ### Check Configuration Status
 ```bash
 manx config --show      # View all settings
-manx config --validate  # Check for issues
 ```
 
 ### Fix Common Issues
 ```bash
 # Reset corrupted config
-manx config --reset
+rm ~/.config/manx/config.json
 
 # Clear cache if embedding issues
-manx cache clear --embeddings-only
+manx cache clear
 
-# Test connections
-manx config --test-llm
-manx config --test-context7
+# Test connections manually
+manx search "test query" --limit 1
 ```
 
 ### Debug Mode
@@ -305,20 +284,14 @@ manx --debug search "test query"
 
 ### Context-Aware Configuration
 ```bash
-# Different configs for different projects
-cd ~/work-project/
-export MANX_CONFIG_DIR="./.manx"
-manx config --llm-provider "anthropic"  # Use Claude for work
-
-cd ~/personal-project/
-export MANX_CONFIG_DIR="./.manx"  
-manx config --llm-provider "openai"     # Use OpenAI for personal
+# Note: Project-specific configuration not currently implemented
+# Use global configuration in ~/.config/manx/config.json
 ```
 
 ### Performance Optimization
 ```bash
 # For slower machines
-manx config --embedding-provider "onnx:sentence-transformers/all-MiniLM-L6-v2"
+manx config --embedding-provider "onnx:all-MiniLM-L6-v2"
 
 # For maximum quality
 manx config --embedding-provider "onnx:sentence-transformers/all-mpnet-base-v2"

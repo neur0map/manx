@@ -106,11 +106,11 @@ Manage indexed document sources.
 # List indexed sources
 manx sources list
 
+# Add a document source to the index
+manx sources add <path> [--id <alias>]
+
 # Clear all indexed documents
 manx sources clear
-
-# Remove specific source
-manx sources remove <source-id>
 ```
 
 ## 🧠 Embedding Management
@@ -126,7 +126,7 @@ manx embedding status
 manx embedding list
 
 # Download a model
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 
 # Test embedding generation
 manx embedding test "your test query"
@@ -151,7 +151,7 @@ Configure manx settings and providers.
 manx config --show
 
 # Embedding provider
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # LLM configuration
 manx config --openai-api "sk-your-key"
@@ -172,11 +172,10 @@ Manage local documentation cache.
 manx cache clear
 
 # View cache statistics
-manx cache status
+manx cache stats
 
-# Selective clearing
-manx cache clear --docs-only
-manx cache clear --embeddings-only
+# Show all currently cached libraries
+manx cache list
 ```
 
 ## 🔗 Utility Commands
@@ -255,8 +254,8 @@ manx search "fastapi dependency injection"  # Better than "dependency injection"
 manx snippet python "functions"
 
 # Add semantic search for better results
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Index your docs for private search
 manx index ~/dev-notes/

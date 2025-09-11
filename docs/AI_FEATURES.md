@@ -49,27 +49,25 @@ manx config --llm-model "llama-3.1-8b-instant"       # Lightning fast
 manx config --llm-model "llama-3.1-70b-versatile"    # More capable
 ```
 
-### Google Gemini
+### HuggingFace
 ```bash
-manx config --llm-provider "google"
-manx config --google-api "your-google-key"
-manx config --llm-model "gemini-1.5-flash"           # Fast and capable
-manx config --llm-model "gemini-1.5-pro"             # Maximum capability
+manx config --llm-provider "huggingface"
+manx config --huggingface-api "your-huggingface-token"
+manx config --llm-model "meta-llama/Llama-2-7b-chat-hf"
 ```
 
-### Azure OpenAI
+### OpenRouter
 ```bash
-manx config --llm-provider "azure"
-manx config --azure-api "your-azure-key"
-manx config --azure-endpoint "https://your-resource.openai.azure.com/"
-manx config --llm-model "gpt-4o"
+manx config --llm-provider "openrouter"
+manx config --openrouter-api "sk-or-your-key"
+manx config --llm-model "openai/gpt-4o"
 ```
 
-### Ollama (Local/Private)
+### Custom Endpoints
 ```bash
-manx config --llm-provider "ollama"
-manx config --ollama-endpoint "http://localhost:11434"
-manx config --llm-model "llama3.1:8b"                # Privacy-focused
+manx config --llm-provider "custom"
+manx config --custom-endpoint "https://your-api-endpoint.com"
+manx config --llm-model "your-model-name"
 ```
 
 ## 🎯 AI-Enhanced Commands
@@ -135,28 +133,16 @@ manx snippet python --no-llm
 manx snippet python
 ```
 
-### Global AI Settings
+### AI Control
 ```bash
-# Always use AI when available
-manx config --ai-default true
+# Note: Global AI settings like --ai-default, --ai-mode, --ai-verbosity
+# are not currently implemented. Use per-command flags instead:
 
-# Never use AI unless explicitly requested
-manx config --ai-default false
+# Force disable AI for a command
+manx snippet python --no-llm
 
-# Use AI only for complex queries (smart mode)
-manx config --ai-mode "smart"
-```
-
-### AI Response Formatting
-```bash
-# Detailed explanations
-manx config --ai-verbosity "detailed"
-
-# Concise responses
-manx config --ai-verbosity "concise"
-
-# Code-focused responses
-manx config --ai-format "code-first"
+# AI is automatically used when LLM provider is configured
+manx snippet python  # Uses AI if configured
 ```
 
 ## 💡 AI Use Cases
@@ -243,62 +229,38 @@ manx config --llm-model "gpt-4o-mini"        # OpenAI
 manx config --llm-model "claude-3-haiku"     # Anthropic
 manx config --llm-model "llama-3.1-8b"       # Groq (fast + cheap)
 
-# Free local option
-manx config --llm-provider "ollama"          # No API costs
+# Note: Ollama provider not currently implemented
+# Use HuggingFace or custom endpoints for local models
 ```
 
 ### Usage Controls
 ```bash
-# Limit AI usage
-manx config --ai-max-calls-per-day 50
-manx config --ai-token-limit 4000
+# Note: AI usage controls like daily limits, token limits, and budget
+# tracking are not currently implemented. Monitor costs through your
+# LLM provider's dashboard instead.
 
-# Smart usage (AI only for complex queries)
-manx config --ai-mode "smart"
-
-# Budget tracking
-manx config --ai-budget-monthly 25.00  # USD
-```
-
-### Cost Monitoring
-```bash
-# Check usage statistics
-manx config --ai-usage-stats
-
-# Estimate costs
-manx config --ai-cost-estimate
+# To limit AI usage, use --no-llm flag on individual commands:
+manx snippet python --no-llm
 ```
 
 ## 🚀 Advanced AI Features
 
-### Custom Prompts
+### AI Behavior
 ```bash
-# Technical focus
-manx config --ai-style "technical"
+# Note: Custom prompts, AI styles, and multi-turn conversations
+# are not currently implemented. AI responses use default prompts
+# optimized for technical documentation.
 
-# Beginner-friendly explanations  
-manx config --ai-style "beginner"
-
-# Code-heavy responses
-manx config --ai-style "code-focused"
-
-# Architecture-focused
-manx config --ai-style "architecture"
-```
-
-### Multi-Turn Conversations
-```bash
-# Follow-up questions maintain context
+# AI is stateless - each command is independent
 manx search "react state management"
-manx search "what about performance implications"  # Continues context
-manx search "show me a complex example"           # Still in context
+manx search "performance implications"  # Separate query
 ```
 
 ### AI + Neural Search Synergy
 ```bash
 # Best quality: Neural embeddings + AI analysis
-manx embedding download sentence-transformers/all-mpnet-base-v2
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx embedding download all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 manx config --openai-api "sk-your-key"
 
 # Now queries get:

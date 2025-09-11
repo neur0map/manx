@@ -6,10 +6,10 @@ Get **51% better semantic understanding** with just TWO commands!
 
 ```bash
 # 1. Download a semantic model (one-time, ~200MB)
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 
 # 2. Enable it
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # That's it! 🎉
 ```
@@ -47,14 +47,14 @@ manx embedding test "React hooks useState"
 
 ### Fast & Good (384 dimensions)
 ```bash
-manx embedding download sentence-transformers/all-MiniLM-L6-v2    # Recommended
-manx embedding download BAAI/bge-small-en-v1.5                   # Multilingual
+manx embedding download all-MiniLM-L6-v2    # Recommended
+manx embedding download bge-small-en-v1.5                   # Multilingual
 ```
 
 ### Slower & Better (768+ dimensions)
 ```bash
-manx embedding download sentence-transformers/all-mpnet-base-v2   # High quality
-manx embedding download BAAI/bge-large-en-v1.5                   # Best quality (1024D)
+manx embedding download all-mpnet-base-v2   # High quality
+manx embedding download bge-large-en-v1.5                   # Best quality (1024D)
 ```
 
 ## 💡 Smart Usage Tips
@@ -75,7 +75,7 @@ manx embedding download BAAI/bge-large-en-v1.5                   # Best quality 
 manx config --embedding-provider hash
 
 # Back to semantic
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 ```
 
 ## ✅ Success Examples
@@ -103,7 +103,7 @@ manx snippet "async programming"
 **Download fails?**
 ```bash
 # Retry with force
-manx embedding download sentence-transformers/all-MiniLM-L6-v2 --force
+manx embedding download all-MiniLM-L6-v2 --force
 ```
 
 **Want to go back to default?**

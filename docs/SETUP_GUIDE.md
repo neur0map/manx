@@ -58,12 +58,12 @@ For much better search quality with semantic understanding:
 ### Step 1: Download a Model
 ```bash
 # Download a lightweight, fast model (87MB)
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 ```
 
 ### Step 2: Configure Manx to Use It
 ```bash
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 ```
 
 ### Step 3: Test Enhanced Search
@@ -85,15 +85,15 @@ Choose the model that fits your needs:
 ### Lightweight & Fast (Recommended for Most Users)
 ```bash
 # MiniLM - Best balance of speed and quality (87MB, 384 dimensions)
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 ```
 
 ### High Quality (For Better Semantic Understanding)
 ```bash
 # MPNet - Superior quality, larger model (400MB, 768 dimensions)
-manx embedding download sentence-transformers/all-mpnet-base-v2
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx embedding download all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 ```
 
 ### Specialized Models
@@ -228,27 +228,25 @@ manx config --llm-model "llama-3.1-70b-versatile"    # More capable
 manx config --groq-api "gsk_your-key"
 ```
 
-### Google (Gemini)
+### HuggingFace
 ```bash
-manx config --llm-provider "google"
-manx config --llm-model "gemini-1.5-flash"           # Default
-manx config --llm-model "gemini-1.5-pro"             # More capable
-manx config --google-api "your-key"
+manx config --llm-provider "huggingface"
+manx config --llm-model "meta-llama/Llama-2-7b-chat-hf"
+manx config --huggingface-api "your-token"
 ```
 
-### Azure OpenAI
+### OpenRouter
 ```bash
-manx config --llm-provider "azure"
-manx config --llm-model "gpt-4o"
-manx config --azure-api "your-key"
-manx config --azure-endpoint "https://your-resource.openai.azure.com/"
+manx config --llm-provider "openrouter"
+manx config --llm-model "openai/gpt-4o"
+manx config --openrouter-api "sk-or-your-key"
 ```
 
-### Ollama (Local models)
+### Custom Endpoints
 ```bash
-manx config --llm-provider "ollama"
-manx config --llm-model "llama3.1:8b"
-manx config --ollama-endpoint "http://localhost:11434"
+manx config --llm-provider "custom"
+manx config --llm-model "your-model-name"
+manx config --custom-endpoint "https://your-api.com"
 ```
 
 ### Check Current Configuration
@@ -256,8 +254,8 @@ manx config --ollama-endpoint "http://localhost:11434"
 # View all current settings
 manx config --show
 
-# Test LLM connection
-manx config --test-llm
+# Test by running a simple search
+manx search "test query" --limit 1
 ```
 
 ## 🔄 Common Workflows
@@ -289,7 +287,7 @@ manx snippet "security protocols" --rag
 ### For Research
 ```bash
 # Use high-quality model for better understanding
-manx config --embedding-provider onnx:sentence-transformers/all-mpnet-base-v2
+manx config --embedding-provider onnx:all-mpnet-base-v2
 
 # Add AI for comprehensive analysis
 manx config --openai-api "sk-your-key"
@@ -320,7 +318,7 @@ cargo install manx-cli
 ping huggingface.co
 
 # Retry with force flag
-manx embedding download sentence-transformers/all-MiniLM-L6-v2 --force
+manx embedding download all-MiniLM-L6-v2 --force
 
 # Check available disk space (models are 87MB-1.3GB)
 df -h
@@ -338,7 +336,7 @@ manx cache clear
 ### Performance Issues
 ```bash
 # Use smaller model for faster inference
-manx config --embedding-provider onnx:sentence-transformers/all-MiniLM-L6-v2
+manx config --embedding-provider onnx:all-MiniLM-L6-v2
 
 # Check system resources
 manx embedding status
@@ -349,7 +347,7 @@ manx embedding status
 **"Model not found"**
 ```bash
 # Download the model first
-manx embedding download sentence-transformers/all-MiniLM-L6-v2
+manx embedding download all-MiniLM-L6-v2
 ```
 
 **"ONNX embeddings feature not enabled"**
