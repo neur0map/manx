@@ -188,6 +188,16 @@ I'm not a programmer - just a cybersecurity student learning the basics and buil
 
 ## 📋 Todo
 
+### Setup Wizard
+Add an interactive setup wizard command to streamline configuration:
+
+- ⏳ `manx init` command for guided setup
+- ⏳ Detect available AI providers 
+- ⏳ Test API keys and connections
+- ⏳ Configure default search preferences
+- ⏳ Set up local documentation paths
+- ⏳ Initialize RAG databases if needed
+
 ### Release Binaries
 The install script currently falls back to cargo compilation when pre-built binaries aren't available. Future releases should include binaries for:
 
