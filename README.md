@@ -230,7 +230,7 @@ Example: `manx search "Tauri tables"` would search official docs AND `tauri-apps
 
 ## 📄 License
 
-MIT © [neur0map](https://github.com/neur0map)
+GPL-3 © [neur0map](https://github.com/neur0map)
 
 ---
 
