@@ -175,7 +175,7 @@ cargo install manx-cli
 
 Huge thanks to the amazing open source community and projects that make Manx possible:
 - **[Anthropic](https://anthropic.com)** - For Claude and the incredible Claude Code IDE
-- **[Context7](https://context7.sh)** - For providing the documentation API that powers default search
+- **[Context7](https://context7.com/)** - For providing the documentation API that powers default search
 - **[Hugging Face](https://huggingface.co)** - For the neural embedding models and infrastructure
 - **[ONNX Runtime](https://onnxruntime.ai)** - For fast, local neural inference
 - **[Rust Community](https://rust-lang.org)** - For the amazing ecosystem and libraries
