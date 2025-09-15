@@ -26,25 +26,24 @@
 ## ⚡ Quick Start
 
 ```bash
-# Install
+# Install and run setup wizard
 cargo install manx-cli
-# or directly from GitHub
+manx init  # Interactive setup wizard
+
+# Or install and start immediately
 curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
 # Find code snippets instantly
 manx snippet react "useState hook"
 manx snippet python "async functions"
 
-# Search documentation on the web
+# Search documentation and crawl sites
 manx search "rust error handling"
 manx doc fastapi "middleware"
-
-# Index your local docs or crawl documentation sites
-manx index /path/to/docs
 manx index https://docs.rs/ --crawl
 ```
 
-**That's it!** Works immediately with no setup required.
+**Works immediately!** No setup required, enhanced with the `manx init` wizard.
 
 ## ✨ What is Manx?
 
@@ -79,67 +78,21 @@ manx doc fastapi "dependency injection"
 
 ### **Personal Knowledge Base**
 ```bash
-# Index local documentation
+# Index local documentation or crawl websites
 manx index ~/dev-notes/
-
-# Index and crawl web documentation
 manx index https://docs.python.org --crawl --max-depth 2
 
-# Search indexed content
+# Search with semantic understanding
 manx search "team coding standards" --rag
 ```
-*Index local files or crawl websites, then search with semantic understanding*
-
-### **Web Documentation Crawling**
-```bash
-# Basic URL indexing
-manx index https://docs.fastapi.tiangolo.com
-
-# Deep crawl with depth control
-manx index https://docs.python.org --crawl --max-depth 3
-
-# Limited crawl with page limits
-manx index https://company-wiki.com --crawl --max-pages 100
-```
-*Automatically discover and index entire documentation sites*
+*Index local files or crawl documentation sites for private search*
 
 ### **AI-Powered Analysis** *(Optional)*
 ```bash
-manx config --openai-api "sk-your-key"
+manx init  # Setup wizard includes AI configuration
 manx snippet react hooks  # Now includes AI explanations
 ```
 *Get comprehensive answers with code examples, explanations, and citations*
-
-## 📚 Learn More
-
-- **🔧 [Setup Guide](docs/SETUP_GUIDE.md)** - Complete installation and configuration
-- **📖 [Commands Reference](docs/COMMANDS.md)** - All commands with examples
-- **⚙️ [Configuration](docs/CONFIGURATION.md)** - Customize settings and providers
-- **🧠 [AI Features](docs/AI_FEATURES.md)** - LLM integration and capabilities
-- **📁 [RAG Mode](docs/RAG_GUIDE.md)** - Index and search personal documentation
-- **🔍 [Neural Search](docs/NEURAL_SEARCH.md)** - Enhanced semantic understanding
-
-## 🏃‍♂️ Daily Workflows
-
-### **Quick Development**
-```bash
-manx snippet python "list comprehensions"     # Learning
-manx search "javascript memory leaks"         # Debugging
-manx doc svelte "component lifecycle"         # Reference
-```
-
-### **Team Knowledge**
-```bash
-manx index ~/team-docs/                       # Index local docs
-manx index https://company-docs.com --crawl   # Crawl internal wiki
-manx search "deployment checklist" --rag      # Search all indexed content
-```
-
-### **Research Mode**
-```bash
-manx config --openai-api "sk-key"            # Enable AI
-manx search "microservices architecture"      # Get comprehensive analysis
-```
 
 ## 🚀 Why Manx?
 
@@ -149,6 +102,15 @@ manx search "microservices architecture"      # Get comprehensive analysis
 - **🔒 Private**: Your documents never leave your machine
 - **⚙️ Flexible**: Choose your level of enhancement
 - **🚀 Fast**: Optimized Rust performance with embedded ONNX Runtime
+
+## 📚 Learn More
+
+- **🔧 [Setup Guide](docs/SETUP_GUIDE.md)** - Complete installation and configuration
+- **📖 [Commands Reference](docs/COMMANDS.md)** - All commands with examples
+- **⚙️ [Configuration](docs/CONFIGURATION.md)** - Customize settings and providers
+- **🧠 [AI Features](docs/AI_FEATURES.md)** - LLM integration and capabilities
+- **📁 [RAG Mode](docs/RAG_GUIDE.md)** - Index and search personal documentation
+- **🔍 [Neural Search](docs/NEURAL_SEARCH.md)** - Enhanced semantic understanding
 
 ## 📦 Installation
 
@@ -186,29 +148,15 @@ This tool was fully built through "vibe coding" with **[Claude Code](https://cla
 
 I'm not a programmer - just a cybersecurity student learning the basics and building tools for my own use under [prowl.sh](https://prowl.sh). If people find these tools useful, I'm more than happy to continue working on them and improving the experience!
 
-## 📋 Todo
-
-### Setup Wizard
-Add an interactive setup wizard command to streamline configuration:
-
-- ⏳ `manx init` command for guided setup
-- ⏳ Detect available AI providers 
-- ⏳ Test API keys and connections
-- ⏳ Configure default search preferences
-- ⏳ Set up local documentation paths
-- ⏳ Initialize RAG databases if needed
+## 📋 Roadmap
 
 ### Release Binaries
 The install script currently falls back to cargo compilation when pre-built binaries aren't available. Future releases should include binaries for:
 
-- ✅ `x86_64-unknown-linux-gnu` (Intel/AMD Linux)
 - ✅ `x86_64-apple-darwin` (Intel Mac)
 - ✅ `aarch64-apple-darwin` (Apple Silicon Mac)
 - ✅ `x86_64-pc-windows-msvc` (Windows x64)
-- `aarch64-unknown-linux-gnu` (ARM64 Linux - Raspberry Pi, ARM servers)
-- ⏳ `x86_64-unknown-linux-musl` (Alpine Linux, static binaries)
-
-This will make installation faster and eliminate the need for Rust/Cargo on target systems.
+- ⏳ `aarch64-unknown-linux-gnu` (ARM64 Linux - Raspberry Pi, ARM servers)
 
 ### GitHub Repository Search
 Future enhancement to search directly within GitHub repositories for code examples and implementation patterns:
