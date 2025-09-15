@@ -378,6 +378,23 @@ pub enum Commands {
         #[command(subcommand)]
         command: EmbeddingCommands,
     },
+
+    /// 🚀 Interactive setup wizard for configuring manx
+    ///
+    /// WHAT IT DOES:
+    ///   • Guides you through initial configuration
+    ///   • Sets up Context7 API for official docs
+    ///   • Configures embedding models for semantic search
+    ///   • Optional LLM provider setup for AI synthesis
+    ///
+    /// PERFECT FOR:
+    ///   • First-time users
+    ///   • Reconfiguring after updates
+    ///   • Testing different providers
+    ///
+    /// EXAMPLE:
+    ///   manx init     # Start interactive setup wizard
+    Init,
 }
 
 #[derive(Subcommand)]

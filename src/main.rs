@@ -8,6 +8,7 @@ mod render;
 mod search;
 mod update;
 mod web_search;
+mod wizard;
 
 use anyhow::{Context, Result};
 use colored::{control, Colorize};
@@ -552,6 +553,12 @@ async fn run() -> Result<()> {
 
         Some(Commands::Embedding { command }) => {
             handle_embedding_command(command, &mut config, &renderer).await?;
+        }
+
+        Some(Commands::Init) => {
+            // Run the setup wizard
+            let mut wizard = wizard::SetupWizard::new()?;
+            wizard.run().await?;
         }
 
         None => {
