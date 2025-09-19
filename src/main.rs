@@ -1471,20 +1471,8 @@ async fn handle_index_command(
     // Determine if input is URL or file path
     let is_url = path_or_url.starts_with("http://") || path_or_url.starts_with("https://");
 
-    // For crawling operations, don't show our spinner to avoid conflicts with docrawl's built-in progress
-    let pb = if is_url {
-        // Check if any crawl option is enabled (crawl, crawl_depth, or crawl_all)
-        let should_crawl = crawl || crawl_depth.is_some() || crawl_all;
-
-        if should_crawl {
-            // Don't show progress spinner during crawling - let docrawl handle it
-            None
-        } else {
-            Some(renderer.show_progress(&format!("Fetching and indexing URL: {}", path_or_url)))
-        }
-    } else {
-        Some(renderer.show_progress(&format!("Indexing path: {}", path_or_url)))
-    };
+    // Don't show progress spinner for indexing operations - let underlying tools handle progress display
+    let pb: Option<indicatif::ProgressBar> = None;
 
     match RagSystem::new(config.rag.clone()).await {
         Ok(mut rag_system) => {
