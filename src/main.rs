@@ -540,10 +540,11 @@ async fn run() -> Result<()> {
             path,
             id,
             crawl,
-            max_depth,
-            max_pages,
+            crawl_depth,
+            crawl_all,
+            ..
         }) => {
-            handle_index_command(&path, id, crawl, max_depth, max_pages, &config, &renderer)
+            handle_index_command(&path, id, crawl, crawl_depth, crawl_all, &config, &renderer)
                 .await?;
         }
 
@@ -1453,8 +1454,8 @@ async fn handle_index_command(
     path_or_url: &str,
     _id: Option<String>,
     crawl: bool,
-    max_depth: Option<u32>,
-    max_pages: Option<u32>,
+    crawl_depth: Option<u32>,
+    crawl_all: bool,
     config: &Config,
     renderer: &Renderer,
 ) -> Result<()> {
@@ -1471,14 +1472,17 @@ async fn handle_index_command(
     let is_url = path_or_url.starts_with("http://") || path_or_url.starts_with("https://");
 
     let pb = if is_url {
-        if crawl {
-            let crawl_info = match (max_depth, max_pages) {
-                (Some(depth), Some(pages)) => {
-                    format!(" (max depth: {}, max pages: {})", depth, pages)
+        // Check if any crawl option is enabled (crawl, crawl_depth, or crawl_all)
+        let should_crawl = crawl || crawl_depth.is_some() || crawl_all;
+
+        if should_crawl {
+            let crawl_info = match (crawl_depth, crawl_all) {
+                (Some(depth), false) => {
+                    format!(" (max depth: {})", depth)
                 }
-                (Some(depth), None) => format!(" (max depth: {})", depth),
-                (None, Some(pages)) => format!(" (max pages: {})", pages),
-                (None, None) => " (deep crawl)".to_string(),
+                (Some(depth), true) => format!(" (max depth: {}, crawl all)", depth),
+                (None, true) => " (crawl all)".to_string(),
+                (None, false) => " (default depth)".to_string(),
             };
             renderer.show_progress(&format!(
                 "Deep crawling and indexing URL: {}{}",
@@ -1494,10 +1498,15 @@ async fn handle_index_command(
     match RagSystem::new(config.rag.clone()).await {
         Ok(mut rag_system) => {
             let indexed_count = if is_url {
-                if crawl {
+                // Check if any crawl option is enabled (crawl, crawl_depth, or crawl_all)
+                let should_crawl = crawl || crawl_depth.is_some() || crawl_all;
+
+                if should_crawl {
                     // Index URL content with deep crawling
+                    // Convert old max_pages logic: if crawl_all is true, no page limit
+                    let max_pages = if crawl_all { None } else { Some(100) }; // Default limit when not crawling all
                     rag_system
-                        .index_url_deep(path_or_url, max_depth, max_pages)
+                        .index_url_deep(path_or_url, crawl_depth, max_pages)
                         .await?
                 } else {
                     // Index single URL content
@@ -1627,7 +1636,7 @@ async fn handle_sources_command(
                 None,
                 false,
                 None,
-                None,
+                false,
                 config,
                 renderer,
             )

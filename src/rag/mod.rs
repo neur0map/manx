@@ -332,8 +332,10 @@ impl RagSystem {
         );
 
         let indexer = Indexer::new(&self.config)?;
+        // Convert old parameters to new docrawl-based parameters
+        let crawl_all = max_pages.is_none(); // If no page limit, crawl all
         let chunks = indexer
-            .index_url_deep(url.to_string(), max_depth, max_pages)
+            .index_url_deep(url.to_string(), max_depth, crawl_all)
             .await?;
         let chunk_count = chunks.len();
 

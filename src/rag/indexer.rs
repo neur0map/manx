@@ -5,10 +5,12 @@
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use spider::website::Website;
+use docrawl::{crawl, CrawlConfig, Config};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use walkdir::WalkDir;
+use url::Url;
 
 use crate::rag::embeddings::preprocessing;
 use crate::rag::{DocumentChunk, DocumentMetadata, RagConfig, SourceType};
@@ -81,80 +83,24 @@ impl Indexer {
 
     /// Index content from a URL
     pub async fn index_url(&self, url: String) -> Result<Vec<DocumentChunk>> {
-        log::info!("Fetching content from URL: {}", url);
+        log::info!("Indexing single URL (no crawling): {}", url);
 
-        // Validate URL format
-        let parsed_url =
-            url::Url::parse(&url).map_err(|e| anyhow!("Invalid URL format '{}': {}", url, e))?;
-
-        // Security check - only allow HTTP/HTTPS
-        match parsed_url.scheme() {
-            "http" | "https" => {}
-            scheme => {
-                return Err(anyhow!(
-                    "Unsupported URL scheme '{}'. Only HTTP and HTTPS are allowed.",
-                    scheme
-                ))
-            }
-        }
-
-        // Fetch content from URL
-        let content = fetch_url_content(&url).await?;
-
-        if content.trim().is_empty() {
-            return Err(anyhow!("URL contains no extractable content: {}", url));
-        }
-
-        // Create metadata for the URL
-        let metadata = create_url_metadata(&url, &content).await?;
-
-        // Detect document structure (title, sections) from HTML content
-        let (title, sections) = detect_url_structure(&content, &url);
-
-        // Chunk the content
-        let chunks = chunk_content(&content, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
-
-        // Create document chunks
-        let mut document_chunks = Vec::new();
-        for (i, chunk_content) in chunks.into_iter().enumerate() {
-            // Try to determine which section this chunk belongs to
-            let current_section = find_relevant_section(&chunk_content, &sections);
-
-            let chunk_id = format!("{}#{}", url, i);
-            let document_chunk = DocumentChunk {
-                id: chunk_id,
-                content: chunk_content,
-                source_path: PathBuf::from(&url), // Use URL as path
-                source_type: SourceType::Remote,
-                title: title.clone(),
-                section: current_section,
-                chunk_index: i,
-                metadata: metadata.clone(),
-            };
-
-            document_chunks.push(document_chunk);
-        }
-
-        log::info!(
-            "Successfully indexed {} chunks from URL: {}",
-            document_chunks.len(),
-            url
-        );
-        Ok(document_chunks)
+        // Use docrawl with depth 0 (single page only)
+        self.index_url_deep(url, Some(0), false).await
     }
 
-    /// Index content from a URL with deep crawling support
+    /// Index content from a URL with documentation-optimized crawling
     pub async fn index_url_deep(
         &self,
         url: String,
-        max_depth: Option<u32>,
-        max_pages: Option<u32>,
+        crawl_depth: Option<u32>,
+        crawl_all: bool,
     ) -> Result<Vec<DocumentChunk>> {
         log::info!(
-            "Starting deep crawl of URL: {} (max_depth: {:?}, max_pages: {:?})",
+            "Starting docrawl of URL: {} (depth: {:?}, crawl_all: {})",
             url,
-            max_depth,
-            max_pages
+            crawl_depth,
+            crawl_all
         );
 
         // Validate URL format
@@ -172,134 +118,125 @@ impl Indexer {
             }
         }
 
-        // Create and configure spider website
-        let mut website = Website::new(&url);
+        // Create temporary directory for docrawl output
+        let temp_dir = std::env::temp_dir().join(format!("manx_crawl_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir)?;
 
-        // Configure for documentation-optimized crawling
-        website.configuration.respect_robots_txt = false; // Disable for faster crawling
-        website.configuration.delay = 50; // Reduce delay for faster crawling
-        website.configuration.subdomains = false; // Stay within same domain
-        website.configuration.tld = false; // Don't crawl different TLDs
-        website.configuration.request_timeout = Some(Box::new(std::time::Duration::from_secs(10))); // Add timeout
+        // Parse the URL
+        let base_url = Url::parse(&url)?;
 
-        // Set crawl depth limit (default to 3 if not specified)
-        if let Some(depth) = max_depth {
-            website.configuration.depth = depth as usize;
-        } else {
-            website.configuration.depth = 3;
-        }
+        // Configure docrawl
+        let config = CrawlConfig {
+            base_url,
+            output_dir: temp_dir.clone(),
+            user_agent: "Manx/0.5.0 (Documentation Crawler)".to_string(),
+            max_depth: if let Some(depth) = crawl_depth {
+                Some(depth as usize)
+            } else if crawl_all {
+                None // No depth limit
+            } else {
+                Some(3) // Default depth
+            },
+            rate_limit_per_sec: 10,
+            follow_sitemaps: true,
+            concurrency: 4,
+            timeout: Some(Duration::from_secs(30)),
+            resume: false,
+            config: Config::default(),
+        };
 
-        // Filter out non-documentation URLs
-        let blacklist_patterns = vec![
-            "/api/".to_string(),
-            "/downloads/".to_string(),
-            "/images/".to_string(),
-            "/assets/".to_string(),
-            "/static/".to_string(),
-            ".jpg".to_string(),
-            ".jpeg".to_string(),
-            ".png".to_string(),
-            ".gif".to_string(),
-            ".pdf".to_string(),
-            ".zip".to_string(),
-            ".tar".to_string(),
-        ];
-
-        website.configuration.blacklist_url = Some(
-            blacklist_patterns
-                .iter()
-                .map(|pattern| {
-                    format!("{}{}", parsed_url.origin().ascii_serialization(), pattern).into()
-                })
-                .collect(),
-        );
-
-        // Perform the crawl with timeout
-        let crawl_timeout = std::time::Duration::from_secs(30);
-        match tokio::time::timeout(crawl_timeout, website.crawl()).await {
-            Ok(_) => log::info!("Crawl completed successfully"),
-            Err(_) => {
-                log::warn!("Crawl timed out after {} seconds", crawl_timeout.as_secs());
-                return Err(anyhow!(
-                    "Crawl operation timed out after {} seconds",
-                    crawl_timeout.as_secs()
-                ));
+        log::info!("Running docrawl on: {}", url);
+        match crawl(config).await {
+            Ok(stats) => {
+                log::info!("Docrawl completed successfully, processed {} pages", stats.pages);
+            }
+            Err(e) => {
+                // Clean up temp directory
+                let _ = std::fs::remove_dir_all(&temp_dir);
+                return Err(anyhow!("Docrawl failed: {}", e));
             }
         }
 
-        let discovered_links = website.get_links();
-        log::info!("Discovered {} URLs during crawl", discovered_links.len());
-
-        // Apply page limit if specified
-        let links_to_process = if let Some(max) = max_pages {
-            discovered_links
-                .into_iter()
-                .take(max as usize)
-                .collect::<Vec<_>>()
-        } else {
-            discovered_links.into_iter().collect::<Vec<_>>()
-        };
-
-        log::info!(
-            "Processing {} URLs for content extraction",
-            links_to_process.len()
-        );
-
-        // Process each discovered page
+        // Process the generated markdown files
         let mut all_chunks = Vec::new();
-        for (index, link) in links_to_process.iter().enumerate() {
-            let page_url = link.as_ref();
+        let markdown_files = self.find_markdown_files(&temp_dir)?;
+
+        log::info!("Processing {} markdown files from docrawl", markdown_files.len());
+
+        for (index, md_file) in markdown_files.iter().enumerate() {
             log::debug!(
-                "Processing page {}/{}: {}",
+                "Processing markdown file {}/{}: {}",
                 index + 1,
-                links_to_process.len(),
-                page_url
+                markdown_files.len(),
+                md_file.display()
             );
 
-            match self.process_crawled_page(page_url).await {
+            match self.process_markdown_file(md_file, &url).await {
                 Ok(chunks) => {
                     let chunk_count = chunks.len();
                     all_chunks.extend(chunks);
                     log::debug!(
-                        "Successfully processed page: {} ({} chunks)",
-                        page_url,
+                        "Successfully processed markdown: {} ({} chunks)",
+                        md_file.display(),
                         chunk_count
                     );
                 }
                 Err(e) => {
-                    log::warn!("Failed to process page '{}': {}", page_url, e);
-                    // Continue with other pages even if one fails
+                    log::warn!("Failed to process markdown '{}': {}", md_file.display(), e);
+                    // Continue with other files even if one fails
                 }
             }
         }
 
+        // Clean up temporary directory
+        if let Err(e) = std::fs::remove_dir_all(&temp_dir) {
+            log::warn!("Failed to clean up temporary directory: {}", e);
+        }
+
         log::info!(
-            "Successfully indexed {} chunks from {} pages via deep crawl of: {}",
+            "Successfully indexed {} chunks from {} markdown files via docrawl of: {}",
             all_chunks.len(),
-            links_to_process.len(),
+            markdown_files.len(),
             url
         );
 
         Ok(all_chunks)
     }
 
-    /// Process a single crawled page URL and extract content chunks
-    async fn process_crawled_page(&self, page_url: &str) -> Result<Vec<DocumentChunk>> {
-        // Fetch content from the page
-        let content = fetch_url_content(page_url).await?;
+    /// Find all markdown files in the crawled directory
+    fn find_markdown_files(&self, dir: &Path) -> Result<Vec<PathBuf>> {
+        let mut markdown_files = Vec::new();
+
+        for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                markdown_files.push(path.to_path_buf());
+            }
+        }
+
+        Ok(markdown_files)
+    }
+
+    /// Process a markdown file generated by docrawl
+    async fn process_markdown_file(&self, md_file: &Path, base_url: &str) -> Result<Vec<DocumentChunk>> {
+        // Read the markdown content
+        let content = std::fs::read_to_string(md_file)?;
 
         if content.trim().is_empty() {
             return Err(anyhow!(
-                "Page contains no extractable content: {}",
-                page_url
+                "Markdown file contains no content: {}",
+                md_file.display()
             ));
         }
 
-        // Create metadata for this page
-        let metadata = create_url_metadata(page_url, &content).await?;
+        // Create metadata for this markdown file
+        let metadata = self.create_markdown_metadata(md_file, &content, base_url)?;
 
-        // Detect document structure (title, sections) from HTML content
-        let (title, sections) = detect_url_structure(&content, page_url);
+        // Detect document structure (title, sections) from markdown content
+        let (title, sections) = detect_structure(&content, md_file);
+
+        // Derive a logical page URL from the file path and base URL
+        let page_url = self.derive_page_url(md_file, base_url);
 
         // Chunk the content
         let chunks = chunk_content(&content, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
@@ -313,7 +250,7 @@ impl Indexer {
             let chunk = DocumentChunk {
                 id: format!("{}_{}", page_url, i),
                 content: preprocessing::clean_text(&chunk_content),
-                source_path: PathBuf::from(page_url),
+                source_path: PathBuf::from(&page_url),
                 source_type: SourceType::Web,
                 title: title.clone(),
                 section: section.clone(),
@@ -325,6 +262,49 @@ impl Indexer {
         }
 
         Ok(document_chunks)
+    }
+
+    /// Create metadata for a markdown file from docrawl
+    fn create_markdown_metadata(&self, md_file: &Path, content: &str, base_url: &str) -> Result<DocumentMetadata> {
+        let file_metadata = std::fs::metadata(md_file)?;
+        let modified_time = file_metadata.modified()?;
+        let modified_datetime = chrono::DateTime::<chrono::Utc>::from(modified_time);
+
+        // Extract tags from file path and content
+        let mut tags = extract_tags_from_path(md_file);
+        tags.push("documentation".to_string());
+        tags.push("crawled".to_string());
+
+        // Add base domain as a tag (simple extraction)
+        if let Some(domain) = extract_domain_from_url(base_url) {
+            tags.push(domain);
+        }
+
+        // Detect language from content (basic detection for now)
+        let language = detect_language(md_file);
+
+        Ok(DocumentMetadata {
+            file_type: "markdown".to_string(),
+            size: content.len() as u64,
+            modified: modified_datetime,
+            tags,
+            language,
+        })
+    }
+
+    /// Derive a logical page URL from the markdown file path
+    fn derive_page_url(&self, md_file: &Path, base_url: &str) -> String {
+        // Get the relative path from the temp directory
+        let file_name = md_file.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("page");
+
+        // Create a logical URL by combining base URL with file name
+        if base_url.ends_with('/') {
+            format!("{}{}", base_url, file_name)
+        } else {
+            format!("{}/{}", base_url, file_name)
+        }
     }
 }
 
@@ -1117,282 +1097,6 @@ fn validate_pdf_security(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Fetch content from URL and extract text
-async fn fetch_url_content(url: &str) -> Result<String> {
-    log::debug!("Fetching content from: {}", url);
-
-    // Create HTTP client with reasonable timeouts
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .user_agent("Manx Documentation Indexer/1.0")
-        .build()?;
-
-    // Fetch the URL
-    let response = client.get(url).send().await?;
-
-    // Check if request was successful
-    if !response.status().is_success() {
-        return Err(anyhow!(
-            "Failed to fetch URL '{}': HTTP {}",
-            url,
-            response.status()
-        ));
-    }
-
-    // Get content type to determine how to process
-    let content_type = response
-        .headers()
-        .get("content-type")
-        .and_then(|ct| ct.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-
-    let body = response.text().await?;
-
-    // Process based on content type
-    if content_type.contains("text/html") || content_type.contains("application/xhtml") {
-        // Extract text from HTML
-        extract_text_from_html(&body)
-    } else if content_type.contains("text/plain") || content_type.contains("text/markdown") {
-        // Plain text or markdown
-        Ok(body)
-    } else {
-        log::warn!(
-            "Unknown content type '{}' for URL '{}', treating as plain text",
-            content_type,
-            url
-        );
-        Ok(body)
-    }
-}
-
-/// Extract readable text from HTML content
-fn extract_text_from_html(html: &str) -> Result<String> {
-    use scraper::{Html, Selector};
-
-    let document = Html::parse_document(html);
-
-    // Remove script, style, and other non-content elements
-    let cleanup_selectors = [
-        "script",
-        "style",
-        "nav",
-        "footer",
-        "header",
-        ".nav",
-        ".footer",
-        ".header",
-        ".sidebar",
-        ".advertisement",
-        ".ads",
-        ".social-share",
-        "[role='navigation']",
-        "[role='banner']",
-        "[role='contentinfo']",
-    ];
-
-    let mut cleaned_html = html.to_string();
-    for selector_str in &cleanup_selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            // Remove matching elements by replacing them with empty content
-            for element in document.select(&selector) {
-                let element_html = element.html();
-                cleaned_html = cleaned_html.replace(&element_html, "");
-            }
-        }
-    }
-
-    // Re-parse the cleaned HTML
-    let cleaned_document = Html::parse_document(&cleaned_html);
-
-    // Extract text from main content areas
-    let content_selectors = [
-        "article",
-        "main",
-        ".content",
-        ".article",
-        ".post",
-        ".entry",
-        "div[role=main]",
-        "[role=article]",
-        ".documentation",
-    ];
-
-    let mut extracted_text = String::new();
-
-    // Try to find main content first
-    for selector_str in &content_selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            for element in cleaned_document.select(&selector) {
-                let text = element.text().collect::<Vec<_>>().join(" ");
-                if !text.trim().is_empty() && text.len() > 100 {
-                    // Only substantial content
-                    extracted_text.push_str(&text);
-                    extracted_text.push('\n');
-                }
-            }
-        }
-    }
-
-    // If no main content found, extract from body
-    if extracted_text.trim().is_empty() {
-        if let Ok(body_selector) = Selector::parse("body") {
-            if let Some(element) = cleaned_document.select(&body_selector).next() {
-                extracted_text = element.text().collect::<Vec<_>>().join(" ");
-            }
-        }
-    }
-
-    // Final fallback - get all text
-    if extracted_text.trim().is_empty() {
-        extracted_text = cleaned_document
-            .root_element()
-            .text()
-            .collect::<Vec<_>>()
-            .join(" ");
-    }
-
-    // Clean up whitespace
-    let cleaned = extracted_text
-        .lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    Ok(cleaned)
-}
-
-/// Create metadata for URL content
-async fn create_url_metadata(_url: &str, content: &str) -> Result<DocumentMetadata> {
-    Ok(DocumentMetadata {
-        file_type: "web".to_string(),
-        size: content.len() as u64,
-        modified: chrono::Utc::now(),
-        tags: vec!["web".to_string(), "remote".to_string()],
-        language: detect_content_language(content),
-    })
-}
-
-/// Detect document structure from URL content (title, sections)
-fn detect_url_structure(content: &str, url: &str) -> (Option<String>, Vec<String>) {
-    use scraper::{Html, Selector};
-
-    // Try to parse as HTML first
-    let document = Html::parse_document(content);
-
-    // Extract title (before cleaning, as title is in head)
-    let title = if let Ok(title_selector) = Selector::parse("title") {
-        document
-            .select(&title_selector)
-            .next()
-            .map(|el| el.text().collect::<String>().trim().to_string())
-            .filter(|t| !t.is_empty())
-    } else {
-        None
-    }
-    .or_else(|| {
-        // Fallback: use URL path as title
-        if let Ok(parsed_url) = url::Url::parse(url) {
-            if let Some(mut segments) = parsed_url.path_segments() {
-                if let Some(last_segment) = segments.next_back() {
-                    if !last_segment.is_empty() {
-                        return Some(last_segment.replace("-", " ").replace("_", " "));
-                    }
-                }
-            }
-            // If no path segments, use domain as title
-            parsed_url.host_str().map(|s| s.to_string())
-        } else {
-            None
-        }
-    });
-
-    // Clean HTML by removing non-content elements first
-    let cleanup_selectors = ["script", "style", "nav", "footer", "header"];
-    let mut cleaned_html = content.to_string();
-    for selector_str in &cleanup_selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            for element in document.select(&selector) {
-                let element_html = element.html();
-                cleaned_html = cleaned_html.replace(&element_html, "");
-            }
-        }
-    }
-
-    let cleaned_document = Html::parse_document(&cleaned_html);
-
-    // Extract section headings from cleaned content
-    let mut sections = Vec::new();
-    let heading_selectors = ["h1", "h2", "h3", "h4", "h5", "h6"];
-
-    for selector_str in &heading_selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            for element in cleaned_document.select(&selector) {
-                let heading_text = element.text().collect::<String>().trim().to_string();
-                if !heading_text.is_empty() && heading_text.len() < 200 {
-                    sections.push(heading_text);
-                }
-            }
-        }
-    }
-
-    // If it's not HTML, look for markdown-style headings
-    if sections.is_empty() {
-        for line in content.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with('#') {
-                let heading = trimmed.trim_start_matches('#').trim();
-                if !heading.is_empty() && heading.len() < 200 {
-                    sections.push(heading.to_string());
-                }
-            }
-        }
-    }
-
-    (title, sections)
-}
-
-/// Find the most relevant section for a chunk of content
-fn find_relevant_section(chunk_content: &str, sections: &[String]) -> Option<String> {
-    // Simple heuristic: find the section whose title appears in the chunk
-    for section in sections {
-        if chunk_content
-            .to_lowercase()
-            .contains(&section.to_lowercase())
-        {
-            return Some(section.clone());
-        }
-    }
-    None
-}
-
-/// Detect content language using basic heuristics
-fn detect_content_language(content: &str) -> Option<String> {
-    // Simple language detection based on common programming patterns and keywords
-    let content_lower = content.to_lowercase();
-
-    if content_lower.contains("function")
-        || content_lower.contains("const ")
-        || content_lower.contains("let ")
-    {
-        Some("javascript".to_string())
-    } else if content_lower.contains("def ")
-        || content_lower.contains("import ")
-        || content_lower.contains("print(")
-    {
-        Some("python".to_string())
-    } else if content_lower.contains("fn ")
-        || content_lower.contains("use ")
-        || content_lower.contains("struct")
-    {
-        Some("rust".to_string())
-    } else if content_lower.contains("class ") && content_lower.contains("public") {
-        Some("java".to_string())
-    } else {
-        Some("en".to_string())
-    }
-}
 
 /// Create metadata entry for documents that cannot be fully processed
 fn create_doc_metadata(path: &Path, doc_type: &str) -> Result<String> {
@@ -1567,6 +1271,21 @@ fn chunk_content(content: &str, chunk_size: usize, overlap: usize) -> Vec<String
 
     // Use the preprocessing chunk_text function
     crate::rag::embeddings::preprocessing::chunk_text(content, word_chunk_size, word_overlap)
+}
+
+/// Extract domain from URL without requiring external dependencies
+fn extract_domain_from_url(url: &str) -> Option<String> {
+    // Simple domain extraction without full URL parsing
+    if let Some(start) = url.find("://") {
+        let after_protocol = &url[start + 3..];
+        if let Some(end) = after_protocol.find('/') {
+            Some(after_protocol[..end].to_string())
+        } else {
+            Some(after_protocol.to_string())
+        }
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

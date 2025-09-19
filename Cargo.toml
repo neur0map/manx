@@ -82,8 +82,8 @@ url = "2.4"
 urlencoding = "2.1"
 regex = "1.10"
 
-# Web crawling
-spider = "2.37"
+# Web crawling - Documentation-optimized crawler
+docrawl = "0.1"
 
 # RAG dependencies for document processing and vector storage  
 docx-rs = "0.4"
