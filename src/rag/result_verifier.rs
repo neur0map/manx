@@ -386,6 +386,7 @@ mod tests {
             title: None,
             section: None,
             score,
+            chunk_index: 0,
             metadata: DocumentMetadata {
                 file_type: "rust".to_string(),
                 size: 100,

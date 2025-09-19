@@ -1300,7 +1300,8 @@ mod tests {
         assert!(is_supported_file(Path::new("test.md")));
         assert!(is_supported_file(Path::new("test.txt")));
         assert!(is_supported_file(Path::new("test.pdf")));
-        assert!(!is_supported_file(Path::new("test.rs")));
+        assert!(is_supported_file(Path::new("test.rs"))); // Now supported for code indexing
+        assert!(!is_supported_file(Path::new("test.unknown")));
         assert!(!is_supported_file(Path::new("test")));
     }
 

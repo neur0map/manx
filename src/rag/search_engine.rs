@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_code_file_detection() {
-        let engine_config = create_test_config();
+        let _engine_config = create_test_config();
         // We can't easily test the full engine without setting it up, but we can test the logic
         let path = PathBuf::from("test.rs");
         // This would be tested with the actual engine instance
