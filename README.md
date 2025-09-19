@@ -30,6 +30,9 @@
 cargo install manx-cli
 manx init  # Interactive setup wizard
 
+# Exisiting users
+manx update
+
 # Or install and start immediately
 curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
@@ -51,10 +54,10 @@ Manx helps developers **find answers fast** with four powerful modes:
 
 | Mode | Setup | Description |
 |------|-------|-------------|
-| **🚀 Default** | None | Official docs + keyword search (works instantly) |
-| **🧠 Enhanced** | 1 command | Neural search + semantic understanding |
-| **📁 RAG** | Index docs | Search your private documentation |
-| **🤖 AI** | Add API key | Full synthesis with explanations + citations |
+| **Default** | None | Official docs + keyword search (works instantly) |
+| **Enhanced** | 1 command | Neural search + semantic understanding |
+| **RAG** | Index docs and sites | Search your private documentation |
+| **AI** | Add API key | Full synthesis with explanations + citations |
 
 ### Progressive Enhancement
 Start simple → Add semantic search → Index your docs → Enable AI
@@ -95,15 +98,6 @@ manx snippet react hooks  # Now includes AI explanations
 ```
 *Get comprehensive answers with code examples, explanations, and citations*
 
-## 🚀 Why Manx?
-
-- **⚡ Instant**: Works immediately after installation
-- **🎯 Accurate**: Searches official documentation, not forums
-- **🧠 Smart**: Optional semantic search understands intent
-- **🔒 Private**: Your documents never leave your machine
-- **⚙️ Flexible**: Choose your level of enhancement
-- **🚀 Fast**: Optimized Rust performance with embedded ONNX Runtime
-
 ## 📚 Learn More
 
 - **🔧 [Setup Guide](docs/SETUP_GUIDE.md)** - Complete installation and configuration
@@ -112,19 +106,6 @@ manx snippet react hooks  # Now includes AI explanations
 - **🧠 [AI Features](docs/AI_FEATURES.md)** - LLM integration and capabilities
 - **📁 [RAG Mode](docs/RAG_GUIDE.md)** - Index and search personal documentation
 - **🔍 [Neural Search](docs/NEURAL_SEARCH.md)** - Enhanced semantic understanding
-
-## 📦 Installation
-
-### Quick Install Script
-```bash
-curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
-```
-*Automatically detects your platform and installs the latest release*
-
-### Cargo (Alternative)
-```bash
-cargo install manx-cli
-```
 
 ### Manual Download
 - **Binary**: Download from [GitHub Releases](https://github.com/neur0map/manx/releases)
@@ -151,29 +132,14 @@ I'm not a programmer - just a cybersecurity student learning the basics and buil
 
 ## 📋 Roadmap
 
-### Release Binaries
-The install script currently falls back to cargo compilation when pre-built binaries aren't available. Future releases should include binaries for:
-
-- ✅ `x86_64-apple-darwin` (Intel Mac)
-- ✅ `aarch64-apple-darwin` (Apple Silicon Mac)
-- ✅ `x86_64-pc-windows-msvc` (Windows x64)
-- ⏳ `aarch64-unknown-linux-gnu` (ARM64 Linux - Raspberry Pi, ARM servers)
-
-### GitHub Repository Search
+### GitHub Repository database Search
 Future enhancement to search directly within GitHub repositories for code examples and implementation patterns:
 
-- ⏳ **GitHub Access**: Search repositories, issues, and discussions from the CLI
-- ⏳ **Code Search**: Look through repo code with the option to add extra context using embeddings
-- ⏳ **Issue Tracking**: Pull in issues and make them easier to reference alongside other results
-- ⏳ **Docs Indexing**: Treat READMEs and repo docs as part of the searchable database
-- ⏳ **Extra Context**: When needed, let an LLM help summarize or clarify what the search finds
-
-**Integration with Manx Intelligence:**
-- 🧠 **Embedding-Enhanced Code Search**: Neural embeddings understand code similarity and patterns
-- 🤖 **LLM Code Analysis**: Synthesize solutions from multiple repos with explanations
-- 🎯 **Smart Query Routing**: Framework detection automatically searches relevant repositories  
-- 📊 **Hybrid Results**: Combine web docs + GitHub code + issue discussions in unified answers
-- 🔍 **Semantic Issue Search**: Find related problems even with different terminology
+- **GitHub Access**: Search repositories, issues, and discussions from the CLI
+- **Code Search**: Look through repo code with the option to add extra context using embeddings
+- **Issue Tracking**: Pull in issues and make them easier to reference alongside other results
+- **Docs Indexing**: Treat READMEs and repo docs as part of the searchable database
+- **Extra Context**: When needed, let an LLM help summarize or clarify what the search finds
 
 Example: `manx search "Tauri tables"` would search official docs AND `tauri-apps/tauri` repo for real implementations.
 
