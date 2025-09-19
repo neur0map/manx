@@ -55,7 +55,7 @@ Manx helps developers **find answers fast** with four powerful modes:
 | Mode | Setup | Description |
 |------|-------|-------------|
 | **Default** | None | Official docs + keyword search (works instantly) |
-| **Enhanced** | 1 command | Neural search + semantic understanding |
+| **Enhanced** | Download neural model | Neural search + semantic understanding |
 | **RAG** | Index docs and sites | Search your private documentation |
 | **AI** | Add API key | Full synthesis with explanations + citations |
 
