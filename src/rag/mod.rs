@@ -101,13 +101,13 @@ impl Default for CodeSecurityLevel {
 /// Configuration for smart search capabilities
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SmartSearchConfig {
-    pub prefer_semantic: bool,           // Use ONNX over hash when available
-    pub enable_query_enhancement: bool,  // Use LLM for query expansion
+    pub prefer_semantic: bool,            // Use ONNX over hash when available
+    pub enable_query_enhancement: bool,   // Use LLM for query expansion
     pub enable_result_verification: bool, // Use LLM for relevance checking
-    pub min_confidence_score: f32,       // Minimum relevance threshold
-    pub max_query_variations: usize,     // Number of query variations to try
-    pub enable_multi_stage: bool,        // Enable multi-stage search strategy
-    pub adaptive_chunking: bool,         // Use smart code-aware chunking
+    pub min_confidence_score: f32,        // Minimum relevance threshold
+    pub max_query_variations: usize,      // Number of query variations to try
+    pub enable_multi_stage: bool,         // Enable multi-stage search strategy
+    pub adaptive_chunking: bool,          // Use smart code-aware chunking
 }
 
 impl Default for SmartSearchConfig {
@@ -148,9 +148,9 @@ impl Default for RagConfig {
             max_results: 10,
             similarity_threshold: 0.6,
             allow_pdf_processing: false, // Disabled by default for security
-            allow_code_processing: true,  // Enabled by default with security checks
+            allow_code_processing: true, // Enabled by default with security checks
             code_security_level: CodeSecurityLevel::Moderate,
-            mask_secrets: true, // Mask secrets by default
+            mask_secrets: true,    // Mask secrets by default
             max_file_size_mb: 100, // 100MB default limit
             embedding: EmbeddingConfig::default(),
             smart_search: SmartSearchConfig::default(),
@@ -361,7 +361,8 @@ impl RagSystem {
         log::info!("Starting intelligent search for: '{}'", query);
 
         // Create smart search engine
-        let search_engine = SmartSearchEngine::new(self.config.clone(), self.llm_client.clone()).await?;
+        let search_engine =
+            SmartSearchEngine::new(self.config.clone(), self.llm_client.clone()).await?;
 
         // Perform intelligent search
         let verified_results = search_engine.search(query, max_results).await?;
@@ -382,10 +383,12 @@ impl RagSystem {
             })
             .collect();
 
-        log::info!("Intelligent search completed with {} results", results.len());
+        log::info!(
+            "Intelligent search completed with {} results",
+            results.len()
+        );
         Ok(results)
     }
-
 
     pub async fn get_stats(&self) -> Result<RagStats> {
         if !self.config.enabled {

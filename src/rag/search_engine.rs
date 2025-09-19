@@ -5,13 +5,13 @@
 
 use anyhow::Result;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::rag::{
     embeddings::EmbeddingModel,
     indexer::Indexer,
     llm::LlmClient,
-    query_enhancer::{QueryEnhancer, EnhancedQuery, SearchStrategy},
+    query_enhancer::{EnhancedQuery, QueryEnhancer, SearchStrategy},
     result_verifier::{ResultVerifier, VerifiedResult},
     EmbeddingProvider, RagConfig, RagSearchResult,
 };
@@ -29,11 +29,13 @@ pub struct SmartSearchEngine {
     llm_client: Option<LlmClient>,
 }
 
-
 impl SmartSearchEngine {
     /// Create a new smart search engine
     pub async fn new(config: RagConfig, llm_client: Option<LlmClient>) -> Result<Self> {
-        log::info!("Initializing smart search engine with config: {:?}", config.smart_search);
+        log::info!(
+            "Initializing smart search engine with config: {:?}",
+            config.smart_search
+        );
 
         // Initialize embedding model based on smart search preferences
         let embedding_model = Self::initialize_embedding_model(&config).await?;
@@ -65,7 +67,10 @@ impl SmartSearchEngine {
             log::info!("Default hash provider detected, attempting auto-selection of better model");
             match EmbeddingModel::new_auto_select().await {
                 Ok(model) => {
-                    log::info!("Successfully auto-selected embedding model: {:?}", model.get_config().provider);
+                    log::info!(
+                        "Successfully auto-selected embedding model: {:?}",
+                        model.get_config().provider
+                    );
                     return Ok(Some(model));
                 }
                 Err(e) => {
@@ -77,11 +82,17 @@ impl SmartSearchEngine {
         // Try to initialize with configured embedding provider
         match EmbeddingModel::new_with_config(config.embedding.clone()).await {
             Ok(model) => {
-                log::info!("Successfully initialized embedding model: {:?}", config.embedding.provider);
+                log::info!(
+                    "Successfully initialized embedding model: {:?}",
+                    config.embedding.provider
+                );
                 Ok(Some(model))
             }
             Err(e) => {
-                log::warn!("Failed to initialize embedding model, will use fallback: {}", e);
+                log::warn!(
+                    "Failed to initialize embedding model, will use fallback: {}",
+                    e
+                );
                 Ok(None)
             }
         }
@@ -97,7 +108,10 @@ impl SmartSearchEngine {
 
         // Stage 1: Query Enhancement
         let enhanced_query = self.query_enhancer.enhance_query(query).await?;
-        log::debug!("Enhanced query with {} variations", enhanced_query.variations.len());
+        log::debug!(
+            "Enhanced query with {} variations",
+            enhanced_query.variations.len()
+        );
 
         // Stage 2: Multi-strategy search execution
         let mut all_results = if self.config.smart_search.enable_multi_stage {
@@ -106,13 +120,19 @@ impl SmartSearchEngine {
             self.execute_single_stage_search(&enhanced_query).await?
         };
 
-        log::debug!("Collected {} raw results from search stages", all_results.len());
+        log::debug!(
+            "Collected {} raw results from search stages",
+            all_results.len()
+        );
 
         // Stage 3: Deduplication and initial filtering
         all_results = self.deduplicate_results(all_results);
 
         // Stage 4: Result verification and scoring
-        let verified_results = self.result_verifier.verify_results(&enhanced_query, all_results).await?;
+        let verified_results = self
+            .result_verifier
+            .verify_results(&enhanced_query, all_results)
+            .await?;
 
         // Stage 5: Final ranking and limiting
         let final_results = self.finalize_results(verified_results, max_results);
@@ -127,7 +147,10 @@ impl SmartSearchEngine {
     }
 
     /// Execute multi-stage search with different strategies
-    async fn execute_multi_stage_search(&self, query: &EnhancedQuery) -> Result<Vec<RagSearchResult>> {
+    async fn execute_multi_stage_search(
+        &self,
+        query: &EnhancedQuery,
+    ) -> Result<Vec<RagSearchResult>> {
         let mut all_results = Vec::new();
 
         // Stage 1: Direct semantic search with original query
@@ -144,27 +167,34 @@ impl SmartSearchEngine {
 
         // Stage 2: Enhanced query variations
         log::debug!("Stage 2: Enhanced query variations");
-        for (i, variation) in query.variations.iter().enumerate().take(3) { // Limit to top 3 variations
+        for (i, variation) in query.variations.iter().enumerate().take(3) {
+            // Limit to top 3 variations
             log::debug!("Searching with variation {}: '{}'", i + 1, variation.query);
 
             let mut variation_results = match variation.strategy {
                 SearchStrategy::Semantic => {
                     if let Some(ref embedding_model) = self.embedding_model {
-                        self.semantic_search(&variation.query, embedding_model).await.unwrap_or_default()
+                        self.semantic_search(&variation.query, embedding_model)
+                            .await
+                            .unwrap_or_default()
                     } else {
                         Vec::new()
                     }
                 }
-                SearchStrategy::Keyword => {
-                    self.keyword_search(&variation.query).await.unwrap_or_default()
-                }
+                SearchStrategy::Keyword => self
+                    .keyword_search(&variation.query)
+                    .await
+                    .unwrap_or_default(),
                 SearchStrategy::Code => {
                     self.code_search(&variation.query).await.unwrap_or_default()
                 }
                 SearchStrategy::Mixed => {
                     let mut mixed_results = Vec::new();
                     if let Some(ref embedding_model) = self.embedding_model {
-                        if let Ok(mut semantic_results) = self.semantic_search(&variation.query, embedding_model).await {
+                        if let Ok(mut semantic_results) = self
+                            .semantic_search(&variation.query, embedding_model)
+                            .await
+                        {
                             mixed_results.append(&mut semantic_results);
                         }
                     }
@@ -186,7 +216,10 @@ impl SmartSearchEngine {
 
         // Stage 3: Keyword fallback for exact matches
         log::debug!("Stage 3: Keyword fallback");
-        let mut keyword_results = self.keyword_search(&query.original).await.unwrap_or_default();
+        let mut keyword_results = self
+            .keyword_search(&query.original)
+            .await
+            .unwrap_or_default();
         // Boost keyword results slightly since they're exact matches
         for result in &mut keyword_results {
             result.score *= 1.1;
@@ -197,7 +230,10 @@ impl SmartSearchEngine {
     }
 
     /// Execute single-stage search (simpler approach)
-    async fn execute_single_stage_search(&self, query: &EnhancedQuery) -> Result<Vec<RagSearchResult>> {
+    async fn execute_single_stage_search(
+        &self,
+        query: &EnhancedQuery,
+    ) -> Result<Vec<RagSearchResult>> {
         if let Some(ref embedding_model) = self.embedding_model {
             self.semantic_search(&query.original, embedding_model).await
         } else {
@@ -206,7 +242,11 @@ impl SmartSearchEngine {
     }
 
     /// Perform semantic search using embeddings
-    async fn semantic_search(&self, query: &str, embedding_model: &EmbeddingModel) -> Result<Vec<RagSearchResult>> {
+    async fn semantic_search(
+        &self,
+        query: &str,
+        embedding_model: &EmbeddingModel,
+    ) -> Result<Vec<RagSearchResult>> {
         log::debug!("Performing semantic search for: '{}'", query);
 
         // Generate query embedding
@@ -228,7 +268,10 @@ impl SmartSearchEngine {
         for entry in entries.flatten() {
             if let Some(file_name) = entry.file_name().to_str() {
                 if file_name.ends_with(".json") {
-                    match self.load_and_score_embedding(&entry.path(), &query_embedding, embedding_model).await {
+                    match self
+                        .load_and_score_embedding(&entry.path(), &query_embedding, embedding_model)
+                        .await
+                    {
                         Ok(Some(result)) => {
                             if result.score >= self.config.similarity_threshold {
                                 results.push(result);
@@ -236,7 +279,11 @@ impl SmartSearchEngine {
                         }
                         Ok(None) => continue,
                         Err(e) => {
-                            log::warn!("Failed to process embedding file {:?}: {}", entry.path(), e);
+                            log::warn!(
+                                "Failed to process embedding file {:?}: {}",
+                                entry.path(),
+                                e
+                            );
                         }
                     }
                 }
@@ -262,7 +309,8 @@ impl SmartSearchEngine {
             return Ok(vec![]);
         }
 
-        let query_words: Vec<String> = query.to_lowercase()
+        let query_words: Vec<String> = query
+            .to_lowercase()
             .split_whitespace()
             .filter(|w| w.len() > 2)
             .map(|w| w.to_string())
@@ -275,10 +323,13 @@ impl SmartSearchEngine {
             if let Some(file_name) = entry.file_name().to_str() {
                 if file_name.ends_with(".json") {
                     if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        if let Ok(stored_chunk) = serde_json::from_str::<crate::rag::StoredChunk>(&content) {
+                        if let Ok(stored_chunk) =
+                            serde_json::from_str::<crate::rag::StoredChunk>(&content)
+                        {
                             let content_lower = stored_chunk.content.to_lowercase();
 
-                            let matches = query_words.iter()
+                            let matches = query_words
+                                .iter()
                                 .filter(|word| content_lower.contains(*word))
                                 .count();
 
@@ -330,9 +381,12 @@ impl SmartSearchEngine {
     }
 
     /// Check if a file appears to be a code file
-    fn is_code_file(&self, path: &PathBuf) -> bool {
+    fn is_code_file(&self, path: &Path) -> bool {
         if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-            matches!(extension, "rs" | "js" | "ts" | "py" | "java" | "cpp" | "c" | "go" | "php" | "rb")
+            matches!(
+                extension,
+                "rs" | "js" | "ts" | "py" | "java" | "cpp" | "c" | "go" | "php" | "rb"
+            )
         } else {
             false
         }
@@ -372,7 +426,11 @@ impl SmartSearchEngine {
 
         for result in results {
             // Create a simple hash of the content for deduplication
-            let content_hash = format!("{}_{}", result.source_path.to_string_lossy(), result.chunk_index);
+            let content_hash = format!(
+                "{}_{}",
+                result.source_path.to_string_lossy(),
+                result.chunk_index
+            );
 
             if !seen_content.contains(&content_hash) {
                 seen_content.insert(content_hash);
@@ -380,12 +438,20 @@ impl SmartSearchEngine {
             }
         }
 
-        log::debug!("Deduplicated {} results to {}", original_count, unique_results.len());
+        log::debug!(
+            "Deduplicated {} results to {}",
+            original_count,
+            unique_results.len()
+        );
         unique_results
     }
 
     /// Finalize results with ranking and limiting
-    fn finalize_results(&self, mut results: Vec<VerifiedResult>, max_results: Option<usize>) -> Vec<VerifiedResult> {
+    fn finalize_results(
+        &self,
+        mut results: Vec<VerifiedResult>,
+        max_results: Option<usize>,
+    ) -> Vec<VerifiedResult> {
         // Sort by confidence score (already done in verifier, but ensuring)
         results.sort_by(|a, b| b.confidence_score.partial_cmp(&a.confidence_score).unwrap());
 

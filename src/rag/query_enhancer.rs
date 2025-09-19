@@ -29,12 +29,12 @@ pub struct QueryVariation {
 /// Different search strategies for query variations
 #[derive(Debug, Clone)]
 pub enum SearchStrategy {
-    Semantic,       // Use semantic embeddings
-    Keyword,        // Exact keyword matching
+    Semantic, // Use semantic embeddings
+    Keyword,  // Exact keyword matching
     #[allow(dead_code)]
-    Fuzzy,         // Fuzzy string matching
-    Code,          // Code-specific patterns
-    Mixed,         // Combined approach
+    Fuzzy, // Fuzzy string matching
+    Code,     // Code-specific patterns
+    Mixed,    // Combined approach
 }
 
 /// Detected query intent for specialized handling
@@ -77,11 +77,17 @@ impl QueryEnhancer {
         // Try LLM enhancement if available
         if let Some(ref llm_client) = self.llm_client {
             if self.config.enable_query_enhancement {
-                match self.enhance_with_llm(query, &detected_intent, llm_client).await {
+                match self
+                    .enhance_with_llm(query, &detected_intent, llm_client)
+                    .await
+                {
                     Ok((llm_variations, llm_terms)) => {
                         variations.extend(llm_variations);
                         suggested_terms.extend(llm_terms);
-                        log::debug!("LLM enhancement succeeded with {} variations", variations.len());
+                        log::debug!(
+                            "LLM enhancement succeeded with {} variations",
+                            variations.len()
+                        );
                     }
                     Err(e) => {
                         log::warn!("LLM enhancement failed, using fallback: {}", e);
@@ -95,11 +101,14 @@ impl QueryEnhancer {
         variations.extend(fallback_variations);
 
         // Add original query as highest priority
-        variations.insert(0, QueryVariation {
-            query: query.to_string(),
-            strategy: SearchStrategy::Mixed,
-            weight: 1.0,
-        });
+        variations.insert(
+            0,
+            QueryVariation {
+                query: query.to_string(),
+                strategy: SearchStrategy::Mixed,
+                weight: 1.0,
+            },
+        );
 
         // Limit variations based on config
         variations.truncate(self.config.max_query_variations.max(1));
@@ -128,19 +137,29 @@ impl QueryEnhancer {
         }
 
         // Check for configuration queries
-        if query_lower.contains("config") || query_lower.contains("settings") || query_lower.contains("environment") {
+        if query_lower.contains("config")
+            || query_lower.contains("settings")
+            || query_lower.contains("environment")
+        {
             return Ok(QueryIntent::Configuration);
         }
 
         // Check for debugging queries
-        if query_lower.contains("error") || query_lower.contains("bug") || query_lower.contains("debug")
-           || query_lower.contains("issue") || query_lower.contains("problem") {
+        if query_lower.contains("error")
+            || query_lower.contains("bug")
+            || query_lower.contains("debug")
+            || query_lower.contains("issue")
+            || query_lower.contains("problem")
+        {
             return Ok(QueryIntent::Debugging);
         }
 
         // Check for documentation queries
-        if query_lower.contains("how to") || query_lower.contains("guide") || query_lower.contains("tutorial")
-           || query_lower.contains("example") {
+        if query_lower.contains("how to")
+            || query_lower.contains("guide")
+            || query_lower.contains("tutorial")
+            || query_lower.contains("example")
+        {
             return Ok(QueryIntent::Documentation);
         }
 
@@ -150,23 +169,56 @@ impl QueryEnhancer {
     /// Check if query is code-related
     fn is_code_query(&self, query: &str) -> bool {
         let code_indicators = [
-            "function", "method", "class", "struct", "interface", "variable",
-            "implementation", "where is", "how does", "used", "called",
-            "middleware", "authentication", "validation", "security",
-            "database", "connection", "handler", "controller", "service",
-            "component", "module", "library", "package", "import",
+            "function",
+            "method",
+            "class",
+            "struct",
+            "interface",
+            "variable",
+            "implementation",
+            "where is",
+            "how does",
+            "used",
+            "called",
+            "middleware",
+            "authentication",
+            "validation",
+            "security",
+            "database",
+            "connection",
+            "handler",
+            "controller",
+            "service",
+            "component",
+            "module",
+            "library",
+            "package",
+            "import",
         ];
 
-        code_indicators.iter().any(|&indicator| query.contains(indicator))
+        code_indicators
+            .iter()
+            .any(|&indicator| query.contains(indicator))
     }
 
     /// Detect programming language from query
     fn detect_programming_language(&self, query: &str) -> Option<String> {
         let language_keywords = [
-            ("rust", vec!["fn", "impl", "struct", "trait", "cargo", "rust"]),
-            ("javascript", vec!["function", "const", "let", "var", "nodejs", "js", "react", "vue"]),
+            (
+                "rust",
+                vec!["fn", "impl", "struct", "trait", "cargo", "rust"],
+            ),
+            (
+                "javascript",
+                vec![
+                    "function", "const", "let", "var", "nodejs", "js", "react", "vue",
+                ],
+            ),
             ("typescript", vec!["interface", "type", "typescript", "ts"]),
-            ("python", vec!["def", "class", "import", "python", "django", "flask"]),
+            (
+                "python",
+                vec!["def", "class", "import", "python", "django", "flask"],
+            ),
             ("java", vec!["public", "private", "class", "java", "spring"]),
             ("go", vec!["func", "package", "golang", "go"]),
             ("c++", vec!["class", "namespace", "cpp", "c++"]),
@@ -222,7 +274,9 @@ impl QueryEnhancer {
         );
 
         // Create a simple LLM request (we'll use a basic approach since we don't have the full LLM implementation details)
-        let response = self.call_llm_for_enhancement(llm_client, &system_prompt, &user_message).await?;
+        let response = self
+            .call_llm_for_enhancement(llm_client, &system_prompt, &user_message)
+            .await?;
 
         let parsed_response: serde_json::Value = serde_json::from_str(&response)
             .unwrap_or_else(|_| json!({"variations": [], "keywords": []}));
@@ -287,7 +341,8 @@ impl QueryEnhancer {
         Ok(json!({
             "variations": [],
             "keywords": []
-        }).to_string())
+        })
+        .to_string())
     }
 
     /// Fallback enhancement without LLM
@@ -295,7 +350,10 @@ impl QueryEnhancer {
         let mut variations = Vec::new();
 
         match intent {
-            QueryIntent::CodeSearch { language, component_type } => {
+            QueryIntent::CodeSearch {
+                language,
+                component_type,
+            } => {
                 // Add code-specific variations
                 if let Some(comp_type) = component_type {
                     variations.push(QueryVariation {
@@ -323,7 +381,7 @@ impl QueryEnhancer {
                         weight: 0.7,
                     });
                 }
-            },
+            }
             QueryIntent::Documentation => {
                 // Add documentation-focused variations
                 variations.push(QueryVariation {
@@ -336,7 +394,7 @@ impl QueryEnhancer {
                     strategy: SearchStrategy::Keyword,
                     weight: 0.6,
                 });
-            },
+            }
             _ => {
                 // Generic fallback variations
                 variations.push(QueryVariation {
@@ -359,10 +417,16 @@ mod tests {
     async fn test_query_intent_detection() {
         let enhancer = QueryEnhancer::new(None, SmartSearchConfig::default());
 
-        let result = enhancer.detect_query_intent("where is middleware being used?").await.unwrap();
+        let result = enhancer
+            .detect_query_intent("where is middleware being used?")
+            .await
+            .unwrap();
         matches!(result, QueryIntent::CodeSearch { .. });
 
-        let result = enhancer.detect_query_intent("how to configure authentication").await.unwrap();
+        let result = enhancer
+            .detect_query_intent("how to configure authentication")
+            .await
+            .unwrap();
         matches!(result, QueryIntent::Configuration);
     }
 
@@ -370,7 +434,10 @@ mod tests {
     async fn test_fallback_enhancement() {
         let enhancer = QueryEnhancer::new(None, SmartSearchConfig::default());
 
-        let result = enhancer.enhance_query("validate_code_security function").await.unwrap();
+        let result = enhancer
+            .enhance_query("validate_code_security function")
+            .await
+            .unwrap();
         assert!(result.variations.len() > 1);
         assert_eq!(result.original, "validate_code_security function");
     }

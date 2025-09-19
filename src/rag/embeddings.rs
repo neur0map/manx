@@ -190,7 +190,11 @@ impl EmbeddingModel {
                     ..EmbeddingConfig::default()
                 })
             }
-            Err(e) => Err(anyhow!("Failed to create config for model {}: {}", model_name, e))
+            Err(e) => Err(anyhow!(
+                "Failed to create config for model {}: {}",
+                model_name,
+                e
+            )),
         }
     }
 
@@ -253,7 +257,7 @@ pub mod preprocessing {
             let trimmed = line.trim();
 
             // Skip empty lines in code
-            if trimmed.is_empty() && cleaned.len() > 0 {
+            if trimmed.is_empty() && !cleaned.is_empty() {
                 continue;
             }
 
@@ -294,9 +298,29 @@ pub mod preprocessing {
     /// Check if text appears to be code
     fn is_code_content(text: &str) -> bool {
         let code_indicators = [
-            "function", "const", "let", "var", "def", "class", "import", "export",
-            "public", "private", "protected", "return", "if (", "for (", "while (",
-            "=>", "->", "::", "<?php", "#!/", "package", "namespace", "struct",
+            "function",
+            "const",
+            "let",
+            "var",
+            "def",
+            "class",
+            "import",
+            "export",
+            "public",
+            "private",
+            "protected",
+            "return",
+            "if (",
+            "for (",
+            "while (",
+            "=>",
+            "->",
+            "::",
+            "<?php",
+            "#!/",
+            "package",
+            "namespace",
+            "struct",
         ];
 
         let text_lower = text.to_lowercase();
@@ -318,11 +342,24 @@ pub mod preprocessing {
 
         // Keep imports, function definitions, class definitions, etc.
         let important_patterns = [
-            "import ", "from ", "require", "include",
-            "function ", "def ", "fn ", "func ",
-            "class ", "struct ", "interface ", "enum ",
-            "public ", "private ", "protected ",
-            "export ", "module ", "namespace ",
+            "import ",
+            "from ",
+            "require",
+            "include",
+            "function ",
+            "def ",
+            "fn ",
+            "func ",
+            "class ",
+            "struct ",
+            "interface ",
+            "enum ",
+            "public ",
+            "private ",
+            "protected ",
+            "export ",
+            "module ",
+            "namespace ",
         ];
 
         for pattern in &important_patterns {
@@ -332,7 +369,9 @@ pub mod preprocessing {
         }
 
         // Keep lines with actual code (not just brackets)
-        !line.chars().all(|c| c == '{' || c == '}' || c == '(' || c == ')' || c == ';' || c.is_whitespace())
+        !line
+            .chars()
+            .all(|c| c == '{' || c == '}' || c == '(' || c == ')' || c == ';' || c.is_whitespace())
     }
 
     /// Split text into chunks suitable for embedding
@@ -383,17 +422,18 @@ pub mod preprocessing {
             let trimmed = line.trim();
 
             // Detect function/class boundaries
-            if trimmed.contains("function ") || trimmed.contains("def ") ||
-               trimmed.contains("class ") || trimmed.contains("fn ") {
+            if trimmed.contains("function ")
+                || trimmed.contains("def ")
+                || trimmed.contains("class ")
+                || trimmed.contains("fn ")
+            {
                 in_function = true;
 
                 // If current chunk is large enough, save it
-                if current_size > chunk_size / 2 && brace_depth == 0 {
-                    if !current_chunk.is_empty() {
-                        chunks.push(current_chunk.clone());
-                        current_chunk.clear();
-                        current_size = 0;
-                    }
+                if current_size > chunk_size / 2 && brace_depth == 0 && !current_chunk.is_empty() {
+                    chunks.push(current_chunk.clone());
+                    current_chunk.clear();
+                    current_size = 0;
                 }
             }
 

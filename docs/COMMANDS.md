@@ -84,15 +84,16 @@ manx index ~/dev-notes/
 manx index ~/team-docs/important-guide.md
 
 # Index web documentation
-manx index https://docs.fastapi.tiangolo.com
-manx index https://docs.rust-lang.org/book --crawl --max-depth 3
+manx index https://docs.fastapi.tiangolo.com --crawl
+manx index https://docs.rust-lang.org/book --crawl-depth 3
+manx index https://react.dev --crawl-all
 ```
 
 **Options:**
 - `--id <alias>` - Custom alias for indexed source
-- `--crawl` - Deep crawl for URLs (follows links)
-- `--max-depth <N>` - Maximum crawl depth (default: 3)
-- `--max-pages <N>` - Maximum pages to crawl
+- `--crawl` - Enable crawling for URLs (follows links with default depth)
+- `--crawl-depth <N>` - Crawl with specific depth (implies crawling)
+- `--crawl-all` - Crawl entire documentation site (implies crawling)
 
 **Supported formats:**
 - Text: `.md`, `.txt`, `.rst`

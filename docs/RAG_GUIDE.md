@@ -71,9 +71,10 @@ manx index ~/deployment-runbook.txt
 manx index https://docs.fastapi.tiangolo.com/tutorial/first-steps/
 manx index https://your-company-wiki.com/deployment-guide
 
-# Deep crawl documentation sites  
+# Deep crawl documentation sites
 manx index https://docs.fastapi.tiangolo.com --crawl
-manx index https://docs.rust-lang.org/book --crawl --max-depth 3
+manx index https://docs.rust-lang.org/book --crawl-depth 3
+manx index https://react.dev --crawl-all
 ```
 
 ### Indexing Options
@@ -82,7 +83,7 @@ manx index https://docs.rust-lang.org/book --crawl --max-depth 3
 manx index ~/team-docs/ --id "team-handbook"
 
 # Control crawling behavior
-manx index https://docs.site.com --crawl --max-depth 2 --max-pages 100
+manx index https://docs.site.com --crawl-depth 2
 
 # Verbose output during indexing
 manx index ~/docs/ --verbose

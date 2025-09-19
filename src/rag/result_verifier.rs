@@ -9,7 +9,7 @@ use serde_json::json;
 use crate::rag::{
     llm::LlmClient,
     query_enhancer::{EnhancedQuery, QueryIntent},
-    RagSearchResult, SmartSearchConfig
+    RagSearchResult, SmartSearchConfig,
 };
 
 /// Verified search result with confidence scoring
@@ -54,7 +54,11 @@ impl ResultVerifier {
         query: &EnhancedQuery,
         results: Vec<RagSearchResult>,
     ) -> Result<Vec<VerifiedResult>> {
-        log::debug!("Verifying {} results for query: '{}'", results.len(), query.original);
+        log::debug!(
+            "Verifying {} results for query: '{}'",
+            results.len(),
+            query.original
+        );
 
         let mut verified_results = Vec::new();
 
@@ -74,7 +78,8 @@ impl ResultVerifier {
         }
 
         // Sort by confidence score (highest first)
-        verified_results.sort_by(|a, b| b.confidence_score.partial_cmp(&a.confidence_score).unwrap());
+        verified_results
+            .sort_by(|a, b| b.confidence_score.partial_cmp(&a.confidence_score).unwrap());
 
         log::debug!(
             "Verification complete: {} results passed threshold",
@@ -122,19 +127,21 @@ impl ResultVerifier {
         );
 
         // Simplified LLM call (placeholder)
-        let response = self.call_llm_for_verification(llm_client, &system_prompt, &user_message).await?;
+        let response = self
+            .call_llm_for_verification(llm_client, &system_prompt, &user_message)
+            .await?;
 
-        let parsed_response: serde_json::Value = serde_json::from_str(&response)
-            .unwrap_or_else(|_| json!({
-                "relevant": true,
-                "confidence": 0.5,
-                "explanation": "Unable to parse LLM response",
-                "key_context": null
-            }));
+        let parsed_response: serde_json::Value =
+            serde_json::from_str(&response).unwrap_or_else(|_| {
+                json!({
+                    "relevant": true,
+                    "confidence": 0.5,
+                    "explanation": "Unable to parse LLM response",
+                    "key_context": null
+                })
+            });
 
-        let confidence = parsed_response["confidence"]
-            .as_f64()
-            .unwrap_or(0.5) as f32;
+        let confidence = parsed_response["confidence"].as_f64().unwrap_or(0.5) as f32;
 
         let explanation = parsed_response["explanation"]
             .as_str()
@@ -191,11 +198,16 @@ impl ResultVerifier {
             "confidence": 0.7,
             "explanation": "Content appears relevant to query",
             "key_context": null
-        }).to_string())
+        })
+        .to_string())
     }
 
     /// Fallback verification using statistical methods
-    fn verify_with_fallback(&self, query: &EnhancedQuery, result: RagSearchResult) -> VerifiedResult {
+    fn verify_with_fallback(
+        &self,
+        query: &EnhancedQuery,
+        result: RagSearchResult,
+    ) -> VerifiedResult {
         let mut confidence_score = result.score; // Start with embedding similarity
 
         // Keyword matching boost
@@ -203,7 +215,8 @@ impl ResultVerifier {
         confidence_score = (confidence_score + keyword_score) / 2.0;
 
         // Intent-specific scoring adjustments
-        confidence_score = self.apply_intent_adjustments(confidence_score, &query.detected_intent, &result);
+        confidence_score =
+            self.apply_intent_adjustments(confidence_score, &query.detected_intent, &result);
 
         // Apply query variation matching
         let variation_score = self.calculate_variation_score(query, &result.content);
@@ -214,7 +227,7 @@ impl ResultVerifier {
 
         VerifiedResult {
             result,
-            confidence_score: confidence_score.min(1.0).max(0.0),
+            confidence_score: confidence_score.clamp(0.0, 1.0),
             relevance_explanation: Some("Statistical relevance analysis".to_string()),
             extracted_context,
             verification_method: VerificationMethod::Statistical,
@@ -234,7 +247,8 @@ impl ResultVerifier {
         }
 
         let content_lower = content.to_lowercase();
-        let matches = query_words.iter()
+        let matches = query_words
+            .iter()
             .filter(|&&word| content_lower.contains(word))
             .count();
 
@@ -251,7 +265,10 @@ impl ResultVerifier {
         let mut adjusted_score = base_score;
 
         match intent {
-            QueryIntent::CodeSearch { language, component_type } => {
+            QueryIntent::CodeSearch {
+                language,
+                component_type,
+            } => {
                 // Boost if content appears to be code
                 if self.looks_like_code(&result.content) {
                     adjusted_score *= 1.2;
@@ -266,28 +283,34 @@ impl ResultVerifier {
 
                 // Boost if component type matches
                 if let Some(comp_type) = component_type {
-                    if result.content.to_lowercase().contains(&comp_type.to_lowercase()) {
+                    if result
+                        .content
+                        .to_lowercase()
+                        .contains(&comp_type.to_lowercase())
+                    {
                         adjusted_score *= 1.15;
                     }
                 }
-            },
+            }
             QueryIntent::Documentation => {
                 // Boost documentation-like files
-                if result.source_path.to_string_lossy().contains("doc") ||
-                   result.source_path.to_string_lossy().contains("readme") ||
-                   result.source_path.to_string_lossy().ends_with(".md") {
+                if result.source_path.to_string_lossy().contains("doc")
+                    || result.source_path.to_string_lossy().contains("readme")
+                    || result.source_path.to_string_lossy().ends_with(".md")
+                {
                     adjusted_score *= 1.1;
                 }
-            },
+            }
             QueryIntent::Configuration => {
                 // Boost config-like files
-                if result.source_path.to_string_lossy().contains("config") ||
-                   result.source_path.to_string_lossy().ends_with(".json") ||
-                   result.source_path.to_string_lossy().ends_with(".yaml") ||
-                   result.source_path.to_string_lossy().ends_with(".toml") {
+                if result.source_path.to_string_lossy().contains("config")
+                    || result.source_path.to_string_lossy().ends_with(".json")
+                    || result.source_path.to_string_lossy().ends_with(".yaml")
+                    || result.source_path.to_string_lossy().ends_with(".toml")
+                {
                     adjusted_score *= 1.2;
                 }
-            },
+            }
             _ => {}
         }
 
@@ -297,13 +320,13 @@ impl ResultVerifier {
     /// Check if content looks like code
     fn looks_like_code(&self, content: &str) -> bool {
         let code_indicators = [
-            "function", "class", "struct", "impl", "def", "fn",
-            "public", "private", "const", "let", "var",
-            "import", "use", "include", "package",
-            "{", "}", "(", ")", ";", "=>", "->",
+            "function", "class", "struct", "impl", "def", "fn", "public", "private", "const",
+            "let", "var", "import", "use", "include", "package", "{", "}", "(", ")", ";", "=>",
+            "->",
         ];
 
-        let indicator_count = code_indicators.iter()
+        let indicator_count = code_indicators
+            .iter()
             .filter(|&&indicator| content.contains(indicator))
             .count();
 
@@ -325,12 +348,11 @@ impl ResultVerifier {
     /// Extract most relevant context from content
     fn extract_key_context(&self, query: &str, content: &str) -> Option<String> {
         let query_lower = query.to_lowercase();
-        let query_words: Vec<&str> = query_lower
-            .split_whitespace()
-            .collect();
+        let query_words: Vec<&str> = query_lower.split_whitespace().collect();
 
         // Find sentences containing query terms
-        let sentences: Vec<&str> = content.split(|c| c == '.' || c == '\n' || c == ';')
+        let sentences: Vec<&str> = content
+            .split(['.', '\n', ';'])
             .filter(|s| !s.trim().is_empty())
             .collect();
 
@@ -339,7 +361,8 @@ impl ResultVerifier {
 
         for sentence in sentences {
             let sentence_lower = sentence.to_lowercase();
-            let matches = query_words.iter()
+            let matches = query_words
+                .iter()
                 .filter(|&&word| sentence_lower.contains(word))
                 .count();
 
@@ -377,6 +400,7 @@ mod tests {
     use crate::rag::{DocumentMetadata, SourceType};
     use std::path::PathBuf;
 
+    #[allow(dead_code)]
     fn create_test_result(content: &str, score: f32) -> RagSearchResult {
         RagSearchResult {
             id: "test".to_string(),
@@ -403,7 +427,7 @@ mod tests {
 
         let score = verifier.calculate_keyword_score(
             "validate security function",
-            "fn validate_security() { /* security validation */ }"
+            "fn validate_security() { /* security validation */ }",
         );
 
         assert!(score > 0.5);

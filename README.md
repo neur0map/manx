@@ -80,7 +80,8 @@ manx doc fastapi "dependency injection"
 ```bash
 # Index local documentation or crawl websites
 manx index ~/dev-notes/
-manx index https://docs.python.org --crawl --max-depth 2
+manx index https://docs.python.org --crawl-depth 2
+manx index https://react.dev --crawl-all
 
 # Search with semantic understanding
 manx search "team coding standards" --rag
