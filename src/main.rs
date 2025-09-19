@@ -1471,28 +1471,19 @@ async fn handle_index_command(
     // Determine if input is URL or file path
     let is_url = path_or_url.starts_with("http://") || path_or_url.starts_with("https://");
 
+    // For crawling operations, don't show our spinner to avoid conflicts with docrawl's built-in progress
     let pb = if is_url {
         // Check if any crawl option is enabled (crawl, crawl_depth, or crawl_all)
         let should_crawl = crawl || crawl_depth.is_some() || crawl_all;
 
         if should_crawl {
-            let crawl_info = match (crawl_depth, crawl_all) {
-                (Some(depth), false) => {
-                    format!(" (max depth: {})", depth)
-                }
-                (Some(depth), true) => format!(" (max depth: {}, crawl all)", depth),
-                (None, true) => " (crawl all)".to_string(),
-                (None, false) => " (default depth)".to_string(),
-            };
-            renderer.show_progress(&format!(
-                "Deep crawling and indexing URL: {}{}",
-                path_or_url, crawl_info
-            ))
+            // Don't show progress spinner during crawling - let docrawl handle it
+            None
         } else {
-            renderer.show_progress(&format!("Fetching and indexing URL: {}", path_or_url))
+            Some(renderer.show_progress(&format!("Fetching and indexing URL: {}", path_or_url)))
         }
     } else {
-        renderer.show_progress(&format!("Indexing path: {}", path_or_url))
+        Some(renderer.show_progress(&format!("Indexing path: {}", path_or_url)))
     };
 
     match RagSystem::new(config.rag.clone()).await {
@@ -1520,7 +1511,9 @@ async fn handle_index_command(
                 } else if path.is_dir() {
                     rag_system.index_directory(path).await?
                 } else {
-                    pb.finish_and_clear();
+                    if let Some(pb) = pb {
+                        pb.finish_and_clear();
+                    }
                     return Err(anyhow::anyhow!(
                         "Path does not exist or is not accessible: {}",
                         path_or_url
@@ -1528,7 +1521,9 @@ async fn handle_index_command(
                 }
             };
 
-            pb.finish_and_clear();
+            if let Some(pb) = pb {
+                pb.finish_and_clear();
+            }
 
             if indexed_count == 0 {
                 if is_url {
@@ -1553,7 +1548,9 @@ async fn handle_index_command(
             }
         }
         Err(e) => {
-            pb.finish_and_clear();
+            if let Some(pb) = pb {
+                pb.finish_and_clear();
+            }
             renderer.print_error(&format!("Failed to initialize RAG system: {}", e));
             renderer.print_success("Make sure Qdrant is running:");
             renderer.print_success("  docker run -p 6334:6334 qdrant/qdrant");
