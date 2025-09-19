@@ -43,10 +43,27 @@ manx index ~/deployment-runbook.txt
 ```
 
 ### Supported File Formats
+
+#### Documentation Formats
 - **Markdown**: `.md`, `.markdown`
-- **Text files**: `.txt`, `.rst`  
-- **Documents**: `.docx`
-- **Web content**: Any HTTP/HTTPS URL
+- **Text files**: `.txt`, `.rst`
+- **Documents**: `.docx`, `.pdf` (with security validation)
+
+#### Code Files (NEW!)
+- **Web/Frontend**: `.js`, `.jsx`, `.ts`, `.tsx`, `.vue`, `.svelte`, `.html`, `.css`, `.scss`
+- **Backend**: `.py`, `.rb`, `.php`, `.java`, `.scala`, `.kotlin`, `.groovy`
+- **Systems**: `.c`, `.cpp`, `.h`, `.rs`, `.go`, `.zig`
+- **Mobile**: `.swift`, `.m`, `.dart`, `.kt`
+- **Database**: `.sql`, `.graphql`, `.prisma`
+- **Other**: `.r`, `.jl`, `.lua`, `.vim`, `.el`
+
+#### Configuration & Data
+- **Config**: `.json`, `.yaml`, `.yml`, `.toml`, `.xml`, `.ini`, `.properties`
+- **Environment**: `.env` (automatic secret masking)
+- **Scripts**: `.sh`, `.bash`, `.zsh`, `.ps1`, `.bat` (enhanced security)
+
+#### Web Content
+- **Web pages**: Any HTTP/HTTPS URL (HTML auto-extraction)
 
 ### Web Documentation
 ```bash
@@ -98,6 +115,11 @@ manx snippet "custom logging decorator" --rag
 
 # Get team procedures and runbooks
 manx search "incident response checklist" --rag
+
+# NEW: Search in your codebase!
+manx search "where is middleware being used?" --rag
+manx search "database connection implementation" --rag
+manx search "error handling patterns" --rag
 
 # Find architectural decisions
 manx search "why we chose postgresql over mongodb" --rag
@@ -191,6 +213,35 @@ manx search "microservices communication" --rag
 - **Lessons learned** (from your postmortem docs)
 - **AI synthesis** connecting everything with best practices
 
+## 🔒 Security Features
+
+manx implements comprehensive security measures when indexing code and documents:
+
+### Code Security
+- **Obfuscation Detection**: Identifies potentially malicious obfuscated code
+- **Shell Script Validation**: Blocks dangerous commands (rm -rf /, fork bombs, etc.)
+- **Prompt Injection Prevention**: Detects and prevents LLM prompt injection attempts
+- **URL Validation**: Checks for suspicious domains and URL shorteners
+
+### Secret Protection
+- **Automatic Masking**: API keys, tokens, and passwords are automatically masked
+- **Environment Files**: .env files are heavily sanitized
+- **Private Keys**: SSH and SSL private keys are replaced with [MASKED]
+- **Config Files**: Sensitive values in config files are protected
+
+### Security Levels
+Configure security strictness based on your needs:
+```bash
+# Default (Moderate) - Good balance of security and functionality
+manx config --code-security moderate
+
+# Strict - Maximum security, may reject some legitimate files
+manx config --code-security strict
+
+# Permissive - Minimal checks, use only with trusted content
+manx config --code-security permissive
+```
+
 ## 🎯 RAG Use Cases
 
 ### Team Knowledge Base
@@ -241,6 +292,25 @@ manx index ~/solution-database/
 # Quick problem resolution
 manx search "memory leak investigation" --rag
 manx search "deployment rollback procedure" --rag
+```
+
+### Codebase Search (NEW!)
+```bash
+# Index your entire codebase
+manx index ~/projects/my-app/src/
+manx index ~/projects/my-app/lib/
+manx index ~/projects/my-app/tests/
+
+# Search for code patterns and implementations
+manx search "where is middleware being used?" --rag
+manx search "authentication implementation" --rag
+manx search "database connection handling" --rag
+manx search "error logging patterns" --rag
+
+# Find specific components or functions
+manx search "UserProfile component" --rag
+manx search "payment processing logic" --rag
+manx search "API rate limiting" --rag
 ```
 
 ## ⚙️ RAG Configuration

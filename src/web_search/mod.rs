@@ -400,6 +400,7 @@ impl DocumentationSearchSystem {
                         title: Some(r.title.clone()),
                         section: None,
                         score: r.final_score,
+                        chunk_index: 0,
                         metadata: crate::rag::DocumentMetadata {
                             file_type: "web".to_string(),
                             size: r.snippet.len() as u64,

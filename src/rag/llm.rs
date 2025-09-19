@@ -88,6 +88,7 @@ pub struct Citation {
 }
 
 /// Multi-provider LLM client with automatic failover
+#[derive(Clone)]
 pub struct LlmClient {
     pub(crate) config: LlmConfig,
     pub(crate) http_client: reqwest::Client,

@@ -709,6 +709,7 @@ async fn handle_search_command(
                     source_path: std::path::PathBuf::from(&result.library),
                     source_type: crate::rag::SourceType::Curated,
                     section: None,
+                    chunk_index: 0,
                     metadata: crate::rag::DocumentMetadata {
                         file_type: "snippet".to_string(),
                         size: result.excerpt.len() as u64,
@@ -988,6 +989,7 @@ async fn handle_doc_command(
                     source_path: std::path::PathBuf::from(library),
                     source_type: crate::rag::SourceType::Curated,
                     section: Some(format!("Section {}", i + 1)),
+                    chunk_index: i,
                     metadata: crate::rag::DocumentMetadata {
                         file_type: "documentation".to_string(),
                         size: section.len() as u64,
@@ -2163,6 +2165,7 @@ async fn handle_web_search_command(
                                 crate::rag::SourceType::Remote
                             },
                             section: None,
+                            chunk_index: 0,
                             metadata: crate::rag::DocumentMetadata {
                                 file_type: "web".to_string(),
                                 size: result.snippet.len() as u64,

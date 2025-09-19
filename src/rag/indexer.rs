@@ -329,7 +329,28 @@ impl Indexer {
 }
 
 /// Supported file extensions for indexing
-const SUPPORTED_EXTENSIONS: &[&str] = &[".md", ".txt", ".pdf", ".doc", ".docx"];
+const SUPPORTED_EXTENSIONS: &[&str] = &[
+    // Documentation
+    ".md", ".txt", ".pdf", ".doc", ".docx", ".rst",
+    // Web/Frontend
+    ".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte", ".html", ".css", ".scss", ".sass", ".less",
+    // Backend/Server
+    ".py", ".rb", ".php", ".java", ".scala", ".kotlin", ".groovy",
+    // Systems Programming
+    ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".rs", ".go", ".zig",
+    // Functional
+    ".ml", ".mli", ".hs", ".elm", ".clj", ".cljs", ".erl", ".ex", ".exs",
+    // Data/Config
+    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env", ".properties",
+    // Shell/Scripts (with security validation)
+    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    // Mobile
+    ".swift", ".m", ".mm", ".kt", ".dart",
+    // Database
+    ".sql", ".graphql", ".prisma",
+    // Other Languages
+    ".r", ".R", ".jl", ".lua", ".vim", ".el",
+];
 
 /// Default chunk size in tokens (approximately)
 const DEFAULT_CHUNK_SIZE: usize = 500;
@@ -349,7 +370,7 @@ pub fn find_documents(dir_path: &Path) -> Result<Vec<PathBuf>> {
 
     let mut documents = Vec::new();
     let max_depth = 10; // Prevent infinite recursion
-    let max_file_size = 50 * 1024 * 1024; // 50MB limit per file
+    let max_file_size = 100 * 1024 * 1024; // 100MB limit per file
 
     log::info!("Scanning directory for documents: {:?}", dir_path);
 
@@ -466,10 +487,18 @@ pub fn index_document(path: PathBuf, config: &RagConfig) -> Result<Vec<DocumentC
         return Ok(vec![]); // Skip PDF files when disabled
     }
 
+    // SECURITY: Check if code processing is disabled
+    let code_extensions = ["js", "jsx", "ts", "tsx", "py", "rb", "php", "java", "scala",
+                          "kotlin", "rs", "go", "c", "cpp", "sh", "bash", "ps1"];
+    if code_extensions.contains(&extension.as_str()) && !config.allow_code_processing {
+        log::warn!("Code processing disabled. Skipping: {:?}", path);
+        return Ok(vec![]); // Skip code files when disabled
+    }
+
     log::info!("Indexing document: {:?}", path);
 
-    // Extract text content
-    let content = extract_text(&path)?;
+    // Extract text content with configuration
+    let content = extract_text(&path, config)?;
     if content.trim().is_empty() {
         return Err(anyhow!("Document contains no text content: {:?}", path));
     }
@@ -508,7 +537,7 @@ pub fn index_document(path: PathBuf, config: &RagConfig) -> Result<Vec<DocumentC
 }
 
 /// Extract text content from various file formats
-fn extract_text(path: &Path) -> Result<String> {
+fn extract_text(path: &Path, config: &RagConfig) -> Result<String> {
     let extension = path
         .extension()
         .and_then(|ext| ext.to_str())
@@ -516,9 +545,23 @@ fn extract_text(path: &Path) -> Result<String> {
         .to_lowercase();
 
     match extension.as_str() {
-        "md" | "txt" => extract_text_file(path),
+        "md" | "txt" | "rst" => extract_text_file(path),
         "pdf" => extract_pdf_text(path),
         "doc" | "docx" => extract_doc_text(path),
+        // Code files
+        "js" | "jsx" | "ts" | "tsx" | "vue" | "svelte" | "html" | "css" | "scss" | "sass" | "less" |
+        "py" | "rb" | "php" | "java" | "scala" | "kotlin" | "groovy" |
+        "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "rs" | "go" | "zig" |
+        "ml" | "mli" | "hs" | "elm" | "clj" | "cljs" | "erl" | "ex" | "exs" |
+        "swift" | "m" | "mm" | "kt" | "dart" |
+        "r" | "jl" | "lua" | "vim" | "el" |
+        "sql" | "graphql" | "prisma" => extract_code_text(path, config),
+        // Config files
+        "json" | "yaml" | "yml" | "toml" | "xml" | "ini" | "properties" => extract_config_text(path, config),
+        // Shell scripts (with extra security)
+        "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd" => extract_shell_text(path, config),
+        // Environment files (with secret masking)
+        "env" => extract_env_text(path, config),
         _ => Err(anyhow!("Unsupported file extension: {}", extension)),
     }
 }
@@ -633,6 +676,315 @@ fn extract_docx_text_safe(path: &Path) -> Result<String> {
     text_content.push_str("Note: Basic DOCX processing - text extraction can be enhanced.");
 
     Ok(text_content)
+}
+
+/// Extract text from code files with security validation
+fn extract_code_text(path: &Path, config: &RagConfig) -> Result<String> {
+    // Validate code file security
+    validate_code_security(path, &config.code_security_level)?;
+
+    // Read the code file
+    let content = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Failed to read code file {:?}: {}", path, e))?;
+
+    // Clean and prepare for indexing
+    let cleaned = if config.mask_secrets {
+        sanitize_code_content(&content)
+    } else {
+        content
+    };
+    Ok(cleaned)
+}
+
+/// Extract text from config files with validation
+fn extract_config_text(path: &Path, config: &RagConfig) -> Result<String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Failed to read config file {:?}: {}", path, e))?;
+
+    // Mask any potential secrets in config files
+    let sanitized = if config.mask_secrets {
+        mask_secrets(&content)
+    } else {
+        content
+    };
+    Ok(sanitized)
+}
+
+/// Extract text from shell scripts with enhanced security validation
+fn extract_shell_text(path: &Path, config: &RagConfig) -> Result<String> {
+    // Extra security validation for shell scripts
+    validate_shell_security(path, &config.code_security_level)?;
+
+    let content = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Failed to read shell script {:?}: {}", path, e))?;
+
+    // Sanitize shell content
+    let sanitized = if config.mask_secrets {
+        sanitize_shell_content(&content)
+    } else {
+        content
+    };
+    Ok(sanitized)
+}
+
+/// Extract text from environment files with secret masking
+fn extract_env_text(path: &Path, _config: &RagConfig) -> Result<String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Failed to read env file {:?}: {}", path, e))?;
+
+    // Heavily mask environment files
+    let masked = mask_env_secrets(&content);
+    Ok(masked)
+}
+
+/// Security validation for code files to prevent malicious content processing
+fn validate_code_security(path: &Path, security_level: &crate::rag::CodeSecurityLevel) -> Result<()> {
+    use crate::rag::CodeSecurityLevel;
+    log::debug!("Running security validation on code file: {:?}", path);
+
+    // Check file size
+    let metadata = fs::metadata(path)?;
+    const MAX_CODE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
+    if metadata.len() > MAX_CODE_SIZE {
+        return Err(anyhow!(
+            "Code file rejected: Size {} bytes exceeds maximum allowed size of {} bytes",
+            metadata.len(),
+            MAX_CODE_SIZE
+        ));
+    }
+
+    // Read file content for analysis
+    let content = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Failed to read code file for validation: {}", e))?;
+
+    // Check for obfuscated code patterns
+    if is_potentially_obfuscated(&content) {
+        match security_level {
+            CodeSecurityLevel::Strict => {
+                return Err(anyhow!("Code file rejected: Contains potentially obfuscated content"));
+            }
+            CodeSecurityLevel::Moderate => {
+                log::warn!("Code file may contain obfuscated content: {:?}", path);
+            }
+            CodeSecurityLevel::Permissive => {
+                log::debug!("Obfuscated content check bypassed (permissive mode)");
+            }
+        }
+    }
+
+    // Check for suspicious URLs or domains
+    validate_urls_in_code(&content, security_level)?;
+
+    // Check for prompt injection patterns
+    check_prompt_injection(&content, security_level)?;
+
+    Ok(())
+}
+
+/// Enhanced security validation for shell scripts
+fn validate_shell_security(path: &Path, security_level: &crate::rag::CodeSecurityLevel) -> Result<()> {
+    use crate::rag::CodeSecurityLevel;
+    log::debug!("Running enhanced security validation on shell script: {:?}", path);
+
+    let content = fs::read_to_string(path)
+        .map_err(|e| anyhow!("Failed to read shell script for validation: {}", e))?;
+
+    // Dangerous shell command patterns
+    let dangerous_patterns = [
+        r"rm\s+-rf\s+/",           // rm -rf /
+        r"rm\s+-rf\s+\*",          // rm -rf *
+        r":\(\)\s*\{\s*:\|\:&\s*\};:", // Fork bomb
+        r"mkfs\.",                 // Format filesystem
+        r"dd\s+if=/dev/(zero|random)", // Disk wipe
+        r">\s*/dev/sda",           // Direct disk write
+        r"curl.*\|\s*(ba)?sh",     // Remote code execution
+        r"wget.*\|\s*(ba)?sh",     // Remote code execution
+        r"eval\s+.*\$\(",          // Eval with command substitution
+        r"python\s+-c.*exec",      // Python exec
+    ];
+
+    for pattern in &dangerous_patterns {
+        if regex::Regex::new(pattern)
+            .unwrap_or_else(|_| regex::Regex::new("").unwrap())
+            .is_match(&content)
+        {
+            match security_level {
+                CodeSecurityLevel::Strict | CodeSecurityLevel::Moderate => {
+                    return Err(anyhow!(
+                        "Shell script rejected: Contains potentially dangerous command pattern"
+                    ));
+                }
+                CodeSecurityLevel::Permissive => {
+                    log::warn!("Dangerous shell pattern detected but allowed in permissive mode");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check for potentially obfuscated code
+fn is_potentially_obfuscated(content: &str) -> bool {
+    // Check for high entropy (randomness) in variable names
+    let lines: Vec<&str> = content.lines().collect();
+    let mut suspicious_count = 0;
+
+    for line in lines {
+        // Skip comments
+        if line.trim().starts_with("//") || line.trim().starts_with("#") || line.trim().starts_with("/*") {
+            continue;
+        }
+
+        // Check for base64 encoded strings
+        if line.contains("atob") || line.contains("btoa") || line.contains("base64") {
+            suspicious_count += 1;
+        }
+
+        // Check for hex strings
+        if regex::Regex::new(r"\\x[0-9a-fA-F]{2}").unwrap().is_match(line) {
+            suspicious_count += 1;
+        }
+
+        // Check for excessive use of escape characters
+        if line.matches('\\').count() > 10 {
+            suspicious_count += 1;
+        }
+    }
+
+    suspicious_count > 5
+}
+
+/// Validate URLs in code for suspicious domains
+fn validate_urls_in_code(content: &str, security_level: &crate::rag::CodeSecurityLevel) -> Result<()> {
+    use crate::rag::CodeSecurityLevel;
+    let url_pattern = regex::Regex::new(r#"https?://[^\s"']+"#).unwrap();
+
+    let suspicious_domains = [
+        "bit.ly", "tinyurl.com", "goo.gl", "ow.ly", "shorte.st",
+        "adf.ly", "bc.vc", "bit.do", "soo.gd", "7.ly",
+        "5z8.info", "DFHGDH", // Common in malware
+    ];
+
+    for url_match in url_pattern.find_iter(content) {
+        let url = url_match.as_str();
+        for domain in &suspicious_domains {
+            if url.contains(domain) {
+                match security_level {
+                    CodeSecurityLevel::Strict => {
+                        return Err(anyhow!("Code rejected: Contains suspicious URL shortener: {}", url));
+                    }
+                    CodeSecurityLevel::Moderate => {
+                        log::warn!("Suspicious URL shortener found in code: {}", url);
+                    }
+                    CodeSecurityLevel::Permissive => {
+                        log::debug!("URL check bypassed (permissive mode): {}", url);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check for prompt injection patterns
+fn check_prompt_injection(content: &str, security_level: &crate::rag::CodeSecurityLevel) -> Result<()> {
+    use crate::rag::CodeSecurityLevel;
+    let injection_patterns = [
+        "ignore previous instructions",
+        "disregard all prior",
+        "forget everything above",
+        "new instructions:",
+        "SYSTEM PROMPT:",
+        "###SYSTEM###",
+        "</system>",
+        "<|im_start|>",
+        "<|im_end|>",
+    ];
+
+    let content_lower = content.to_lowercase();
+    for pattern in &injection_patterns {
+        if content_lower.contains(pattern) {
+            match security_level {
+                CodeSecurityLevel::Strict => {
+                    return Err(anyhow!("Code rejected: Contains potential prompt injection pattern: {}", pattern));
+                }
+                CodeSecurityLevel::Moderate => {
+                    log::warn!("Potential prompt injection pattern detected: {}", pattern);
+                }
+                CodeSecurityLevel::Permissive => {
+                    log::debug!("Prompt injection check bypassed (permissive mode)");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Sanitize code content for safe indexing
+fn sanitize_code_content(content: &str) -> String {
+    // Remove any inline secrets or API keys
+    let sanitized = mask_secrets(content);
+
+    // Preserve code structure but clean up
+    sanitized
+}
+
+/// Sanitize shell script content
+fn sanitize_shell_content(content: &str) -> String {
+    // Mask any hardcoded passwords or secrets
+    mask_secrets(content)
+}
+
+/// Mask secrets in content
+fn mask_secrets(content: &str) -> String {
+    let mut result = content.to_string();
+
+    // Patterns for common secrets
+    let secret_patterns = [
+        (r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?([^'\";\s]+)"#, "API_KEY=[MASKED]"),
+        (r#"(?i)(secret|password|passwd|pwd)\s*[:=]\s*['\"]?([^'\";\s]+)"#, "SECRET=[MASKED]"),
+        (r#"(?i)(token|auth)\s*[:=]\s*['\"]?([^'\";\s]+)"#, "TOKEN=[MASKED]"),
+        (r"(?i)bearer\s+[a-zA-Z0-9\-._~+/]+", "Bearer [MASKED]"),
+        (r"-----BEGIN (RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----[\s\S]*?-----END (RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----", "[PRIVATE_KEY_MASKED]"),
+        (r"ghp_[a-zA-Z0-9]{36}", "ghp_[GITHUB_TOKEN_MASKED]"),
+        (r"sk-[a-zA-Z0-9]{48}", "sk-[OPENAI_KEY_MASKED]"),
+    ];
+
+    for (pattern, replacement) in &secret_patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            result = re.replace_all(&result, *replacement).to_string();
+        }
+    }
+
+    result
+}
+
+/// Heavily mask environment file secrets
+fn mask_env_secrets(content: &str) -> String {
+    let mut result = String::new();
+
+    for line in content.lines() {
+        if line.trim().is_empty() || line.trim().starts_with('#') {
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        if let Some(eq_pos) = line.find('=') {
+            let key = &line[..eq_pos];
+            // Keep the key but mask the value
+            result.push_str(key);
+            result.push_str("=[MASKED]\n");
+        } else {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    result
 }
 
 /// Security validation for PDF files to prevent malicious content processing

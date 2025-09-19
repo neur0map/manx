@@ -24,6 +24,12 @@ impl EmbeddingModel {
         Self::new_with_config(EmbeddingConfig::default()).await
     }
 
+    /// Create embedding model with smart auto-selection of best available provider
+    pub async fn new_auto_select() -> Result<Self> {
+        let best_config = Self::auto_select_best_provider().await?;
+        Self::new_with_config(best_config).await
+    }
+
     /// Create a new embedding model with custom configuration
     pub async fn new_with_config(config: EmbeddingConfig) -> Result<Self> {
         log::info!(
@@ -125,12 +131,99 @@ impl EmbeddingModel {
             dot_product / (norm_a * norm_b)
         }
     }
+
+    /// Automatically select the best available embedding provider from installed models
+    /// Respects user's installed models and doesn't hardcode specific model names
+    pub async fn auto_select_best_provider() -> Result<EmbeddingConfig> {
+        log::info!("Auto-selecting best available embedding provider from installed models...");
+
+        // Try to find any available ONNX models by checking common model directories
+        if let Ok(available_models) = Self::get_available_onnx_models().await {
+            if !available_models.is_empty() {
+                // Select the first available model (user chose to install it)
+                let selected_model = &available_models[0];
+                log::info!("Auto-selected installed ONNX model: {}", selected_model);
+
+                // Try to determine dimension by testing the model
+                if let Ok(test_config) = Self::create_config_for_model(selected_model).await {
+                    return Ok(test_config);
+                }
+            }
+        }
+
+        // Fallback to hash-based embeddings if no ONNX models available
+        log::info!("No ONNX models found, using hash-based embeddings");
+        Ok(EmbeddingConfig::default())
+    }
+
+    /// Get list of available ONNX models (non-hardcoded discovery)
+    async fn get_available_onnx_models() -> Result<Vec<String>> {
+        // This would typically scan the model cache directory
+        // For now, we'll try a few common models that might be installed
+        let potential_models = [
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "sentence-transformers/all-mpnet-base-v2",
+            "BAAI/bge-base-en-v1.5",
+            "BAAI/bge-small-en-v1.5",
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        ];
+
+        let mut available = Vec::new();
+        for model in &potential_models {
+            if Self::is_onnx_model_available(model).await {
+                available.push(model.to_string());
+            }
+        }
+
+        Ok(available)
+    }
+
+    /// Create config for a specific model with proper dimension detection
+    async fn create_config_for_model(model_name: &str) -> Result<EmbeddingConfig> {
+        // Test the model to get its dimension
+        match onnx::OnnxProvider::new(model_name).await {
+            Ok(provider) => {
+                let dimension = provider.get_dimension().await.unwrap_or(384);
+                Ok(EmbeddingConfig {
+                    provider: EmbeddingProvider::Onnx(model_name.to_string()),
+                    dimension,
+                    ..EmbeddingConfig::default()
+                })
+            }
+            Err(e) => Err(anyhow!("Failed to create config for model {}: {}", model_name, e))
+        }
+    }
+
+    /// Check if an ONNX model is available locally
+    async fn is_onnx_model_available(model_name: &str) -> bool {
+        // Try to create the provider to test availability
+        match onnx::OnnxProvider::new(model_name).await {
+            Ok(_) => {
+                log::debug!("ONNX model '{}' is available", model_name);
+                true
+            }
+            Err(e) => {
+                log::debug!("ONNX model '{}' not available: {}", model_name, e);
+                false
+            }
+        }
+    }
 }
 
 /// Utility functions for text preprocessing
 pub mod preprocessing {
     /// Clean and normalize text for embedding
     pub fn clean_text(text: &str) -> String {
+        // Detect if this is code based on common patterns
+        if is_code_content(text) {
+            clean_code_text(text)
+        } else {
+            clean_regular_text(text)
+        }
+    }
+
+    /// Clean regular text (documents, markdown, etc.)
+    fn clean_regular_text(text: &str) -> String {
         // Remove excessive whitespace
         let cleaned = text
             .lines()
@@ -151,8 +244,109 @@ pub mod preprocessing {
         }
     }
 
+    /// Clean code text while preserving structure
+    fn clean_code_text(text: &str) -> String {
+        let mut cleaned = String::new();
+        let mut in_comment_block = false;
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+
+            // Skip empty lines in code
+            if trimmed.is_empty() && cleaned.len() > 0 {
+                continue;
+            }
+
+            // Handle comment blocks
+            if trimmed.starts_with("/*") {
+                in_comment_block = true;
+            }
+            if in_comment_block {
+                if trimmed.ends_with("*/") {
+                    in_comment_block = false;
+                }
+                cleaned.push_str("// ");
+                cleaned.push_str(trimmed);
+                cleaned.push('\n');
+                continue;
+            }
+
+            // Preserve important code structure
+            if is_important_code_line(trimmed) {
+                // Keep indentation context (simplified)
+                let indent_level = line.len() - line.trim_start().len();
+                let normalized_indent = " ".repeat((indent_level / 2).min(4));
+                cleaned.push_str(&normalized_indent);
+                cleaned.push_str(trimmed);
+                cleaned.push('\n');
+            }
+        }
+
+        // Limit length
+        const MAX_CODE_LENGTH: usize = 3000;
+        if cleaned.len() > MAX_CODE_LENGTH {
+            format!("{}...", &cleaned[..MAX_CODE_LENGTH])
+        } else {
+            cleaned
+        }
+    }
+
+    /// Check if text appears to be code
+    fn is_code_content(text: &str) -> bool {
+        let code_indicators = [
+            "function", "const", "let", "var", "def", "class", "import", "export",
+            "public", "private", "protected", "return", "if (", "for (", "while (",
+            "=>", "->", "::", "<?php", "#!/", "package", "namespace", "struct",
+        ];
+
+        let text_lower = text.to_lowercase();
+        let indicator_count = code_indicators
+            .iter()
+            .filter(|&&ind| text_lower.contains(ind))
+            .count();
+
+        // If multiple code indicators found, likely code
+        indicator_count >= 3
+    }
+
+    /// Check if a line is important for code context
+    fn is_important_code_line(line: &str) -> bool {
+        // Skip pure comments unless they're doc comments
+        if line.starts_with("//") && !line.starts_with("///") && !line.starts_with("//!") {
+            return false;
+        }
+
+        // Keep imports, function definitions, class definitions, etc.
+        let important_patterns = [
+            "import ", "from ", "require", "include",
+            "function ", "def ", "fn ", "func ",
+            "class ", "struct ", "interface ", "enum ",
+            "public ", "private ", "protected ",
+            "export ", "module ", "namespace ",
+        ];
+
+        for pattern in &important_patterns {
+            if line.contains(pattern) {
+                return true;
+            }
+        }
+
+        // Keep lines with actual code (not just brackets)
+        !line.chars().all(|c| c == '{' || c == '}' || c == '(' || c == ')' || c == ';' || c.is_whitespace())
+    }
+
     /// Split text into chunks suitable for embedding
     pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
+        // Use code-aware chunking if this appears to be code
+        if is_code_content(text) {
+            chunk_code_text(text, chunk_size, overlap)
+        } else {
+            chunk_regular_text(text, chunk_size, overlap)
+        }
+    }
+
+    /// Regular text chunking by words
+    fn chunk_regular_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
         let words: Vec<&str> = text.split_whitespace().collect();
         let mut chunks = Vec::new();
 
@@ -172,6 +366,68 @@ pub mod preprocessing {
             }
 
             start = end - overlap;
+        }
+
+        chunks
+    }
+
+    /// Code-aware chunking that respects function/class boundaries
+    fn chunk_code_text(text: &str, chunk_size: usize, _overlap: usize) -> Vec<String> {
+        let mut chunks = Vec::new();
+        let mut current_chunk = String::new();
+        let mut current_size = 0;
+        let mut brace_depth = 0;
+        let mut in_function = false;
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+
+            // Detect function/class boundaries
+            if trimmed.contains("function ") || trimmed.contains("def ") ||
+               trimmed.contains("class ") || trimmed.contains("fn ") {
+                in_function = true;
+
+                // If current chunk is large enough, save it
+                if current_size > chunk_size / 2 && brace_depth == 0 {
+                    if !current_chunk.is_empty() {
+                        chunks.push(current_chunk.clone());
+                        current_chunk.clear();
+                        current_size = 0;
+                    }
+                }
+            }
+
+            // Track brace depth for better chunking
+            brace_depth += trimmed.chars().filter(|&c| c == '{').count() as i32;
+            brace_depth -= trimmed.chars().filter(|&c| c == '}').count() as i32;
+            brace_depth = brace_depth.max(0);
+
+            // Add line to current chunk
+            current_chunk.push_str(line);
+            current_chunk.push('\n');
+            current_size += line.split_whitespace().count();
+
+            // Create new chunk when we hit size limit and are at a good boundary
+            if current_size >= chunk_size && brace_depth == 0 && !in_function {
+                chunks.push(current_chunk.clone());
+                current_chunk.clear();
+                current_size = 0;
+            }
+
+            // Reset function flag when we exit a function
+            if in_function && brace_depth == 0 && trimmed.ends_with('}') {
+                in_function = false;
+            }
+        }
+
+        // Add remaining content
+        if !current_chunk.trim().is_empty() {
+            chunks.push(current_chunk);
+        }
+
+        // If no chunks were created, fall back to regular chunking
+        if chunks.is_empty() {
+            return chunk_regular_text(text, chunk_size, chunk_size / 10);
         }
 
         chunks

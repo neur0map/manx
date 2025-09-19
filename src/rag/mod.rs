@@ -5,6 +5,8 @@
 
 use crate::rag::embeddings::EmbeddingModel;
 use crate::rag::indexer::Indexer;
+use crate::rag::llm::LlmClient;
+use crate::rag::search_engine::SmartSearchEngine;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -15,6 +17,9 @@ pub mod indexer;
 pub mod llm;
 pub mod model_metadata;
 pub mod providers;
+pub mod query_enhancer;
+pub mod result_verifier;
+pub mod search_engine;
 
 /// Embedding provider types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -76,6 +81,49 @@ impl EmbeddingConfig {
     }
 }
 
+/// Security level for code processing
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CodeSecurityLevel {
+    /// Strict: Reject files with any suspicious patterns
+    Strict,
+    /// Moderate: Log warnings but allow most files
+    Moderate,
+    /// Permissive: Minimal security checks
+    Permissive,
+}
+
+impl Default for CodeSecurityLevel {
+    fn default() -> Self {
+        Self::Moderate
+    }
+}
+
+/// Configuration for smart search capabilities
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmartSearchConfig {
+    pub prefer_semantic: bool,           // Use ONNX over hash when available
+    pub enable_query_enhancement: bool,  // Use LLM for query expansion
+    pub enable_result_verification: bool, // Use LLM for relevance checking
+    pub min_confidence_score: f32,       // Minimum relevance threshold
+    pub max_query_variations: usize,     // Number of query variations to try
+    pub enable_multi_stage: bool,        // Enable multi-stage search strategy
+    pub adaptive_chunking: bool,         // Use smart code-aware chunking
+}
+
+impl Default for SmartSearchConfig {
+    fn default() -> Self {
+        Self {
+            prefer_semantic: true,
+            enable_query_enhancement: true,
+            enable_result_verification: true,
+            min_confidence_score: 0.7,
+            max_query_variations: 3,
+            enable_multi_stage: true,
+            adaptive_chunking: true,
+        }
+    }
+}
+
 /// Configuration for the RAG system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RagConfig {
@@ -84,7 +132,12 @@ pub struct RagConfig {
     pub max_results: usize,
     pub similarity_threshold: f32,
     pub allow_pdf_processing: bool,
+    pub allow_code_processing: bool,
+    pub code_security_level: CodeSecurityLevel,
+    pub mask_secrets: bool,
+    pub max_file_size_mb: u64,
     pub embedding: EmbeddingConfig,
+    pub smart_search: SmartSearchConfig,
 }
 
 impl Default for RagConfig {
@@ -95,7 +148,12 @@ impl Default for RagConfig {
             max_results: 10,
             similarity_threshold: 0.6,
             allow_pdf_processing: false, // Disabled by default for security
+            allow_code_processing: true,  // Enabled by default with security checks
+            code_security_level: CodeSecurityLevel::Moderate,
+            mask_secrets: true, // Mask secrets by default
+            max_file_size_mb: 100, // 100MB default limit
             embedding: EmbeddingConfig::default(),
+            smart_search: SmartSearchConfig::default(),
         }
     }
 }
@@ -142,6 +200,7 @@ pub struct RagSearchResult {
     pub title: Option<String>,
     pub section: Option<String>,
     pub score: f32,
+    pub chunk_index: usize,
     pub metadata: DocumentMetadata,
 }
 
@@ -157,7 +216,7 @@ pub struct RagStats {
 
 /// Stored chunk with embedding for file-based vector storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredChunk {
+pub struct StoredChunk {
     pub id: String,
     pub content: String,
     pub source_path: PathBuf,
@@ -171,12 +230,16 @@ struct StoredChunk {
 
 /// Local file-based RAG system
 pub struct RagSystem {
-    #[allow(dead_code)]
     config: RagConfig,
+    llm_client: Option<LlmClient>,
 }
 
 impl RagSystem {
     pub async fn new(config: RagConfig) -> Result<Self> {
+        Self::new_with_llm(config, None).await
+    }
+
+    pub async fn new_with_llm(config: RagConfig, llm_client: Option<LlmClient>) -> Result<Self> {
         if !config.enabled {
             return Err(anyhow::anyhow!("RAG system is disabled"));
         }
@@ -192,7 +255,7 @@ impl RagSystem {
             "RAG system initialized with local vector storage at {:?}",
             index_path
         );
-        Ok(Self { config })
+        Ok(Self { config, llm_client })
     }
 
     pub async fn index_document(&mut self, path: PathBuf) -> Result<usize> {
@@ -293,100 +356,34 @@ impl RagSystem {
             return Err(anyhow::anyhow!("RAG system is disabled"));
         }
 
-        let limit = max_results.unwrap_or(10);
+        log::info!("Starting intelligent search for: '{}'", query);
 
-        log::info!("Searching local vector storage for: '{}'", query);
+        // Create smart search engine
+        let search_engine = SmartSearchEngine::new(self.config.clone(), self.llm_client.clone()).await?;
 
-        // Load the embedding model for semantic search
-        let embedding_model =
-            EmbeddingModel::new_with_config(self.config.embedding.clone()).await?;
-        let query_embedding = embedding_model.embed_text(query).await?;
+        // Perform intelligent search
+        let verified_results = search_engine.search(query, max_results).await?;
 
-        // Search through stored embeddings
-        let indexer = Indexer::new(&self.config)?;
-        let index_path = indexer.get_index_path();
+        // Convert VerifiedResult back to RagSearchResult for compatibility
+        let results: Vec<RagSearchResult> = verified_results
+            .into_iter()
+            .map(|verified| RagSearchResult {
+                id: verified.result.id,
+                content: verified.result.content,
+                source_path: verified.result.source_path,
+                source_type: verified.result.source_type,
+                title: verified.result.title,
+                section: verified.result.section,
+                score: verified.confidence_score, // Use the verified confidence score
+                chunk_index: verified.result.chunk_index,
+                metadata: verified.result.metadata,
+            })
+            .collect();
 
-        if !index_path.exists() {
-            log::info!("No indexed documents found yet");
-            return Ok(vec![]);
-        }
-
-        let mut results = Vec::new();
-        let embedding_dir = index_path.join("embeddings");
-
-        if !embedding_dir.exists() {
-            log::info!("No embeddings directory found yet");
-            return Ok(vec![]);
-        }
-
-        // Read all embedding files
-        let entries = std::fs::read_dir(embedding_dir)?;
-
-        for entry in entries.flatten() {
-            if let Some(file_name) = entry.file_name().to_str() {
-                if file_name.ends_with(".json") {
-                    match self
-                        .load_and_score_embedding(&entry.path(), &query_embedding, &embedding_model)
-                        .await
-                    {
-                        Ok(Some(result)) => {
-                            if result.score >= self.config.similarity_threshold {
-                                results.push(result);
-                            }
-                        }
-                        Ok(None) => continue,
-                        Err(e) => {
-                            log::warn!(
-                                "Failed to process embedding file {:?}: {}",
-                                entry.path(),
-                                e
-                            );
-                            continue;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Sort by similarity score (highest first)
-        results.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        results.truncate(limit);
-
-        log::info!("Found {} results from local vector storage", results.len());
+        log::info!("Intelligent search completed with {} results", results.len());
         Ok(results)
     }
 
-    /// Load and score an embedding file against the query
-    async fn load_and_score_embedding(
-        &self,
-        embedding_path: &std::path::Path,
-        query_embedding: &[f32],
-        _embedding_model: &EmbeddingModel,
-    ) -> Result<Option<RagSearchResult>> {
-        // Read the stored chunk data
-        let content = std::fs::read_to_string(embedding_path)?;
-        let chunk_data: StoredChunk = serde_json::from_str(&content)
-            .map_err(|e| anyhow::anyhow!("Failed to parse chunk data: {}", e))?;
-
-        // Calculate similarity score
-        let score = EmbeddingModel::cosine_similarity(query_embedding, &chunk_data.embedding);
-
-        // Convert to RagSearchResult
-        Ok(Some(RagSearchResult {
-            id: chunk_data.id,
-            content: chunk_data.content,
-            source_path: chunk_data.source_path,
-            source_type: chunk_data.source_type,
-            title: chunk_data.title,
-            section: chunk_data.section,
-            score,
-            metadata: chunk_data.metadata,
-        }))
-    }
 
     pub async fn get_stats(&self) -> Result<RagStats> {
         if !self.config.enabled {

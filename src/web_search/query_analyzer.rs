@@ -430,6 +430,7 @@ If the current enhanced query is already good, return it as-is."#,
             title: Some("Query Enhancement".to_string()),
             section: None,
             score: 1.0,
+            chunk_index: 0,
             metadata: crate::rag::DocumentMetadata {
                 file_type: "analysis".to_string(),
                 size: prompt.len() as u64,

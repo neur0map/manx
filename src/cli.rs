@@ -300,11 +300,19 @@ pub enum Commands {
     ///   • Web URLs: manx index https://docs.rust-lang.org/book/ch01-01-installation.html
     ///
     /// SUPPORTED FORMATS:
-    ///   • Documents: .md, .txt, .docx, .pdf (with security validation)
+    ///   • Documents: .md, .txt, .rst, .docx, .pdf (with security validation)
+    ///   • Code files: .js, .jsx, .ts, .tsx, .py, .rb, .php, .java, .scala, .kotlin
+    ///                .rs, .go, .c, .cpp, .swift, .dart, .sql, .graphql, and more
+    ///   • Config: .json, .yaml, .yml, .toml, .xml, .ini, .env (with secret masking)
+    ///   • Scripts: .sh, .bash, .zsh, .ps1, .bat (with enhanced security validation)
     ///   • Web content: HTML pages (auto text extraction)
     ///
     /// SECURITY FEATURES:
-    ///   • PDF processing disabled by default (configure to enable)  
+    ///   • PDF processing disabled by default (configure to enable)
+    ///   • Code file security validation (obfuscation detection, malicious patterns)
+    ///   • Shell script dangerous command blocking
+    ///   • Automatic secret masking (.env files, API keys, tokens)
+    ///   • Prompt injection detection and prevention
     ///   • URL validation (HTTP/HTTPS only)
     ///   • Content sanitization and size limits
     ///
