@@ -16,7 +16,7 @@ use docrawl::{crawl, Config as DocrawlConfig, CrawlConfig};
 // #[cfg(unix)]
 // use libc::{close, dup, dup2, open, O_WRONLY};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+// no need for Write trait; summary prints are plain
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use walkdir::WalkDir;
@@ -408,28 +408,9 @@ impl RagSystem {
         let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
         let crawl_max_pages = crawl_max_pages.unwrap_or(usize::MAX);
 
-        // Two-line progress (no animation) owned by us
+        // Counters for summary (no live prints during crawl)
+        let pages_counter = Arc::new(AtomicUsize::new(0));
         let chunks_counter = Arc::new(AtomicUsize::new(0));
-        let rc = chunks_counter.clone();
-        let reporter = tokio::spawn(async move {
-            use std::io::stderr;
-            use std::time::Instant;
-            let mut last_c = 0usize;
-            let mut last_print = Instant::now();
-            let mut t = interval(std::time::Duration::from_millis(500));
-            // initial line so it is always visible on its own row
-            eprintln!("Stored chunks: 0");
-            loop {
-                t.tick().await;
-                let c = rc.load(std::sync::atomic::Ordering::Relaxed);
-                if c != last_c && last_print.elapsed() >= std::time::Duration::from_millis(500) {
-                    eprintln!("Stored chunks: {}", c);
-                    let _ = stderr().flush();
-                    last_c = c;
-                    last_print = Instant::now();
-                }
-            }
-        });
 
         // Spawn crawler; suppress its stdout to avoid competing spinner
         let crawl_handle = tokio::spawn(async move {
@@ -439,6 +420,7 @@ impl RagSystem {
         // Spawn scanner: discover new markdown files while crawler runs
         let temp_dir_clone = temp_dir.clone();
         let scanner_tx = tx.clone();
+        let pc = pages_counter.clone();
         let scanner_handle = tokio::spawn(async move {
             let mut ticker = interval(Duration::from_millis(300));
             let mut seen: HashSet<PathBuf> = HashSet::new();
@@ -459,6 +441,7 @@ impl RagSystem {
                                 break;
                             }
                             new_found += 1;
+                            pc.fetch_add(1, Ordering::Relaxed);
                             if seen.len() >= crawl_max_pages {
                                 break;
                             }
@@ -527,9 +510,15 @@ impl RagSystem {
         }
 
         let _ = std::fs::remove_dir_all(&temp_dir);
-        // Stop reporter and print newline
-        reporter.abort();
+        // Final summary (separate from docrawl spinner output)
+        let pages = pages_counter.load(Ordering::Relaxed);
+        let indexer = Indexer::new(&self.config)?;
+        let index_path = indexer.get_index_path();
         eprintln!();
+        eprintln!("==== Manx Index Summary ====");
+        eprintln!("Stored chunks: {}", total_stored);
+        eprintln!("Pages discovered: {}", pages);
+        eprintln!("Index path: {}", index_path.display());
         Ok(total_stored)
     }
 
