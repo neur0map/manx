@@ -40,25 +40,27 @@ impl Renderer {
         }
 
         if results.is_empty() {
-            println!("{}", "No results found.".yellow());
+            println!("{}", "No results found.".yellow().bold());
             return Ok(());
         }
 
+        // Compact, high-contrast summary header (emoji-free)
+        let count_label = if results.len() == 1 {
+            "Result"
+        } else {
+            "Results"
+        };
         println!(
-            "{} {} found:",
-            results.len().to_string().cyan().bold(),
-            if results.len() == 1 {
-                "result"
-            } else {
-                "results"
-            }
+            "{}: {}",
+            count_label.white().bold(),
+            results.len().to_string().cyan().bold()
         );
 
         if let Some((library_title, library_id)) = library_info {
             println!(
-                "📚 Using library: {} ({})\n",
-                library_title.bright_blue(),
-                library_id.dimmed()
+                "Using library: {} ({})\n",
+                library_title.bright_blue().bold(),
+                library_id.white().dimmed()
             );
         } else {
             println!();
@@ -96,19 +98,23 @@ impl Renderer {
     }
 
     fn render_search_result(&self, num: usize, result: &SearchResult) -> io::Result<()> {
-        let separator = "─".repeat(self.terminal_width.min(60));
+        let separator = "─".repeat(self.terminal_width.min(70));
 
         println!(
             "{} {} {}",
             format!("[{}]", num).cyan().bold(),
-            result.title.white().bold(),
-            format!("({})", result.library).dimmed()
+            result.title.bright_white().bold(),
+            format!("({})", result.library).white().dimmed()
         );
 
-        println!("  {}: {}", "ID".dimmed(), result.id.yellow());
+        println!("  {}: {}", "ID".white().dimmed(), result.id.bright_yellow());
 
         if let Some(url) = &result.url {
-            println!("  {}: {}", "URL".dimmed(), url.blue().underline());
+            println!(
+                "  {}: {}",
+                "URL".white().dimmed(),
+                url.bright_blue().underline()
+            );
         }
 
         println!();
@@ -117,12 +123,13 @@ impl Renderer {
         if result.excerpt.contains("CODE SNIPPETS") {
             self.render_context7_excerpt(&result.excerpt)?;
         } else {
-            // Show more of the excerpt for better distinction
-            let max_width = self.terminal_width.max(100) - 4;
-            println!("  {}", self.truncate_text(&result.excerpt, max_width));
+            // Show more of the excerpt with higher contrast
+            let max_width = self.terminal_width.saturating_sub(4).max(60);
+            let text = self.truncate_text(&result.excerpt, max_width);
+            println!("  {}", text.white());
         }
 
-        println!("{}\n", separator.dimmed());
+        println!("{}\n", separator.white().dimmed());
         Ok(())
     }
 
@@ -160,13 +167,14 @@ impl Renderer {
 
         // Header
         println!(
-            "\n📚 {} {}",
+            "\n{} {}",
             doc.library.name.cyan().bold(),
             doc.library
                 .version
                 .as_ref()
                 .map(|v| format!("v{}", v))
                 .unwrap_or_default()
+                .white()
                 .dimmed()
         );
 
@@ -183,7 +191,7 @@ impl Renderer {
     }
 
     fn render_doc_section(&self, section: &DocSection) -> io::Result<()> {
-        println!("\n{}", section.title.green().bold());
+        println!("\n{}", section.title.bright_green().bold());
 
         if let Some(url) = &section.url {
             println!("{}: {}", "Source".dimmed(), url.blue().underline());
@@ -202,7 +210,7 @@ impl Renderer {
     fn render_code_example(&self, example: &CodeExample) -> io::Result<()> {
         println!(
             "\n{} {}:",
-            "▶".cyan(),
+            ">".cyan(),
             example
                 .description
                 .as_ref()
@@ -311,13 +319,13 @@ impl Renderer {
         if self.quiet_mode {
             eprintln!("{{\"error\": \"{}\"}}", error);
         } else {
-            eprintln!("{} {}", "✗".red().bold(), error.red());
+            eprintln!("{} {}", "ERROR:".red().bold(), error.red());
         }
     }
 
     pub fn print_success(&self, message: &str) {
         if !self.quiet_mode {
-            println!("{} {}", "✓".green().bold(), message.green());
+            println!("{} {}", "OK".green().bold(), message.green());
         }
     }
 
@@ -336,12 +344,11 @@ impl Renderer {
             return Ok(());
         }
 
-        // Header
+        // Header (emoji-free)
         println!(
-            "\n{} {} {}",
-            "📚".cyan().bold(),
+            "\n{} {}",
             library.white().bold(),
-            "Documentation".dimmed()
+            "Documentation".white().dimmed()
         );
 
         // Parse and render the Context7 format with limit
@@ -387,7 +394,7 @@ impl Renderer {
             // Skip headers and separators
             if line.starts_with("========================") {
                 if i + 1 < lines.len() && lines[i + 1].starts_with("CODE SNIPPETS") {
-                    println!("\n{}", "📝 Code Examples & Snippets".green().bold());
+                    println!("\n{}", "Code Examples & Snippets".green().bold());
                     i += 2;
                     continue;
                 }
@@ -441,7 +448,7 @@ impl Renderer {
 
                     // Parse code block
                     if i < lines.len() && lines[i].starts_with("```") {
-                        println!("\n{} {}:", "▶".cyan(), language.yellow());
+                        println!("\n{} {}:", ">".cyan(), language.yellow());
                         println!("{}", lines[i].dimmed());
                         i += 1;
 
@@ -540,10 +547,9 @@ impl Renderer {
         }
 
         println!(
-            "\n{} {} {}",
-            "📖".cyan().bold(),
+            "\n{} {}",
             id.yellow().bold(),
-            "Documentation Section".dimmed()
+            "Documentation Section".white().dimmed()
         );
 
         // Parse and render just this section
@@ -562,7 +568,7 @@ impl Renderer {
             // Skip headers and separators
             if line.starts_with("========================") {
                 if i + 1 < lines.len() && lines[i + 1].starts_with("CODE SNIPPETS") {
-                    println!("\n{}", "📝 Code Examples & Snippets".green().bold());
+                    println!("\n{}", "Code Examples & Snippets".green().bold());
                     i += 2;
                     continue;
                 }
@@ -611,7 +617,7 @@ impl Renderer {
 
                     // Parse code block
                     if i < lines.len() && lines[i].starts_with("```") {
-                        println!("\n{} {}:", "▶".cyan(), language.yellow());
+                        println!("\n{} {}:", ">".cyan(), language.yellow());
                         println!("{}", lines[i].dimmed());
                         i += 1;
 

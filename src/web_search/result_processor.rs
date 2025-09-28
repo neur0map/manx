@@ -9,6 +9,37 @@ use crate::rag::embeddings::EmbeddingModel;
 use crate::web_search::official_sources::{OfficialSourceManager, SourceTier};
 use crate::web_search::{query_analyzer, ProcessedSearchResult, RawSearchResult};
 use anyhow::Result;
+use std::collections::HashSet;
+
+fn extract_key_phrase(query: &str) -> Option<String> {
+    let q = query.to_lowercase();
+    // Quoted phrase support: find first pair of quotes
+    if let Some(start) = q.find('"') {
+        if let Some(end_rel) = q[start + 1..].find('"') {
+            let end = start + 1 + end_rel;
+            let phrase = &q[start + 1..end];
+            if !phrase.trim().is_empty() {
+                return Some(phrase.trim().to_string());
+            }
+        }
+    }
+    // Otherwise, build a candidate from the first two content words
+    let stopwords: std::collections::HashSet<&str> = [
+        "a", "an", "and", "the", "in", "on", "of", "to", "for", "how", "do", "i", "with", "using",
+        "is", "are", "be", "this", "that", "it", "from", "by", "into", "as", "about", "write",
+    ]
+    .into_iter()
+    .collect();
+    let content: Vec<&str> = q
+        .split_whitespace()
+        .filter(|w| !stopwords.contains(*w))
+        .collect();
+    if content.len() >= 2 {
+        Some(format!("{} {}", content[0], content[1]))
+    } else {
+        None
+    }
+}
 
 /// Process search results with semantic similarity and query analysis context
 pub async fn process_with_embeddings_and_analysis(
@@ -27,6 +58,7 @@ pub async fn process_with_embeddings_and_analysis(
     // Use enhanced query for embedding generation (better context)
     let embedding_query = &query_analysis.enhanced_query;
     let query_embedding = embedding_model.embed_text(embedding_query).await?;
+    let key_phrase = extract_key_phrase(&query_analysis.original_query);
 
     let mut processed_results = Vec::new();
 
@@ -54,8 +86,22 @@ pub async fn process_with_embeddings_and_analysis(
         };
 
         // Calculate semantic similarity
-        let similarity_score =
+        let mut similarity_score =
             EmbeddingModel::cosine_similarity(&query_embedding, &result_embedding);
+
+        // Phrase priority: boost if key phrase is present, penalize if absent for example-type queries
+        if let Some(ref phrase) = key_phrase {
+            let haystack = combined_text.to_lowercase();
+            if haystack.contains(phrase) {
+                similarity_score *= 1.2; // modest boost for phrase match
+            } else if matches!(
+                query_analysis.query_type,
+                query_analyzer::QueryType::Example | query_analyzer::QueryType::HowTo
+            ) {
+                similarity_score *= 0.85; // mild penalty if example-ish query lacks phrase
+            }
+            similarity_score = similarity_score.min(1.0);
+        }
 
         // Apply framework-specific similarity threshold adjustment
         let adjusted_threshold = if !query_analysis.detected_frameworks.is_empty() {
@@ -220,7 +266,20 @@ pub fn process_without_embeddings(
     );
 
     let query_lower = query.to_lowercase();
-    let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+    // Basic stopword filtering to avoid inflating scores with common words
+    let stopwords: HashSet<&str> = [
+        "a", "an", "and", "the", "in", "on", "of", "to", "for", "how", "do", "i", "with", "using",
+        "is", "are", "be", "this", "that", "it", "from", "by", "into", "as",
+    ]
+    .into_iter()
+    .collect();
+
+    let mut query_words: Vec<&str> = query_lower
+        .split_whitespace()
+        .filter(|w| !stopwords.contains(*w))
+        .collect();
+    query_words.dedup();
+    let key_phrase = extract_key_phrase(query);
     let mut processed_results = Vec::new();
 
     for result in raw_results {
@@ -234,11 +293,20 @@ pub fn process_without_embeddings(
             .count();
 
         // Calculate basic similarity score (percentage of query words found)
-        let similarity_score = if query_words.is_empty() {
-            0.5 // Default score if no query words
+        let mut similarity_score = if query_words.is_empty() {
+            0.3 // Lower default to reduce false positives
         } else {
             word_matches as f32 / query_words.len() as f32
         };
+
+        // Phrase priority/penalty
+        if let Some(ref phrase) = key_phrase {
+            if combined_text.contains(phrase) {
+                similarity_score = (similarity_score + 0.2).min(1.0);
+            } else {
+                similarity_score = (similarity_score - 0.1).max(0.0);
+            }
+        }
 
         // Apply minimum threshold
         if similarity_score < 0.3 {

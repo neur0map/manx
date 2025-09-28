@@ -338,6 +338,15 @@ pub enum Commands {
         /// Crawl entire documentation site (implies crawling)
         #[arg(long)]
         crawl_all: bool,
+        /// Stream indexing while crawling (overlaps crawl + embedding for speed)
+        #[arg(long)]
+        live_index: bool,
+        /// Number of parallel embedding workers (defaults to CPU cores)
+        #[arg(long, value_name = "N")]
+        embed_concurrency: Option<usize>,
+        /// Maximum number of pages to process during crawl (soft cap)
+        #[arg(long, value_name = "N")]
+        crawl_max_pages: Option<usize>,
     },
 
     /// 📂 Manage indexed document sources

@@ -239,10 +239,11 @@ pub mod preprocessing {
             .collect::<Vec<_>>()
             .join(" ");
 
-        // Limit length to prevent very long embeddings
-        const MAX_LENGTH: usize = 2048;
-        if cleaned.len() > MAX_LENGTH {
-            format!("{}...", &cleaned[..MAX_LENGTH])
+        // Limit length to prevent very long embeddings (respect UTF-8 boundaries)
+        const MAX_CHARS: usize = 2048;
+        if cleaned.chars().count() > MAX_CHARS {
+            let truncated: String = cleaned.chars().take(MAX_CHARS).collect();
+            format!("{}...", truncated)
         } else {
             cleaned
         }
@@ -286,10 +287,11 @@ pub mod preprocessing {
             }
         }
 
-        // Limit length
-        const MAX_CODE_LENGTH: usize = 3000;
-        if cleaned.len() > MAX_CODE_LENGTH {
-            format!("{}...", &cleaned[..MAX_CODE_LENGTH])
+        // Limit length (UTF-8 safe)
+        const MAX_CODE_CHARS: usize = 3000;
+        if cleaned.chars().count() > MAX_CODE_CHARS {
+            let truncated: String = cleaned.chars().take(MAX_CODE_CHARS).collect();
+            format!("{}...", truncated)
         } else {
             cleaned
         }

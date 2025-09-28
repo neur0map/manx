@@ -88,6 +88,9 @@ docrawl = "0.1"
 # RAG dependencies for document processing and vector storage  
 docx-rs = "0.4"
 walkdir = "2.4"
+num_cpus = "1.16"
+gag = "1"
+libc = "0.2"
 
 # File-based vector storage
 uuid = { version = "1.6", features = ["v4"] }
@@ -118,4 +121,3 @@ strip = true
 inherits = "release"
 strip = false
 debug = true
-

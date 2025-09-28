@@ -8,8 +8,18 @@ use crate::rag::indexer::Indexer;
 use crate::rag::llm::LlmClient;
 use crate::rag::search_engine::SmartSearchEngine;
 use anyhow::Result;
+use docrawl::{crawl, Config as DocrawlConfig, CrawlConfig};
+// gag disabled: let docrawl manage its own spinner
+#[cfg(unix)]
+// removed libc imports; gag handles stdout/stderr capture cross‑platform
+// no longer used: previous attempt to redirect crawler output
+// #[cfg(unix)]
+// use libc::{close, dup, dup2, open, O_WRONLY};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use walkdir::WalkDir;
 
 pub mod benchmarks;
 pub mod embeddings;
@@ -293,6 +303,7 @@ impl RagSystem {
         Ok(chunk_count)
     }
 
+    #[allow(dead_code)]
     pub async fn index_url(&mut self, url: &str) -> Result<usize> {
         if !self.config.enabled {
             return Err(anyhow::anyhow!("RAG system is disabled"));
@@ -314,6 +325,7 @@ impl RagSystem {
         Ok(chunk_count)
     }
 
+    #[allow(dead_code)]
     pub async fn index_url_deep(
         &mut self,
         url: &str,
@@ -347,6 +359,178 @@ impl RagSystem {
             chunk_count
         );
         Ok(chunk_count)
+    }
+
+    /// Streamed deep indexing: overlaps crawling and embedding using Tokio for speed
+    pub async fn index_url_deep_stream(
+        &self,
+        url: &str,
+        max_depth: Option<u32>,
+        crawl_all: bool,
+        embed_concurrency: Option<usize>,
+        crawl_max_pages: Option<usize>,
+    ) -> Result<usize> {
+        use std::collections::HashSet;
+        use std::sync::Arc;
+        use tokio::sync::mpsc;
+        use tokio::time::{interval, Duration};
+
+        let temp_dir = std::env::temp_dir().join(format!("manx_crawl_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir)?;
+
+        // Build crawler config
+        let base_url = url::Url::parse(url)?;
+        let crawl_config = CrawlConfig {
+            base_url,
+            output_dir: temp_dir.clone(),
+            user_agent: "Manx/0.5.0 (Documentation Crawler)".to_string(),
+            max_depth: if let Some(d) = max_depth {
+                Some(d as usize)
+            } else if crawl_all {
+                None
+            } else {
+                Some(3)
+            },
+            rate_limit_per_sec: 20,
+            follow_sitemaps: true,
+            concurrency: std::cmp::max(8, num_cpus::get()),
+            timeout: Some(std::time::Duration::from_secs(30)),
+            resume: false,
+            config: DocrawlConfig::default(),
+        };
+
+        // Create embedding model once
+        let embedding_model =
+            Arc::new(EmbeddingModel::new_with_config(self.config.embedding.clone()).await?);
+
+        // Channel for discovered markdown files
+        let (tx, rx) = mpsc::channel::<PathBuf>(200);
+        let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
+        let crawl_max_pages = crawl_max_pages.unwrap_or(usize::MAX);
+
+        // Two-line progress (no animation) owned by us
+        let chunks_counter = Arc::new(AtomicUsize::new(0));
+        let rc = chunks_counter.clone();
+        let reporter = tokio::spawn(async move {
+            use std::io::stderr;
+            use std::time::Instant;
+            let mut last_c = 0usize;
+            let mut last_print = Instant::now();
+            let mut t = interval(std::time::Duration::from_millis(500));
+            // initial line so it is always visible on its own row
+            eprintln!("Stored chunks: 0");
+            loop {
+                t.tick().await;
+                let c = rc.load(std::sync::atomic::Ordering::Relaxed);
+                if c != last_c && last_print.elapsed() >= std::time::Duration::from_millis(500) {
+                    eprintln!("Stored chunks: {}", c);
+                    let _ = stderr().flush();
+                    last_c = c;
+                    last_print = Instant::now();
+                }
+            }
+        });
+
+        // Spawn crawler; suppress its stdout to avoid competing spinner
+        let crawl_handle = tokio::spawn(async move {
+            let _ = crawl(crawl_config).await;
+        });
+
+        // Spawn scanner: discover new markdown files while crawler runs
+        let temp_dir_clone = temp_dir.clone();
+        let scanner_tx = tx.clone();
+        let scanner_handle = tokio::spawn(async move {
+            let mut ticker = interval(Duration::from_millis(300));
+            let mut seen: HashSet<PathBuf> = HashSet::new();
+            let mut idle_ticks = 0u32;
+            loop {
+                ticker.tick().await;
+                let mut new_found = 0usize;
+                for entry in WalkDir::new(&temp_dir_clone)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                        let pb = path.to_path_buf();
+                        if !seen.contains(&pb) {
+                            seen.insert(pb.clone());
+                            if scanner_tx.send(pb).await.is_err() {
+                                break;
+                            }
+                            new_found += 1;
+                            if seen.len() >= crawl_max_pages {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if new_found == 0 {
+                    idle_ticks += 1;
+                } else {
+                    idle_ticks = 0;
+                }
+                if seen.len() >= crawl_max_pages {
+                    break;
+                }
+                if idle_ticks > 20 {
+                    break;
+                }
+            }
+            drop(scanner_tx);
+        });
+
+        // Worker pool
+        let workers = embed_concurrency.unwrap_or_else(|| std::cmp::max(4, num_cpus::get()));
+        let mut joins = Vec::new();
+        let config_clone = self.config.clone();
+        let url_for_worker = url.to_string();
+        for _ in 0..workers {
+            let rx = rx.clone();
+            let embedding_model = embedding_model.clone();
+            let config_clone = config_clone.clone();
+            let url_clone = url_for_worker.clone();
+            let chunks_counter = chunks_counter.clone();
+            let join = tokio::spawn(async move {
+                let mut stored = 0usize;
+                let idx = match Indexer::new(&config_clone) {
+                    Ok(i) => i,
+                    Err(_) => return 0usize,
+                };
+                loop {
+                    let opt_path = { rx.lock().await.recv().await };
+                    let Some(md_path) = opt_path else { break };
+                    if let Ok(chunks) = idx.process_markdown_file(&md_path, &url_clone).await {
+                        if let Ok(count) =
+                            store_chunks_with_model_config(&config_clone, &chunks, &embedding_model)
+                                .await
+                        {
+                            stored += count;
+                            chunks_counter.fetch_add(count, Ordering::Relaxed);
+                        }
+                    }
+                }
+                stored
+            });
+            joins.push(join);
+        }
+
+        let _ = scanner_handle.await;
+        let _ = crawl_handle.await;
+        drop(tx);
+
+        let mut total_stored = 0usize;
+        for j in joins {
+            if let Ok(count) = j.await {
+                total_stored += count;
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        // Stop reporter and print newline
+        reporter.abort();
+        eprintln!();
+        Ok(total_stored)
     }
 
     pub async fn search(
@@ -596,7 +780,7 @@ impl RagSystem {
         // Process chunks and store with embeddings
         let mut stored_count = 0;
 
-        for chunk in chunks {
+        for (i, chunk) in chunks.iter().enumerate() {
             // Generate embedding for chunk content
             let embedding = match embedding_model.embed_text(&chunk.content).await {
                 Ok(embedding) => embedding,
@@ -628,6 +812,9 @@ impl RagSystem {
 
             stored_count += 1;
             log::debug!("Stored chunk {} to {:?}", chunk.id, file_path);
+            if (i + 1) % 100 == 0 || i + 1 == chunks.len() {
+                println!("Stored {}/{} chunks...", i + 1, chunks.len());
+            }
         }
 
         log::info!(
@@ -636,4 +823,49 @@ impl RagSystem {
         );
         Ok(())
     }
+}
+
+/// Store chunks using a shared embedding model (config-based helper)
+pub async fn store_chunks_with_model_config(
+    config: &RagConfig,
+    chunks: &[DocumentChunk],
+    embedding_model: &EmbeddingModel,
+) -> Result<usize> {
+    use uuid::Uuid;
+    if chunks.is_empty() {
+        return Ok(0);
+    }
+
+    let indexer = Indexer::new(config)?;
+    let index_path = indexer.get_index_path();
+    let embedding_dir = index_path.join("embeddings");
+    std::fs::create_dir_all(&embedding_dir)?;
+
+    let mut stored_count = 0usize;
+    for chunk in chunks {
+        let embedding = match embedding_model.embed_text(&chunk.content).await {
+            Ok(embedding) => embedding,
+            Err(_) => continue,
+        };
+
+        let stored_chunk = StoredChunk {
+            id: chunk.id.clone(),
+            content: chunk.content.clone(),
+            source_path: chunk.source_path.clone(),
+            source_type: chunk.source_type.clone(),
+            title: chunk.title.clone(),
+            section: chunk.section.clone(),
+            chunk_index: chunk.chunk_index,
+            metadata: chunk.metadata.clone(),
+            embedding,
+        };
+
+        let file_id = Uuid::new_v4().to_string();
+        let file_path = embedding_dir.join(format!("{}.json", file_id));
+        let json_content = serde_json::to_string_pretty(&stored_chunk)?;
+        std::fs::write(&file_path, json_content)?;
+        stored_count += 1;
+    }
+
+    Ok(stored_count)
 }

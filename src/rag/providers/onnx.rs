@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 #[cfg(feature = "onnx-embeddings")]
 use std::sync::Arc;
 
@@ -213,7 +213,7 @@ impl OnnxProvider {
     }
 
     /// Detect embedding dimension from ONNX model using introspection
-    async fn detect_dimension_from_onnx(_onnx_path: &PathBuf) -> Result<usize> {
+    async fn detect_dimension_from_onnx(_onnx_path: &Path) -> Result<usize> {
         #[cfg(feature = "onnx-embeddings")]
         {
             log::info!("Detecting dimension from ONNX model: {:?}", _onnx_path);

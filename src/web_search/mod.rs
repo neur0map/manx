@@ -104,13 +104,17 @@ impl DocumentationSearchSystem {
     pub async fn new(
         config: WebSearchConfig,
         llm_config: Option<crate::rag::llm::LlmConfig>,
+        embedding_config: Option<crate::rag::EmbeddingConfig>,
     ) -> Result<Self> {
         if !config.enabled {
             return Err(anyhow!("Documentation search is disabled"));
         }
 
         // Initialize semantic embeddings for similarity scoring
-        let embedding_model = match crate::rag::embeddings::EmbeddingModel::new().await {
+        let embedding_model = match match &embedding_config {
+            Some(cfg) => crate::rag::embeddings::EmbeddingModel::new_with_config(cfg.clone()).await,
+            None => crate::rag::embeddings::EmbeddingModel::new().await,
+        } {
             Ok(model) => {
                 log::info!("Semantic embeddings initialized for search");
                 Some(model)
@@ -172,34 +176,68 @@ impl DocumentationSearchSystem {
 
         // Use enhanced query for better search results
         let search_query = &query_analysis.enhanced_query;
+        // Prefer keeping key phrases intact (e.g., "hello world")
+        fn extract_key_phrase(q: &str) -> Option<String> {
+            let q = q.to_lowercase();
+            if let Some(start) = q.find('"') {
+                if let Some(end_rel) = q[start + 1..].find('"') {
+                    let end = start + 1 + end_rel;
+                    let phrase = &q[start + 1..end];
+                    if !phrase.trim().is_empty() {
+                        return Some(phrase.trim().to_string());
+                    }
+                }
+            }
+            // Fallback: first two content words (basic stopword filter)
+            let stop: std::collections::HashSet<&str> = [
+                "a", "an", "and", "the", "in", "on", "of", "to", "for", "how", "do", "i", "with",
+                "using", "is", "are", "be", "this", "that", "it", "from", "by", "into", "as",
+            ]
+            .into_iter()
+            .collect();
+            let content: Vec<&str> = q
+                .split_whitespace()
+                .filter(|w| !stop.contains(*w))
+                .collect();
+            if content.len() >= 2 {
+                Some(format!("{} {}", content[0], content[1]))
+            } else {
+                None
+            }
+        }
+        let phrase_query = if let Some(p) = extract_key_phrase(&query_analysis.original_query) {
+            format!("\"{}\" {}", p, search_query)
+        } else {
+            search_query.to_string()
+        };
 
         // Step 1: Apply smart search strategy (only when LLM is available)
         let official_query = if self.llm_client.is_some() {
             match &query_analysis.search_strategy {
                 query_analyzer::SearchStrategy::FrameworkSpecific { framework, sites } => {
                     log::info!("🎯 Using LLM-enhanced framework search for {}", framework);
-                    self.build_technical_search_query(search_query, sites)
+                    self.build_technical_search_query(&phrase_query, sites)
                 }
                 query_analyzer::SearchStrategy::OfficialDocsFirst { frameworks } => {
                     log::info!(
                         "📚 Using LLM-enhanced prioritized search for: {}",
                         frameworks.join(", ")
                     );
-                    self.build_dev_focused_query(search_query, frameworks)
+                    self.build_dev_focused_query(&phrase_query, frameworks)
                 }
                 _ => {
                     if self.is_technical_query(&query_analysis) {
                         log::info!("🔧 Using LLM-enhanced technical search");
-                        self.build_dev_focused_query(search_query, &[])
+                        self.build_dev_focused_query(&phrase_query, &[])
                     } else {
-                        self.official_sources.build_official_query(search_query)
+                        self.official_sources.build_official_query(&phrase_query)
                     }
                 }
             }
         } else {
             // Default behavior when no LLM - unchanged original functionality
             log::debug!("Using standard search (no LLM configured)");
-            self.official_sources.build_official_query(search_query)
+            self.official_sources.build_official_query(&phrase_query)
         };
         let mut all_results = search_engine::search_duckduckgo(
             &official_query,
@@ -227,7 +265,7 @@ impl DocumentationSearchSystem {
 
             // Search without site restrictions
             let fallback_results = search_engine::search_duckduckgo(
-                query,
+                &phrase_query,
                 self.config.max_results,
                 &self.config.user_agent,
                 self.config.search_timeout_seconds,
@@ -275,6 +313,16 @@ impl DocumentationSearchSystem {
             )
         };
 
+        // Fallback: if nothing survived filtering, retry with text matching (softer) before final filters
+        if processed_results.is_empty() {
+            log::info!("No results after semantic filtering; retrying with text matching fallback");
+            processed_results = result_processor::process_without_embeddings(
+                query,
+                &all_results,
+                &self.official_sources,
+            );
+        }
+
         // Step 4a: Enhance results with additional metadata
         result_processor::enhance_results(&mut processed_results, &self.official_sources);
 
@@ -299,18 +347,29 @@ impl DocumentationSearchSystem {
         );
 
         // Step 4c: Filter out low-quality results
-        processed_results = result_processor::filter_quality_results(processed_results, 30);
+        processed_results = result_processor::filter_quality_results(processed_results, 20);
 
         // Step 4d: Remove duplicates
-        let processed_results = result_processor::deduplicate_results(processed_results);
+        let mut processed_results = result_processor::deduplicate_results(processed_results);
+
+        // Second-chance fallback: if filters resulted in zero items, retry with softer text matching
+        if processed_results.is_empty() {
+            log::info!("No results after filtering; retrying with softer text-based processing");
+            let mut soft_results = result_processor::process_without_embeddings(
+                query,
+                &all_results,
+                &self.official_sources,
+            );
+            // Use a smaller snippet length minimum for soft pass
+            soft_results = result_processor::filter_quality_results(soft_results, 10);
+            processed_results = result_processor::deduplicate_results(soft_results);
+        }
 
         // Step 5: LLM verification if available
         let verification_result = if let Some(ref llm_client) = self.llm_client {
             if llm_client.is_available() {
                 log::info!("Verifying results with LLM");
-                match llm_verifier::verify_search_results(query, &processed_results, llm_client)
-                    .await
-                {
+                match llm_verifier::verify_search_results(query, &processed_results).await {
                     Ok(verification) => Some(verification),
                     Err(e) => {
                         log::warn!("LLM verification failed: {}", e);

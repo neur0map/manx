@@ -3,7 +3,6 @@
 //! This module provides LLM-powered verification to ensure search results
 //! are authentic and relevant to the user's query.
 
-use crate::rag::llm::LlmClient;
 use crate::web_search::{ProcessedSearchResult, VerificationResult};
 use anyhow::Result;
 
@@ -11,7 +10,6 @@ use anyhow::Result;
 pub async fn verify_search_results(
     query: &str,
     results: &[ProcessedSearchResult],
-    _llm_client: &LlmClient,
 ) -> Result<VerificationResult> {
     // LLM-based verification of search results
     // This implementation provides basic verification using heuristics and could be
@@ -90,12 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_empty_results() {
-        let llm_config = crate::rag::llm::LlmConfig::default();
-        let llm_client = crate::rag::llm::LlmClient::new(llm_config).unwrap();
-
-        let verification = verify_search_results("test query", &[], &llm_client)
-            .await
-            .unwrap();
+        let verification = verify_search_results("test query", &[]).await.unwrap();
 
         assert!(!verification.is_authentic);
         assert_eq!(verification.confidence, 0.0);
@@ -104,17 +97,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_official_results() {
-        let llm_config = crate::rag::llm::LlmConfig::default();
-        let llm_client = crate::rag::llm::LlmClient::new(llm_config).unwrap();
-
         let results = vec![
             create_test_result(true, 0.8),
             create_test_result(false, 0.6),
         ];
 
-        let verification = verify_search_results("test query", &results, &llm_client)
-            .await
-            .unwrap();
+        let verification = verify_search_results("test query", &results).await.unwrap();
 
         assert!(verification.is_authentic);
         assert_eq!(verification.confidence, 0.9);
@@ -123,17 +111,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_high_similarity_results() {
-        let llm_config = crate::rag::llm::LlmConfig::default();
-        let llm_client = crate::rag::llm::LlmClient::new(llm_config).unwrap();
-
         let results = vec![
             create_test_result(false, 0.8),
             create_test_result(false, 0.9),
         ];
 
-        let verification = verify_search_results("test query", &results, &llm_client)
-            .await
-            .unwrap();
+        let verification = verify_search_results("test query", &results).await.unwrap();
 
         assert!(verification.is_authentic);
         assert!(verification.confidence > 0.5);
@@ -142,17 +125,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_verify_low_quality_results() {
-        let llm_config = crate::rag::llm::LlmConfig::default();
-        let llm_client = crate::rag::llm::LlmClient::new(llm_config).unwrap();
-
         let results = vec![
             create_test_result(false, 0.3),
             create_test_result(false, 0.4),
         ];
 
-        let verification = verify_search_results("test query", &results, &llm_client)
-            .await
-            .unwrap();
+        let verification = verify_search_results("test query", &results).await.unwrap();
 
         assert!(!verification.is_authentic);
         assert!(verification.confidence < 0.5);

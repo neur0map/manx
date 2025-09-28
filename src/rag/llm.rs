@@ -315,8 +315,13 @@ STYLE:
         prompt
     }
 
-    /// Extract the actual answer from responses that may contain thinking content
+    /// Extract the actual answer from responses that may contain thinking content (instance)
     fn extract_final_answer(&self, response_text: &str) -> String {
+        Self::extract_final_answer_text(response_text)
+    }
+
+    /// Extract the actual answer from responses that may contain thinking content (static)
+    pub(crate) fn extract_final_answer_text(response_text: &str) -> String {
         // Handle models with thinking capabilities - check for both <thinking> and <think> tags
         if response_text.contains("<thinking>") && response_text.contains("</thinking>") {
             // Find the end of the thinking section
@@ -864,8 +869,6 @@ mod tests {
 
     #[test]
     fn test_extract_final_answer_with_thinking_tags() {
-        let client = LlmClient::new(LlmConfig::default()).unwrap();
-
         let response_with_thinking = r#"<thinking>
 Let me analyze this query about Rust error handling.
 
@@ -882,7 +885,7 @@ Rust uses `Result<T, E>` for error handling, where `T` is the success type and `
 - `expect()` provides custom panic message
 - Pattern match with `match` for comprehensive handling"#;
 
-        let extracted = client.extract_final_answer(response_with_thinking);
+        let extracted = LlmClient::extract_final_answer_text(response_with_thinking);
 
         assert!(!extracted.contains("<thinking>"));
         assert!(!extracted.contains("</thinking>"));
@@ -892,8 +895,6 @@ Rust uses `Result<T, E>` for error handling, where `T` is the success type and `
 
     #[test]
     fn test_extract_final_answer_with_think_tags() {
-        let client = LlmClient::new(LlmConfig::default()).unwrap();
-
         let response_with_think = r#"<think>
 This question is about JavaScript async/await patterns.
 
@@ -910,7 +911,7 @@ Use `async/await` for handling asynchronous operations in JavaScript.
 - Use try/catch for error handling
 - Avoid callback hell with Promise chains"#;
 
-        let extracted = client.extract_final_answer(response_with_think);
+        let extracted = LlmClient::extract_final_answer_text(response_with_think);
 
         assert!(!extracted.contains("<think>"));
         assert!(!extracted.contains("</think>"));
@@ -920,8 +921,6 @@ Use `async/await` for handling asynchronous operations in JavaScript.
 
     #[test]
     fn test_extract_final_answer_without_thinking() {
-        let client = LlmClient::new(LlmConfig::default()).unwrap();
-
         let normal_response = r#"**Quick Answer**
 This is a normal response without thinking tags.
 
@@ -929,15 +928,13 @@ This is a normal response without thinking tags.
 - Point 1
 - Point 2"#;
 
-        let extracted = client.extract_final_answer(normal_response);
+        let extracted = LlmClient::extract_final_answer_text(normal_response);
 
         assert_eq!(extracted, normal_response);
     }
 
     #[test]
     fn test_extract_final_answer_with_thinking_prefix() {
-        let client = LlmClient::new(LlmConfig::default()).unwrap();
-
         let response_with_prefix = r#"Let me think about this question carefully...
 
 I need to consider the different aspects of the query.
@@ -951,7 +948,7 @@ Here is the actual answer after thinking.
 - Important point 1
 - Important point 2"#;
 
-        let extracted = client.extract_final_answer(response_with_prefix);
+        let extracted = LlmClient::extract_final_answer_text(response_with_prefix);
 
         assert!(!extracted.contains("Let me think"));
         assert!(extracted.contains("**Quick Answer**"));

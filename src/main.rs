@@ -115,16 +115,19 @@ async fn run() -> Result<()> {
                 // Also show web search configuration if debug is enabled
                 if args.debug {
                     let web_config = crate::web_search::WebSearchConfig::default();
-                    let search_system =
-                        match crate::web_search::DocumentationSearchSystem::new(web_config, None)
-                            .await
-                        {
-                            Ok(system) => system,
-                            Err(_) => {
-                                renderer.print_error("Web search system not available");
-                                return Ok(());
-                            }
-                        };
+                    let search_system = match crate::web_search::DocumentationSearchSystem::new(
+                        web_config,
+                        None,
+                        Some(config.rag.embedding.clone()),
+                    )
+                    .await
+                    {
+                        Ok(system) => system,
+                        Err(_) => {
+                            renderer.print_error("Web search system not available");
+                            return Ok(());
+                        }
+                    };
 
                     renderer.print_success("🔍 Web Search Configuration:");
                     println!("  Available: {}", search_system.is_available());
@@ -542,10 +545,23 @@ async fn run() -> Result<()> {
             crawl,
             crawl_depth,
             crawl_all,
-            ..
+            live_index,
+            embed_concurrency,
+            crawl_max_pages,
         }) => {
-            handle_index_command(&path, id, crawl, crawl_depth, crawl_all, &config, &renderer)
-                .await?;
+            handle_index_command(
+                &path,
+                id,
+                crawl,
+                crawl_depth,
+                crawl_all,
+                live_index,
+                embed_concurrency,
+                crawl_max_pages,
+                &config,
+                &renderer,
+            )
+            .await?;
         }
 
         Some(Commands::Sources { command }) => {
@@ -694,7 +710,7 @@ async fn handle_search_command(
 
     // Apply LLM synthesis if configured and not disabled
     if config.should_use_llm(no_llm) && !results.is_empty() {
-        println!("🤖 Synthesizing answer with AI...");
+        println!("Synthesizing answer with AI...");
 
         // Convert search results to RAG format for LLM synthesis
         let rag_results: Vec<crate::rag::RagSearchResult> = results
@@ -727,14 +743,7 @@ async fn handle_search_command(
             Ok(llm_client) => {
                 match llm_client.synthesize_answer(query, &rag_results).await {
                     Ok(synthesis) => {
-                        println!("\n{}", "┌─────────────────────────────────────────┐".cyan());
-                        println!(
-                            "{} {} {}",
-                            "│".cyan(),
-                            "🤖 AI Summary".bold().cyan(),
-                            "│".cyan()
-                        );
-                        println!("{}", "└─────────────────────────────────────────┘".cyan());
+                        println!("\n{}", "AI Summary".bold().cyan());
 
                         // Clean, colorized AI response
                         for line in synthesis.answer.lines() {
@@ -749,7 +758,7 @@ async fn handle_search_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Quick Answer**",
-                                        &format!("{}", "❯ Quick Answer".bold().green())
+                                        &format!("{}", "> Quick Answer".bold().green())
                                     )
                                 );
                             } else if trimmed.starts_with("**Key Points**") {
@@ -757,7 +766,7 @@ async fn handle_search_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Key Points**",
-                                        &format!("{}", "❯ Key Points".bold().blue())
+                                        &format!("{}", "> Key Points".bold().blue())
                                     )
                                 );
                             } else if trimmed.starts_with("**Code Example**") {
@@ -765,7 +774,7 @@ async fn handle_search_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Code Example**",
-                                        &format!("{}", "❯ Code Example".bold().magenta())
+                                        &format!("{}", "> Code Example".bold().magenta())
                                     )
                                 );
                             } else if trimmed.starts_with("- ") {
@@ -784,7 +793,7 @@ async fn handle_search_command(
                         }
 
                         if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3 {
-                            println!("\n  {} {}", "📖".dimmed(), "Sources used:".dimmed());
+                            println!("\n  {}", "Sources used:".dimmed());
                             for citation in synthesis.citations.iter().take(3) {
                                 println!("  {} {}", "•".dimmed(), citation.source_title.dimmed());
                             }
@@ -808,14 +817,7 @@ async fn handle_search_command(
 
     // Add clear separation before search results
     if config.should_use_llm(no_llm) && !results.is_empty() {
-        println!("{}", "┌─────────────────────────────────────────┐".blue());
-        println!(
-            "{} {} {}",
-            "│".blue(),
-            "📚 Detailed Results".bold().blue(),
-            "│".blue()
-        );
-        println!("{}", "└─────────────────────────────────────────┘".blue());
+        println!("\n{}", "Detailed Results".bold().blue());
     }
 
     // Render results with library information and limit
@@ -972,7 +974,7 @@ async fn handle_doc_command(
 
     // Apply LLM synthesis if configured and not disabled
     if config.should_use_llm(no_llm) && !doc_text.trim().is_empty() {
-        println!("🤖 Synthesizing documentation with AI...");
+        println!("Synthesizing documentation with AI...");
 
         // Convert documentation to RAG format for LLM synthesis
         let doc_sections: Vec<crate::rag::RagSearchResult> = doc_text
@@ -1013,14 +1015,7 @@ async fn handle_doc_command(
             Ok(llm_client) => {
                 match llm_client.synthesize_answer(&ai_query, &doc_sections).await {
                     Ok(synthesis) => {
-                        println!("\n{}", "┌─────────────────────────────────────────┐".cyan());
-                        println!(
-                            "{} {} {}",
-                            "│".cyan(),
-                            "🤖 AI Summary".bold().cyan(),
-                            "│".cyan()
-                        );
-                        println!("{}", "└─────────────────────────────────────────┘".cyan());
+                        println!("\n{}", "AI Summary".bold().cyan());
 
                         // Clean, colorized AI response
                         for line in synthesis.answer.lines() {
@@ -1035,7 +1030,7 @@ async fn handle_doc_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Quick Answer**",
-                                        &format!("{}", "❯ Quick Answer".bold().green())
+                                        &format!("{}", "> Quick Answer".bold().green())
                                     )
                                 );
                             } else if trimmed.starts_with("**Key Points**") {
@@ -1043,7 +1038,7 @@ async fn handle_doc_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Key Points**",
-                                        &format!("{}", "❯ Key Points".bold().blue())
+                                        &format!("{}", "> Key Points".bold().blue())
                                     )
                                 );
                             } else if trimmed.starts_with("**Code Example**") {
@@ -1051,7 +1046,7 @@ async fn handle_doc_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Code Example**",
-                                        &format!("{}", "❯ Code Example".bold().magenta())
+                                        &format!("{}", "> Code Example".bold().magenta())
                                     )
                                 );
                             } else if trimmed.starts_with("- ") {
@@ -1066,7 +1061,7 @@ async fn handle_doc_command(
                         }
 
                         if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3 {
-                            println!("\n  {} {}", "📖".dimmed(), "Sources used:".dimmed());
+                            println!("\n  {}", "Sources used:".dimmed());
                             for citation in synthesis.citations.iter().take(3) {
                                 println!("  {} {}", "•".dimmed(), citation.source_title.dimmed());
                             }
@@ -1086,14 +1081,7 @@ async fn handle_doc_command(
         }
 
         // Add clear separation before documentation
-        println!("{}", "┌─────────────────────────────────────────┐".blue());
-        println!(
-            "{} {} {}",
-            "│".blue(),
-            "📚 Full Documentation".bold().blue(),
-            "│".blue()
-        );
-        println!("{}", "└─────────────────────────────────────────┘".blue());
+        println!("\n{}", "Full Documentation".bold().blue());
     }
 
     // Render documentation using the new Context7 parser
@@ -1450,12 +1438,16 @@ async fn handle_get_command(
 }
 
 /// Handle the index command for RAG document indexing
+#[allow(clippy::too_many_arguments)]
 async fn handle_index_command(
     path_or_url: &str,
     _id: Option<String>,
     crawl: bool,
     crawl_depth: Option<u32>,
     crawl_all: bool,
+    _live_index: bool,
+    embed_concurrency: Option<usize>,
+    crawl_max_pages: Option<usize>,
     config: &Config,
     renderer: &Renderer,
 ) -> Result<()> {
@@ -1481,15 +1473,27 @@ async fn handle_index_command(
                 let should_crawl = crawl || crawl_depth.is_some() || crawl_all;
 
                 if should_crawl {
-                    // Index URL content with deep crawling
-                    // Convert old max_pages logic: if crawl_all is true, no page limit
-                    let max_pages = if crawl_all { None } else { Some(100) }; // Default limit when not crawling all
+                    // Default to streamed indexing for speed (no flag required)
                     rag_system
-                        .index_url_deep(path_or_url, crawl_depth, max_pages)
+                        .index_url_deep_stream(
+                            path_or_url,
+                            crawl_depth,
+                            crawl_all,
+                            embed_concurrency,
+                            crawl_max_pages,
+                        )
                         .await?
                 } else {
-                    // Index single URL content
-                    rag_system.index_url(path_or_url).await?
+                    // No explicit crawl flags: stream with depth 0 for speed
+                    rag_system
+                        .index_url_deep_stream(
+                            path_or_url,
+                            Some(0),
+                            false,
+                            embed_concurrency,
+                            crawl_max_pages,
+                        )
+                        .await?
                 }
             } else {
                 // Index local file or directory
@@ -1622,6 +1626,9 @@ async fn handle_sources_command(
                 false,
                 None,
                 false,
+                false,
+                None,
+                None,
                 config,
                 renderer,
             )
@@ -1835,7 +1842,7 @@ async fn handle_embedding_command(
             match OnnxProvider::download_model(&model, force).await {
                 Ok(()) => {
                     pb.finish_and_clear();
-                    renderer.print_success(&format!("✅ Successfully downloaded model: {}", model));
+                    renderer.print_success(&format!("Successfully downloaded model: {}", model));
 
                     // Update config to detect and store the actual dimension
                     if let Err(e) = config.rag.embedding.detect_and_update_dimension().await {
@@ -1844,7 +1851,7 @@ async fn handle_embedding_command(
                 }
                 Err(e) => {
                     pb.finish_and_clear();
-                    renderer.print_error(&format!("❌ Failed to download model: {}", e));
+                    renderer.print_error(&format!("Failed to download model: {}", e));
                 }
             }
         }
@@ -1853,7 +1860,7 @@ async fn handle_embedding_command(
             if available {
                 use crate::rag::providers::onnx::OnnxProvider;
 
-                renderer.print_success("🌐 Available Models for Download:");
+                renderer.print_success("Available Models for Download:");
                 let models = OnnxProvider::list_available_models();
                 for model in models {
                     println!("  • {}", model);
@@ -1866,13 +1873,13 @@ async fn handle_embedding_command(
                     Ok(manager) => {
                         let models = manager.list_models();
                         if models.is_empty() {
-                            renderer.print_success("💾 No models installed yet.");
+                            renderer.print_success("No models installed yet.");
                             println!("Use 'manx embedding download <model>' to install models.");
                         } else {
                             renderer
-                                .print_success(&format!("💾 Installed Models ({}):", models.len()));
+                                .print_success(&format!("Installed Models ({}):", models.len()));
                             for model in models {
-                                println!("\n  📦 {}", model.model_name);
+                                println!("\n  {}", model.model_name);
                                 println!("     Type: {}", model.provider_type);
                                 println!("     Dimension: {}", model.dimension);
                                 println!("     Size: {:.1} MB", model.size_mb);
@@ -1897,7 +1904,7 @@ async fn handle_embedding_command(
         }
 
         EmbeddingCommands::Test { query, verbose } => {
-            println!("🔄 Testing embedding generation with query: '{}'", query);
+            println!("Testing embedding generation with query: '{}'", query);
 
             let start_time = std::time::Instant::now();
 
@@ -1905,16 +1912,16 @@ async fn handle_embedding_command(
                 Ok(model) => {
                     // Show provider info
                     let provider_info = model.get_provider_info();
-                    println!("🔧 Using provider: {}", provider_info.name);
+                    println!("Using provider: {}", provider_info.name);
                     if let Some(model_name) = &provider_info.model_name {
-                        println!("🏷️  Model: {}", model_name);
+                        println!("Model: {}", model_name);
                     }
 
                     match model.embed_text(&query).await {
                         Ok(embedding) => {
                             let duration = start_time.elapsed();
                             renderer.print_success(&format!(
-                                "✅ Successfully generated embedding with {} dimensions in {:.2}ms",
+                                "Successfully generated embedding with {} dimensions in {:.2}ms",
                                 embedding.len(),
                                 duration.as_millis()
                             ));
@@ -1923,7 +1930,7 @@ async fn handle_embedding_command(
                             if let Ok(actual_dim) = model.get_dimension().await {
                                 if actual_dim != config.rag.embedding.dimension {
                                     println!(
-                                        "⚠️  Updating dimension: {} -> {}",
+                                        "Updating dimension: {} -> {}",
                                         config.rag.embedding.dimension, actual_dim
                                     );
                                     config.rag.embedding.dimension = actual_dim;
@@ -2085,11 +2092,11 @@ async fn handle_web_search_command(
 
     // Show appropriate progress message based on LLM availability
     let search_mode = if will_use_llm {
-        "🔍 Searching with AI verification"
+        "Searching with AI verification"
     } else if config.has_llm_configured() {
-        "🔍 Searching (LLM disabled by --no-llm)"
+        "Searching (LLM disabled by --no-llm)"
     } else {
-        "🔍 Searching with semantic matching"
+        "Searching with semantic matching"
     };
 
     let pb = renderer.show_progress(&format!("{} for '{}'", search_mode, query));
@@ -2102,15 +2109,20 @@ async fn handle_web_search_command(
     let max_display_results = web_search_config.max_results;
 
     // Create web search system
-    let mut search_system =
-        match web_search::DocumentationSearchSystem::new(web_search_config, llm_config).await {
-            Ok(system) => system,
-            Err(e) => {
-                pb.finish_and_clear();
-                renderer.print_error(&format!("Failed to initialize search system: {}", e));
-                return Ok(());
-            }
-        };
+    let mut search_system = match web_search::DocumentationSearchSystem::new(
+        web_search_config,
+        llm_config,
+        Some(config.rag.embedding.clone()),
+    )
+    .await
+    {
+        Ok(system) => system,
+        Err(e) => {
+            pb.finish_and_clear();
+            renderer.print_error(&format!("Failed to initialize search system: {}", e));
+            return Ok(());
+        }
+    };
 
     // Perform search
     match search_system.search(query).await {
@@ -2120,12 +2132,12 @@ async fn handle_web_search_command(
             // Display search info
             if response.used_fallback {
                 renderer.print_error(&format!(
-                    "⚠️ Limited official results found ({}), expanded to trusted community sources",
+                    "Limited official results found ({}), expanded to trusted community sources",
                     response.official_results_count
                 ));
             } else {
                 renderer.print_success(&format!(
-                    "✓ Found {} results from official documentation sources",
+                    "Found {} results from official documentation sources",
                     response.official_results_count
                 ));
             }
@@ -2138,7 +2150,7 @@ async fn handle_web_search_command(
 
             // Apply LLM synthesis if configured and not disabled
             if config.should_use_llm(no_llm) && !response.results.is_empty() {
-                println!("🤖 Synthesizing answer with AI...");
+                println!("Synthesizing answer with AI...");
 
                 // Convert search results to RAG format for LLM synthesis
                 let rag_results: Vec<crate::rag::RagSearchResult> = response
@@ -2180,20 +2192,7 @@ async fn handle_web_search_command(
                     Ok(llm_client) => {
                         match llm_client.synthesize_answer(query, &rag_results).await {
                             Ok(synthesis) => {
-                                println!(
-                                    "\n{}",
-                                    "┌─────────────────────────────────────────┐".cyan()
-                                );
-                                println!(
-                                    "{} {} {}",
-                                    "│".cyan(),
-                                    "🤖 AI Summary".bold().cyan(),
-                                    "│".cyan()
-                                );
-                                println!(
-                                    "{}",
-                                    "└─────────────────────────────────────────┘".cyan()
-                                );
+                                println!("\n{}", "AI Summary".bold().cyan());
 
                                 // Clean, colorized AI response
                                 for line in synthesis.answer.lines() {
@@ -2208,7 +2207,7 @@ async fn handle_web_search_command(
                                             "  {}",
                                             trimmed.replace(
                                                 "**Quick Answer**",
-                                                &format!("{}", "❯ Quick Answer".bold().green())
+                                                &format!("{}", "> Quick Answer".bold().green())
                                             )
                                         );
                                     } else if trimmed.starts_with("**Key Points**") {
@@ -2216,7 +2215,7 @@ async fn handle_web_search_command(
                                             "  {}",
                                             trimmed.replace(
                                                 "**Key Points**",
-                                                &format!("{}", "❯ Key Points".bold().blue())
+                                                &format!("{}", "> Key Points".bold().blue())
                                             )
                                         );
                                     } else if trimmed.starts_with("**Code Example**") {
@@ -2224,7 +2223,7 @@ async fn handle_web_search_command(
                                             "  {}",
                                             trimmed.replace(
                                                 "**Code Example**",
-                                                &format!("{}", "❯ Code Example".bold().magenta())
+                                                &format!("{}", "> Code Example".bold().magenta())
                                             )
                                         );
                                     } else if trimmed.starts_with("- ") {
@@ -2240,7 +2239,7 @@ async fn handle_web_search_command(
 
                                 if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3
                                 {
-                                    println!("\n  {} {}", "📖".dimmed(), "Sources used:".dimmed());
+                                    println!("\n  {}", "Sources used:".dimmed());
                                     for citation in synthesis.citations.iter().take(3) {
                                         println!(
                                             "  {} {}",
@@ -2268,52 +2267,59 @@ async fn handle_web_search_command(
 
             // Add clear separation before search results
             if config.should_use_llm(no_llm) && !response.results.is_empty() {
-                println!("{}", "┌─────────────────────────────────────────┐".blue());
-                println!(
-                    "{} {} {}",
-                    "│".blue(),
-                    "📚 Detailed Results".bold().blue(),
-                    "│".blue()
-                );
-                println!("{}", "└─────────────────────────────────────────┘".blue());
+                println!("\n{}", "Detailed Results".bold().blue());
             }
 
             // Show summary (truncated)
-            println!("\n📝 Summary:");
+            println!("\nSummary:");
             let summary = truncate_text(&response.summary, 150, true);
             println!("{}", summary);
 
             // Show top results
-            println!("\n📚 Documentation Results:");
+            println!("\nDocumentation Results:");
+            let separator = "-".repeat(70);
             for (i, result) in response
                 .results
                 .iter()
                 .enumerate()
                 .take(max_display_results)
             {
+                if i > 0 {
+                    println!("{}", separator.dimmed());
+                }
                 // Truncate title if too long
                 let title = truncate_text(&result.title, 80, false);
                 println!("\n{}. {}", i + 1, title);
-                println!("   🔗 {}", result.url);
+                println!("   URL: {}", result.url.bright_blue().underline());
 
                 let source_indicator = if result.is_official {
-                    "📋 Official Documentation"
+                    "Official Documentation"
                 } else {
-                    "🌐 Community Source"
+                    "Community Source"
                 };
-                println!(
-                    "   {} • Relevance: {:.1}%",
-                    source_indicator,
-                    result.similarity_score * 100.0
-                );
+                let relevance = result.similarity_score * 100.0;
+                let relevance_str = format!("{:.1}%", relevance);
+                let relevance_colored = if relevance >= 85.0 {
+                    relevance_str.bright_green()
+                } else if relevance >= 70.0 {
+                    relevance_str.yellow()
+                } else {
+                    relevance_str.red()
+                };
+                println!("   {} • Relevance: {}", source_indicator, relevance_colored);
 
                 // Show snippet (smart truncated)
-                let snippet = truncate_text(&result.snippet, 120, true);
+                // Show a longer preview so users can judge relevance
+                let snippet = truncate_text(&result.snippet, 220, true);
                 println!("   {}", snippet);
             }
 
+            if !response.results.is_empty() {
+                println!("{}", separator.dimmed());
+            }
+
             // Show search stats
-            println!("\n📊 Search Statistics:");
+            println!("\nSearch Statistics:");
             println!("• Total found: {}", response.total_found);
             println!("• Official sources: {}", response.official_results_count);
             println!("• Search time: {}ms", response.search_time_ms);
@@ -2334,7 +2340,7 @@ async fn handle_web_search_command(
             renderer.print_error(&format!("Search failed: {}", e));
 
             // Provide helpful suggestions
-            println!("💡 Search Tips:");
+            println!("Search Tips:");
             println!("• Try more specific terms: 'react hooks useEffect' instead of 'react'");
             println!("• Check your internet connection");
             println!("• Use quotes for exact phrases: '\"memory management\"'");
@@ -2397,7 +2403,7 @@ async fn handle_rag_search_command(
             }
 
             renderer.print_success(&format!(
-                "✓ Found {} results from indexed documents",
+                "Found {} results from indexed documents",
                 results.len()
             ));
 
@@ -2405,11 +2411,11 @@ async fn handle_rag_search_command(
             if config.should_use_llm(*no_llm) && !results.is_empty() {
                 match synthesize_rag_results(query, &results, config, renderer).await {
                     Ok(synthesis) => {
-                        println!("\n🤖 AI Analysis:");
+                        println!("\nAI Analysis:");
                         println!("{}", synthesis.answer);
 
                         if !synthesis.citations.is_empty() {
-                            println!("\n📖 Sources:");
+                            println!("\nSources:");
                             for citation in synthesis.citations.iter().take(5) {
                                 println!("  • {}", citation.source_title);
                             }
@@ -2508,17 +2514,13 @@ async fn handle_rag_snippet_command(
                 return Ok(());
             }
 
-            renderer.print_success(&format!(
-                "✓ Found {} snippets for {}",
-                results.len(),
-                library
-            ));
+            renderer.print_success(&format!("Found {} snippets for {}", results.len(), library));
 
             // Apply LLM synthesis if configured
             if config.should_use_llm(*no_llm) && !results.is_empty() {
                 match synthesize_rag_results(&focused_query, &results, config, renderer).await {
                     Ok(synthesis) => {
-                        println!("\n🤖 Code Analysis:");
+                        println!("\nCode Analysis:");
                         println!("{}", synthesis.answer);
                     }
                     Err(e) => {
@@ -2566,9 +2568,9 @@ async fn handle_rag_doc_command(
     };
 
     let search_mode = if config.should_use_llm(*no_llm) {
-        "📚 Finding documentation with AI understanding"
+        "Finding documentation with AI understanding"
     } else {
-        "📚 Finding documentation with semantic matching"
+        "Finding documentation with semantic matching"
     };
 
     let pb = renderer.show_progress(&format!("{} for '{}'", search_mode, search_query));
@@ -2598,7 +2600,7 @@ async fn handle_rag_doc_command(
             }
 
             renderer.print_success(&format!(
-                "✓ Found {} documentation sections for {}",
+                "Found {} documentation sections for {}",
                 results.len(),
                 library
             ));
@@ -2607,7 +2609,7 @@ async fn handle_rag_doc_command(
             if config.should_use_llm(*no_llm) && !results.is_empty() {
                 match synthesize_rag_results(&search_query, &results, config, renderer).await {
                     Ok(synthesis) => {
-                        println!("\n🤖 Documentation Summary:");
+                        println!("\nDocumentation Summary:");
                         println!("{}", synthesis.answer);
                     }
                     Err(e) => {
