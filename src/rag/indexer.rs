@@ -81,6 +81,79 @@ impl Indexer {
         Ok(all_chunks)
     }
 
+    /// Index a single URL without invoking the crawler (depth 0 semantics)
+    pub async fn index_single_url_no_crawl(&self, url: &str) -> Result<Vec<DocumentChunk>> {
+        log::info!("Fetching single URL without crawl: {}", url);
+
+        // Validate URL
+        let _ = Url::parse(url).map_err(|e| anyhow!("Invalid URL '{}': {}", url, e))?;
+
+        // Fetch page
+        let client = reqwest::Client::builder()
+            .user_agent("Manx/0.5.0 (Single Page Indexer)")
+            .timeout(Duration::from_secs(30))
+            .build()?;
+
+        let resp = client.get(url).send().await?;
+        if !resp.status().is_success() {
+            return Err(anyhow!(
+                "Failed to fetch URL {}: {}",
+                url,
+                resp.status()
+            ));
+        }
+        let html = resp.text().await?;
+
+        // Extract title (best-effort)
+        let page_title = extract_html_title(&html).or_else(|| extract_h1(&html));
+
+        // Convert HTML to plain text (markdown-like)
+        let text = clean_html_to_text(&html);
+        if text.trim().is_empty() {
+            return Err(anyhow!("Fetched page contains no indexable text: {}", url));
+        }
+
+        // Chunk the content
+        let chunks = chunk_content(&text, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
+
+        // Build metadata
+        let mut tags = vec!["documentation".to_string(), "single-page".to_string()];
+        if let Some(domain) = extract_domain_from_url(url) {
+            tags.push(domain);
+        }
+
+        let metadata = DocumentMetadata {
+            file_type: "html".to_string(),
+            size: text.len() as u64,
+            modified: Utc::now(),
+            tags,
+            language: Some("en".to_string()),
+        };
+
+        // Create document chunks
+        let mut document_chunks = Vec::new();
+        for (i, chunk_content) in chunks.into_iter().enumerate() {
+            let chunk = DocumentChunk {
+                id: format!("{}_{}", url, i),
+                content: preprocessing::clean_text(&chunk_content),
+                source_path: PathBuf::from(url),
+                source_type: SourceType::Web,
+                title: page_title.clone(),
+                section: None,
+                chunk_index: i,
+                metadata: metadata.clone(),
+            };
+            document_chunks.push(chunk);
+        }
+
+        log::info!(
+            "Indexed {} chunks from single URL without crawl: {}",
+            document_chunks.len(),
+            url
+        );
+        Ok(document_chunks)
+    }
+
     /// Index content from a URL
     #[allow(dead_code)]
     pub async fn index_url(&self, url: String) -> Result<Vec<DocumentChunk>> {
@@ -125,7 +198,7 @@ impl Indexer {
         // Parse the URL
         let base_url = Url::parse(&url)?;
 
-        // Configure docrawl
+        // Configure doccrawl with silenced output so Manx renders progress
         let config = CrawlConfig {
             base_url,
             output_dir: temp_dir.clone(),
@@ -137,6 +210,7 @@ impl Indexer {
             } else {
                 Some(3) // Default depth
             },
+            silence: true, // Silence docrawl; Manx renders its own progress UI
             rate_limit_per_sec: 10,
             follow_sitemaps: true,
             concurrency: 4,
@@ -321,6 +395,162 @@ impl Indexer {
         } else {
             format!("{}/{}", base_url, file_name)
         }
+    }
+
+    /// Shallow crawl: fetch base page and first-level same-host links (depth 1)
+    pub async fn index_shallow_url(
+        &self,
+        url: &str,
+        max_pages: Option<usize>,
+    ) -> Result<Vec<DocumentChunk>> {
+        use indicatif::{ProgressBar, ProgressStyle};
+        use scraper::{Html, Selector};
+        use tokio::task::JoinSet;
+
+        let client = reqwest::Client::builder()
+            .user_agent("Manx/0.5.0 (Shallow Crawler)")
+            .timeout(Duration::from_secs(30))
+            .build()?;
+
+        // Fetch base page
+        let resp = client.get(url).send().await?;
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to fetch URL {}: {}", url, resp.status()));
+        }
+        let final_url = resp.url().clone();
+        let base_html = resp.text().await?;
+
+        eprintln!("\n🌐 Shallow crawl starting: {}", url);
+
+        // Helper to build chunks from HTML
+        let mut all_chunks: Vec<DocumentChunk> = Vec::new();
+        let make_chunks = |page_url: &str, html: &str| -> Result<Vec<DocumentChunk>> {
+            let page_title = extract_html_title(html).or_else(|| extract_h1(html));
+            let text = clean_html_to_text(html);
+            if text.trim().is_empty() {
+                return Ok(vec![]);
+            }
+            let chunks = chunk_content(&text, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
+
+            // Build metadata
+            let mut tags = vec!["documentation".to_string(), "shallow-crawl".to_string()];
+            if let Some(domain) = extract_domain_from_url(page_url) {
+                tags.push(domain);
+            }
+            let metadata = DocumentMetadata {
+                file_type: "html".to_string(),
+                size: text.len() as u64,
+                modified: Utc::now(),
+                tags,
+                language: Some("en".to_string()),
+            };
+
+            let mut docs = Vec::new();
+            for (i, chunk_content) in chunks.into_iter().enumerate() {
+                docs.push(DocumentChunk {
+                    id: format!("{}_{}", page_url, i),
+                    content: preprocessing::clean_text(&chunk_content),
+                    source_path: PathBuf::from(page_url),
+                    source_type: SourceType::Web,
+                    title: page_title.clone(),
+                    section: None,
+                    chunk_index: i,
+                    metadata: metadata.clone(),
+                });
+            }
+            Ok(docs)
+        };
+
+        // Include base page
+        eprintln!("🔎 Fetching base page: {}", final_url);
+        all_chunks.extend(make_chunks(final_url.as_str(), &base_html)?);
+
+        // Parse links from base page
+        let doc = Html::parse_document(&base_html);
+        let a_sel = Selector::parse("a[href]").unwrap();
+        let base_host = final_url.host_str().unwrap_or("");
+        let norm = |h: &str| h.strip_prefix("www.").unwrap_or(h).to_string();
+        let base_norm = norm(base_host);
+
+        use std::collections::HashSet;
+        let mut seen: HashSet<String> = HashSet::new();
+        seen.insert(final_url.as_str().to_string());
+
+        let page_cap = max_pages.unwrap_or(usize::MAX);
+        let mut targets: Vec<url::Url> = Vec::new();
+        for a in doc.select(&a_sel) {
+            if let Some(href) = a.value().attr("href") {
+                // Resolve relative links
+                if let Ok(abs) = final_url.join(href) {
+                    // Same-host (treat www. as equivalent)
+                    if let Some(h) = abs.host_str() {
+                        if norm(h) != base_norm {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                    // Deduplicate
+                    let s = abs.as_str().to_string();
+                    if !seen.insert(s.clone()) {
+                        continue;
+                    }
+                    targets.push(abs);
+                    if seen.len() >= page_cap {
+                        break;
+                    }
+                }
+            }
+        }
+
+        eprintln!("🔗 Found {} same-host links", targets.len());
+
+        // Fetch first-level pages with small concurrency
+        let pb = if !targets.is_empty() {
+            let pb = ProgressBar::new(targets.len() as u64);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} pages ({percent}%) | {msg}")
+                    .unwrap()
+                    .progress_chars("█▉▊▋▌▍▎▏  "),
+            );
+            pb.set_message("Fetching pages...");
+            Some(pb)
+        } else {
+            None
+        };
+        let mut set = JoinSet::new();
+        let client2 = client.clone();
+        for t in targets.into_iter() {
+            let client3 = client2.clone();
+            set.spawn(async move {
+                let r = client3.get(t.clone()).send().await.ok()?;
+                if !r.status().is_success() {
+                    return None;
+                }
+                let html = r.text().await.ok()?;
+                Some((t.to_string(), html))
+            });
+        }
+
+        let mut fetched = 0usize;
+        while let Some(res) = set.join_next().await {
+            if let Ok(Some((page_url, html))) = res {
+                if let Ok(mut chunks) = make_chunks(&page_url, &html) {
+                    all_chunks.append(&mut chunks);
+                }
+            }
+            fetched += 1;
+            if let Some(pb) = &pb {
+                pb.set_position(fetched as u64);
+            }
+        }
+
+        if let Some(pb) = pb {
+            pb.finish_with_message("✓ Shallow crawl completed");
+        }
+
+        Ok(all_chunks)
     }
 }
 
@@ -1412,8 +1642,65 @@ fn extract_domain_from_url(url: &str) -> Option<String> {
             Some(after_protocol.to_string())
         }
     } else {
-        None
+        return None;
     }
+}
+
+/// Clean HTML to plain text suitable for indexing
+fn clean_html_to_text(html: &str) -> String {
+    use regex::Regex;
+    // Remove script and style blocks
+    let re_script = Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap();
+    let re_style = Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap();
+    let stripped = re_script.replace_all(html, "");
+    let without_code = re_style.replace_all(&stripped, "");
+
+    // Replace common block tags with newlines to keep structure
+    let block_tags = [
+        "</p>", "</div>", "</section>", "</article>", "</li>", "</ul>", "</ol>",
+        "<br>", "<br/>", "<br />",
+    ];
+    let mut structured = without_code.to_string();
+    for tag in &block_tags {
+        structured = structured.replace(tag, "\n");
+    }
+
+    // Remove all remaining tags
+    let re_tags = Regex::new(r"<[^>]+>").unwrap();
+    let no_tags = re_tags.replace_all(&structured, "");
+
+    // Decode common HTML entities
+    let decoded = no_tags
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ");
+
+    // Normalize whitespace
+    let re_ws = regex::Regex::new(r"\s+").unwrap();
+    re_ws.replace_all(&decoded, " ").trim().to_string()
+}
+
+/// Extract page title from <title> tag (best effort)
+fn extract_html_title(html: &str) -> Option<String> {
+    use regex::Regex;
+    let re = Regex::new(r"(?is)<title[^>]*>(.*?)</title>").ok()?;
+    let caps = re.captures(html)?;
+    let title = caps.get(1)?.as_str();
+    let cleaned = clean_html_to_text(title);
+    if cleaned.is_empty() { None } else { Some(cleaned) }
+}
+
+/// Extract first <h1> text as a fallback title
+fn extract_h1(html: &str) -> Option<String> {
+    use regex::Regex;
+    let re = Regex::new(r"(?is)<h1[^>]*>(.*?)</h1>").ok()?;
+    let caps = re.captures(html)?;
+    let h1 = caps.get(1)?.as_str();
+    let cleaned = clean_html_to_text(h1);
+    if cleaned.is_empty() { None } else { Some(cleaned) }
 }
 
 #[cfg(test)]

@@ -1469,32 +1469,32 @@ async fn handle_index_command(
     match RagSystem::new(config.rag.clone()).await {
         Ok(mut rag_system) => {
             let indexed_count = if is_url {
-                // Check if any crawl option is enabled (crawl, crawl_depth, or crawl_all)
-                let should_crawl = crawl || crawl_depth.is_some() || crawl_all;
-
-                if should_crawl {
-                    // Default to streamed indexing for speed (no flag required)
-                    rag_system
-                        .index_url_deep_stream(
-                            path_or_url,
-                            crawl_depth,
-                            crawl_all,
-                            embed_concurrency,
-                            crawl_max_pages,
-                        )
-                        .await?
+                // Determine effective crawl behavior based on flags
+                // Semantics:
+                //   - No flag: depth = 0 (single page)
+                //   - --crawl: depth = 1 (first-level links)
+                //   - --crawl-depth N: depth = N
+                //   - --crawl-all: unlimited depth
+                let (effective_depth, effective_crawl_all) = if crawl_all {
+                    (None, true)
+                } else if let Some(d) = crawl_depth {
+                    (Some(d), false)
+                } else if crawl {
+                    (Some(1), false)
                 } else {
-                    // No explicit crawl flags: stream with depth 0 for speed
-                    rag_system
-                        .index_url_deep_stream(
-                            path_or_url,
-                            Some(0),
-                            false,
-                            embed_concurrency,
-                            crawl_max_pages,
-                        )
-                        .await?
-                }
+                    (Some(0), false)
+                };
+
+                // Streamed indexing for speed
+                rag_system
+                    .index_url_deep_stream(
+                        path_or_url,
+                        effective_depth,
+                        effective_crawl_all,
+                        embed_concurrency,
+                        crawl_max_pages,
+                    )
+                    .await?
             } else {
                 // Index local file or directory
                 let path = std::path::PathBuf::from(path_or_url);

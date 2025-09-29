@@ -791,9 +791,9 @@ dependencies = [
 
 [[package]]
 name = "docrawl"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d3bc6410959ee1c8ea82a6f80973c1c5b80fc9614506a79353d9154f82618b0"
+checksum = "589d81b6b26fe216a04263c30376a6fe9b7359dc6fe473e7b13ca3fd92c379fc"
 dependencies = [
  "async-trait",
  "bytes",

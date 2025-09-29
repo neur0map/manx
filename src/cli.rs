@@ -329,7 +329,7 @@ pub enum Commands {
         /// Optional alias for the indexed source
         #[arg(long, value_name = "ALIAS")]
         id: Option<String>,
-        /// Enable basic crawling for URLs (follows links with default depth)
+        /// Enable basic crawling for URLs (default depth: 1)
         #[arg(long)]
         crawl: bool,
         /// Crawl with specific depth (implies crawling)

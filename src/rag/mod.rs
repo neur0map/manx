@@ -18,7 +18,8 @@ use docrawl::{crawl, Config as DocrawlConfig, CrawlConfig};
 use serde::{Deserialize, Serialize};
 // no need for Write trait; summary prints are plain
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use walkdir::WalkDir;
 
 pub mod benchmarks;
@@ -375,11 +376,62 @@ impl RagSystem {
         use tokio::sync::mpsc;
         use tokio::time::{interval, Duration};
 
+        // If explicitly depth 0 and not crawl-all, do single-page fetch without the crawler
+        if matches!(max_depth, Some(0)) && !crawl_all {
+            eprintln!("\n🧭 Indexing single page (no crawl): {}", url);
+            let embedding_model = std::sync::Arc::new(
+                EmbeddingModel::new_with_config(self.config.embedding.clone()).await?,
+            );
+            let indexer = Indexer::new(&self.config)?;
+            let chunks = indexer.index_single_url_no_crawl(url).await?;
+            let total_stored =
+                store_chunks_with_model_config(&self.config, &chunks, &embedding_model).await?;
+
+            let index_path = indexer.get_index_path();
+            eprintln!("\n==== Manx Index Summary ====");
+            eprintln!("Mode: Single page (no crawl)");
+            eprintln!("Chunks created: {}", chunks.len());
+            eprintln!("Chunks stored: {}", total_stored);
+            eprintln!("Index path: {}", index_path.display());
+            return Ok(total_stored);
+        }
+
+        // If depth is 1 (shallow), prefer our manual shallow crawler to avoid docrawl host-scope quirks
+        if matches!(max_depth, Some(1)) && !crawl_all {
+            eprintln!("\n🧭 Shallow crawl (depth 1) for: {}", url);
+            let embedding_model = std::sync::Arc::new(
+                EmbeddingModel::new_with_config(self.config.embedding.clone()).await?,
+            );
+            let indexer = Indexer::new(&self.config)?;
+            let chunks = indexer.index_shallow_url(url, crawl_max_pages).await?;
+            let total_stored =
+                store_chunks_with_model_config(&self.config, &chunks, &embedding_model).await?;
+
+            let index_path = indexer.get_index_path();
+            eprintln!("\n==== Manx Index Summary ====");
+            eprintln!("Mode: Shallow crawl (depth 1)");
+            eprintln!("Chunks created: {}", chunks.len());
+            eprintln!("Chunks stored: {}", total_stored);
+            eprintln!("Index path: {}", index_path.display());
+            return Ok(total_stored);
+        }
+
         let temp_dir = std::env::temp_dir().join(format!("manx_crawl_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&temp_dir)?;
 
-        // Build crawler config
-        let base_url = url::Url::parse(url)?;
+        // Show initial status
+        eprintln!("\n🌐 Starting document crawl for: {}", url);
+        eprintln!("   This will: 1) Crawl pages → 2) Chunk content → 3) Create embeddings");
+        log::debug!("Temp directory: {}", temp_dir.display());
+        eprintln!();
+
+        // Resolve potential redirects to get canonical host (e.g., kali.org -> www.kali.org)
+        let base_url = if let Ok(resp) = reqwest::Client::new().get(url).send().await {
+            resp.url().clone()
+        } else {
+            url::Url::parse(url)?
+        };
+        // Configure docrawl secondary options (use defaults)
         let crawl_config = CrawlConfig {
             base_url,
             output_dir: temp_dir.clone(),
@@ -391,17 +443,18 @@ impl RagSystem {
             } else {
                 Some(3)
             },
-            rate_limit_per_sec: 20,
+            silence: true, // Silence docrawl; Manx renders its own progress UI
+            rate_limit_per_sec: 20, // Reasonable rate limit for documentation sites
             follow_sitemaps: true,
-            concurrency: std::cmp::max(8, num_cpus::get()),
+            concurrency: std::cmp::max(8, num_cpus::get()), // Use more threads for faster crawling
             timeout: Some(std::time::Duration::from_secs(30)),
             resume: false,
+            // Additional crawler behavior configuration
             config: DocrawlConfig::default(),
         };
 
         // Create embedding model once
-        let embedding_model =
-            Arc::new(EmbeddingModel::new_with_config(self.config.embedding.clone()).await?);
+        let embedding_model = Arc::new(EmbeddingModel::new_with_config(self.config.embedding.clone()).await?);
 
         // Channel for discovered markdown files
         let (tx, rx) = mpsc::channel::<PathBuf>(200);
@@ -410,57 +463,117 @@ impl RagSystem {
 
         // Counters for summary (no live prints during crawl)
         let pages_counter = Arc::new(AtomicUsize::new(0));
+        let processed_pages_counter = Arc::new(AtomicUsize::new(0));
         let chunks_counter = Arc::new(AtomicUsize::new(0));
+
+        // Track when crawl is done
+        let crawl_done = Arc::new(AtomicBool::new(false));
+        let crawl_done_clone = crawl_done.clone();
 
         // Spawn crawler; suppress its stdout to avoid competing spinner
         let crawl_handle = tokio::spawn(async move {
-            let _ = crawl(crawl_config).await;
+            let result = crawl(crawl_config).await;
+            crawl_done_clone.store(true, Ordering::Relaxed);
+            // Convert the error to a string to make it Send
+            result.map_err(|e| e.to_string())
         });
 
         // Spawn scanner: discover new markdown files while crawler runs
         let temp_dir_clone = temp_dir.clone();
         let scanner_tx = tx.clone();
         let pc = pages_counter.clone();
+        let crawl_done_scanner = crawl_done.clone();
         let scanner_handle = tokio::spawn(async move {
-            let mut ticker = interval(Duration::from_millis(300));
+            // Give docrawl a head start before we start scanning
+            tokio::time::sleep(Duration::from_secs(3)).await;
+
+            // Start with longer interval during active crawling, speed up when crawl is done
+            let mut scan_interval_ms = 1000; // Start with 1 second interval to reduce overhead
+            let mut ticker = interval(Duration::from_millis(scan_interval_ms));
             let mut seen: HashSet<PathBuf> = HashSet::new();
             let mut idle_ticks = 0u32;
+            let mut total_files_scanned;
+            // Reduced verbosity - only show important messages
+            log::debug!("Scanner: Starting to monitor directory: {}", temp_dir_clone.display());
+
             loop {
                 ticker.tick().await;
                 let mut new_found = 0usize;
+                let mut current_scan_count = 0usize;
+
                 for entry in WalkDir::new(&temp_dir_clone)
                     .into_iter()
                     .filter_map(|e| e.ok())
                 {
                     let path = entry.path();
-                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
-                        let pb = path.to_path_buf();
-                        if !seen.contains(&pb) {
-                            seen.insert(pb.clone());
-                            if scanner_tx.send(pb).await.is_err() {
-                                break;
-                            }
-                            new_found += 1;
-                            pc.fetch_add(1, Ordering::Relaxed);
-                            if seen.len() >= crawl_max_pages {
-                                break;
+                    current_scan_count += 1;
+
+                    if path.is_file() {
+                        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                            if ext == "md" {
+                                let pb = path.to_path_buf();
+                                if !seen.contains(&pb) {
+                                    log::debug!("Scanner: Found new markdown file: {}", pb.file_name().unwrap_or_default().to_string_lossy());
+                                    seen.insert(pb.clone());
+                                    if scanner_tx.send(pb).await.is_err() {
+                                        break;
+                                    }
+                                    new_found += 1;
+                                    pc.fetch_add(1, Ordering::Relaxed);
+                                    if seen.len() >= crawl_max_pages {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                if new_found == 0 {
-                    idle_ticks += 1;
-                } else {
+
+                total_files_scanned = current_scan_count;
+
+                if new_found > 0 {
+                    log::debug!("Scanner: Found {} new markdown files this scan (total: {})", new_found, seen.len());
                     idle_ticks = 0;
+                    // Speed up scanning when we're finding files
+                    if scan_interval_ms > 300 {
+                        scan_interval_ms = 300;
+                        ticker = interval(Duration::from_millis(scan_interval_ms));
+                    }
+                } else {
+                    idle_ticks += 1;
+
+                    // If crawl is done and we're idle, speed up scanning to finish quickly
+                    if crawl_done_scanner.load(Ordering::Relaxed) && scan_interval_ms > 200 {
+                        scan_interval_ms = 200;
+                        ticker = interval(Duration::from_millis(scan_interval_ms));
+                    }
+
+                    if idle_ticks % 10 == 0 {
+                        log::debug!("Scanner: No new files found for {} ticks (scanned {} total files in directory)", idle_ticks, total_files_scanned);
+                    }
                 }
+
                 if seen.len() >= crawl_max_pages {
+                    eprintln!("Scanner: Reached max pages limit ({})", crawl_max_pages);
                     break;
                 }
-                if idle_ticks > 20 {
+
+                // Only exit on idle if crawl is done
+                if idle_ticks > 20 && crawl_done_scanner.load(Ordering::Relaxed) {
+                    log::debug!("Scanner: Crawl is done and no new files for {} ticks, exiting", idle_ticks);
+                    break;
+                }
+
+                // If crawl is still running but we've been idle for a long time, keep waiting
+                if idle_ticks > 100 {
+                    log::debug!("Scanner: Safety exit after {} ticks of no activity", idle_ticks);
                     break;
                 }
             }
+            let files_found = seen.len();
+            // Final count will be shown by the main thread
             drop(scanner_tx);
+            files_found
         });
 
         // Worker pool
@@ -474,6 +587,7 @@ impl RagSystem {
             let config_clone = config_clone.clone();
             let url_clone = url_for_worker.clone();
             let chunks_counter = chunks_counter.clone();
+            let processed_pages_counter = processed_pages_counter.clone();
             let join = tokio::spawn(async move {
                 let mut stored = 0usize;
                 let idx = match Indexer::new(&config_clone) {
@@ -490,6 +604,8 @@ impl RagSystem {
                         {
                             stored += count;
                             chunks_counter.fetch_add(count, Ordering::Relaxed);
+                            // count this page as processed after storing its chunks
+                            processed_pages_counter.fetch_add(1, Ordering::Relaxed);
                         }
                     }
                 }
@@ -498,27 +614,206 @@ impl RagSystem {
             joins.push(join);
         }
 
-        let _ = scanner_handle.await;
-        let _ = crawl_handle.await;
+        // Wait for crawl to complete first
+        let crawl_result = crawl_handle.await;
+        let crawled_pages = if let Ok(Ok(stats)) = &crawl_result {
+            eprintln!("\n✓ Crawl completed: {} pages crawled", stats.pages);
+            stats.pages
+        } else if let Ok(Err(e)) = &crawl_result {
+            eprintln!("\n⚠️ Crawl completed with error: {}", e);
+            0
+        } else {
+            eprintln!("\n⚠️ Crawl status unknown");
+            0
+        };
+
+        // Monitor file discovery with a proper progress spinner
+        eprintln!("\n📂 Scanning for markdown files...");
+
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap()
+        );
+        pb.enable_steady_tick(std::time::Duration::from_millis(200));
+
+        // Create a monitoring task that updates the progress bar
+        let pages_counter_clone = pages_counter.clone();
+        let crawl_done_clone = crawl_done.clone();
+        let pb_clone = pb.clone();
+        let start_time = std::time::Instant::now();
+        let monitor_handle = tokio::spawn(async move {
+            let mut last_count = 0usize;
+            let mut stable_cycles = 0;
+
+            loop {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                let current_count = pages_counter_clone.load(Ordering::Relaxed);
+                let is_crawl_done = crawl_done_clone.load(Ordering::Relaxed);
+                let elapsed = start_time.elapsed().as_secs_f32().max(0.1);
+                let rate = (current_count as f32) / elapsed;
+
+                let message = if current_count != last_count {
+                    last_count = current_count;
+                    stable_cycles = 0;
+                    format!("Found {} files | {:.1}/s", current_count, rate)
+                } else {
+                    stable_cycles += 1;
+                    if stable_cycles < 4 {
+                        format!("Found {} files (scanning...) | {:.1}/s", current_count, rate)
+                    } else {
+                        format!("Found {} files (finalizing...) | {:.1}/s", current_count, rate)
+                    }
+                };
+
+                pb_clone.set_message(message);
+
+                // Stop monitoring once crawl is done and we've been stable for a bit
+                if is_crawl_done && stable_cycles > 6 {
+                    break;
+                }
+                // Safety exit after 30 seconds
+                if stable_cycles > 60 {
+                    break;
+                }
+            }
+        });
+
+        // Wait for scanner to finish
+        let scanner_result = scanner_handle.await;
+        let _scanner_files = scanner_result.unwrap_or(0);
+
+        // Stop the monitor and finish the progress bar
+        monitor_handle.abort();
+        let final_count = pages_counter.load(Ordering::Relaxed);
+        pb.finish_with_message(format!("✓ Found {} markdown files", final_count));
+
         drop(tx);
 
+        // If scanner already printed the count, we don't need to print it again
+        // but we'll use the value for logic below
+
+        // Get final count for processing phase
+        let total_pages_found = pages_counter.load(Ordering::Relaxed);
+
+        // Show status for chunking phase
+        let mut processed_so_far = processed_pages_counter.load(Ordering::Relaxed);
+
+        // If we have pages to process, show chunking progress with a progress bar
+        if total_pages_found > 0 {
+            eprintln!("\n📄 Processing {} markdown files...", total_pages_found);
+
+            // Create a progress bar for chunking
+            let pb = ProgressBar::new(total_pages_found as u64);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} files ({percent}%) | {msg}")
+                    .unwrap()
+                    .progress_chars("█▉▊▋▌▍▎▏  ")
+            );
+            pb.set_message(format!("Chunking... 0 chunks created"));
+
+            // Monitor chunking progress
+            let mut last_processed = processed_so_far;
+            let mut stall_counter = 0;
+            while processed_so_far < total_pages_found && stall_counter < 60 {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                processed_so_far = processed_pages_counter.load(Ordering::Relaxed);
+                let chunks_so_far = chunks_counter.load(Ordering::Relaxed);
+
+                if processed_so_far != last_processed {
+                    pb.set_position(processed_so_far as u64);
+                    pb.set_message(format!("{} chunks created", chunks_so_far));
+                    last_processed = processed_so_far;
+                    stall_counter = 0;
+                } else {
+                    stall_counter += 1;
+                    // Update spinner even when stalled to show activity
+                    pb.tick();
+                }
+            }
+
+            // Ensure we show completion
+            pb.set_position(processed_so_far as u64);
+
+            if processed_so_far == total_pages_found {
+                pb.finish_with_message("✓ All files processed");
+            } else {
+                pb.abandon_with_message("Processing incomplete - some files may have failed");
+            }
+        } else {
+            eprintln!("\n⚠️  No markdown files found to process");
+            eprintln!("   The crawler processed {} pages but docrawl generated no markdown files.", crawled_pages);
+            eprintln!("   This can happen when:");
+            eprintln!("   • The site uses JavaScript rendering that docrawl can't parse");
+            eprintln!("   • The pages contain mostly non-text content (images, PDFs, etc.)");
+            eprintln!("   • The site structure isn't compatible with the crawler");
+            eprintln!("");
+            eprintln!("   Try:");
+            eprintln!("   • Using a different URL that points to documentation pages");
+            eprintln!("   • Indexing local files instead if you have them downloaded");
+        }
+
+        // Wait for all workers to complete
         let mut total_stored = 0usize;
-        for j in joins {
-            if let Ok(count) = j.await {
-                total_stored += count;
+
+        if total_pages_found > 0 {
+            // Only show spinner if we had files to process
+            eprintln!("\n⏳ Waiting for workers to finish...");
+            let pb_final = ProgressBar::new_spinner();
+            pb_final.set_style(
+                ProgressStyle::default_spinner()
+                    .template("{spinner:.green} {msg}")
+                    .unwrap()
+            );
+            pb_final.set_message("Finalizing embeddings and storing to database...");
+            pb_final.enable_steady_tick(std::time::Duration::from_millis(100));
+
+            for j in joins {
+                pb_final.tick();
+                if let Ok(count) = j.await {
+                    total_stored += count;
+                }
+            }
+
+            pb_final.finish_with_message("✓ Index finalized");
+        } else {
+            // Just wait for workers without showing spinner
+            for j in joins {
+                if let Ok(count) = j.await {
+                    total_stored += count;
+                }
             }
         }
 
+        // Clean up temp directory (silently)
         let _ = std::fs::remove_dir_all(&temp_dir);
-        // Final summary (separate from docrawl spinner output)
-        let pages = pages_counter.load(Ordering::Relaxed);
+
+        // Final summary (always show, even if no files found)
+        let total_pages = pages_counter.load(Ordering::Relaxed);
+        let final_processed = processed_pages_counter.load(Ordering::Relaxed);
+        let final_chunks = chunks_counter.load(Ordering::Relaxed);
         let indexer = Indexer::new(&self.config)?;
         let index_path = indexer.get_index_path();
+
         eprintln!();
         eprintln!("==== Manx Index Summary ====");
-        eprintln!("Stored chunks: {}", total_stored);
-        eprintln!("Pages discovered: {}", pages);
+        eprintln!("Markdown files found: {}", total_pages);
+        eprintln!("Files processed: {}", final_processed);
+        eprintln!("Chunks created: {}", final_chunks);
+        eprintln!("Chunks stored: {}", total_stored);
         eprintln!("Index path: {}", index_path.display());
+
+        if total_pages == 0 {
+            eprintln!();
+            eprintln!("⚠️  No markdown files were found. Docrawl may not have generated any content.");
+            eprintln!("   This could mean the site structure is not compatible with crawling.");
+        } else if total_stored == 0 {
+            eprintln!();
+            eprintln!("⚠️  No chunks were stored. The markdown files may have been empty.");
+        }
+
         Ok(total_stored)
     }
 
