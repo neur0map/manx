@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name to release (e.g., v0.5.3)'
+        required: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,6 +42,8 @@ jobs:
             
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -90,11 +97,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          merge-multiple: true
           
       - name: Display structure of downloaded files
         run: ls -R release-assets/
@@ -104,7 +114,9 @@ jobs:
         with:
           draft: false
           prerelease: false
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
           files: |
-            release-assets/*/manx-*
+            release-assets/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
