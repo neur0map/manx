@@ -712,7 +712,7 @@ impl RagSystem {
                     .unwrap()
                     .progress_chars("█▉▊▋▌▍▎▏  ")
             );
-            pb.set_message(format!("Chunking... 0 chunks created"));
+            pb.set_message("Chunking... 0 chunks created".to_string());
 
             // Monitor chunking progress
             let mut last_processed = processed_so_far;
@@ -749,7 +749,7 @@ impl RagSystem {
             eprintln!("   • The site uses JavaScript rendering that docrawl can't parse");
             eprintln!("   • The pages contain mostly non-text content (images, PDFs, etc.)");
             eprintln!("   • The site structure isn't compatible with the crawler");
-            eprintln!("");
+            // Extra newline intentionally removed to satisfy clippy
             eprintln!("   Try:");
             eprintln!("   • Using a different URL that points to documentation pages");
             eprintln!("   • Indexing local files instead if you have them downloaded");

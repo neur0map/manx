@@ -1642,7 +1642,7 @@ fn extract_domain_from_url(url: &str) -> Option<String> {
             Some(after_protocol.to_string())
         }
     } else {
-        return None;
+        None
     }
 }
 
