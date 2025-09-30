@@ -559,7 +559,7 @@ impl RagSystem {
                         ticker = interval(Duration::from_millis(scan_interval_ms));
                     }
 
-                    if idle_ticks % 10 == 0 {
+                    if idle_ticks.is_multiple_of(10) {
                         log::debug!("Scanner: No new files found for {} ticks (scanned {} total files in directory)", idle_ticks, total_files_scanned);
                     }
                 }
