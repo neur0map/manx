@@ -96,11 +96,7 @@ impl Indexer {
 
         let resp = client.get(url).send().await?;
         if !resp.status().is_success() {
-            return Err(anyhow!(
-                "Failed to fetch URL {}: {}",
-                url,
-                resp.status()
-            ));
+            return Err(anyhow!("Failed to fetch URL {}: {}", url, resp.status()));
         }
         let html = resp.text().await?;
 
@@ -1657,8 +1653,16 @@ fn clean_html_to_text(html: &str) -> String {
 
     // Replace common block tags with newlines to keep structure
     let block_tags = [
-        "</p>", "</div>", "</section>", "</article>", "</li>", "</ul>", "</ol>",
-        "<br>", "<br/>", "<br />",
+        "</p>",
+        "</div>",
+        "</section>",
+        "</article>",
+        "</li>",
+        "</ul>",
+        "</ol>",
+        "<br>",
+        "<br/>",
+        "<br />",
     ];
     let mut structured = without_code.to_string();
     for tag in &block_tags {
@@ -1690,7 +1694,11 @@ fn extract_html_title(html: &str) -> Option<String> {
     let caps = re.captures(html)?;
     let title = caps.get(1)?.as_str();
     let cleaned = clean_html_to_text(title);
-    if cleaned.is_empty() { None } else { Some(cleaned) }
+    if cleaned.is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    }
 }
 
 /// Extract first <h1> text as a fallback title
@@ -1700,7 +1708,11 @@ fn extract_h1(html: &str) -> Option<String> {
     let caps = re.captures(html)?;
     let h1 = caps.get(1)?.as_str();
     let cleaned = clean_html_to_text(h1);
-    if cleaned.is_empty() { None } else { Some(cleaned) }
+    if cleaned.is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    }
 }
 
 #[cfg(test)]

@@ -17,8 +17,8 @@ use docrawl::{crawl, Config as DocrawlConfig, CrawlConfig};
 // use libc::{close, dup, dup2, open, O_WRONLY};
 use serde::{Deserialize, Serialize};
 // no need for Write trait; summary prints are plain
-use std::path::PathBuf;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use walkdir::WalkDir;
 
@@ -443,7 +443,7 @@ impl RagSystem {
             } else {
                 Some(3)
             },
-            silence: true, // Silence docrawl; Manx renders its own progress UI
+            silence: true,          // Silence docrawl; Manx renders its own progress UI
             rate_limit_per_sec: 20, // Reasonable rate limit for documentation sites
             follow_sitemaps: true,
             concurrency: std::cmp::max(8, num_cpus::get()), // Use more threads for faster crawling
@@ -454,7 +454,8 @@ impl RagSystem {
         };
 
         // Create embedding model once
-        let embedding_model = Arc::new(EmbeddingModel::new_with_config(self.config.embedding.clone()).await?);
+        let embedding_model =
+            Arc::new(EmbeddingModel::new_with_config(self.config.embedding.clone()).await?);
 
         // Channel for discovered markdown files
         let (tx, rx) = mpsc::channel::<PathBuf>(200);
@@ -494,7 +495,10 @@ impl RagSystem {
             let mut idle_ticks = 0u32;
             let mut total_files_scanned;
             // Reduced verbosity - only show important messages
-            log::debug!("Scanner: Starting to monitor directory: {}", temp_dir_clone.display());
+            log::debug!(
+                "Scanner: Starting to monitor directory: {}",
+                temp_dir_clone.display()
+            );
 
             loop {
                 ticker.tick().await;
@@ -513,7 +517,10 @@ impl RagSystem {
                             if ext == "md" {
                                 let pb = path.to_path_buf();
                                 if !seen.contains(&pb) {
-                                    log::debug!("Scanner: Found new markdown file: {}", pb.file_name().unwrap_or_default().to_string_lossy());
+                                    log::debug!(
+                                        "Scanner: Found new markdown file: {}",
+                                        pb.file_name().unwrap_or_default().to_string_lossy()
+                                    );
                                     seen.insert(pb.clone());
                                     if scanner_tx.send(pb).await.is_err() {
                                         break;
@@ -532,7 +539,11 @@ impl RagSystem {
                 total_files_scanned = current_scan_count;
 
                 if new_found > 0 {
-                    log::debug!("Scanner: Found {} new markdown files this scan (total: {})", new_found, seen.len());
+                    log::debug!(
+                        "Scanner: Found {} new markdown files this scan (total: {})",
+                        new_found,
+                        seen.len()
+                    );
                     idle_ticks = 0;
                     // Speed up scanning when we're finding files
                     if scan_interval_ms > 300 {
@@ -560,13 +571,19 @@ impl RagSystem {
 
                 // Only exit on idle if crawl is done
                 if idle_ticks > 20 && crawl_done_scanner.load(Ordering::Relaxed) {
-                    log::debug!("Scanner: Crawl is done and no new files for {} ticks, exiting", idle_ticks);
+                    log::debug!(
+                        "Scanner: Crawl is done and no new files for {} ticks, exiting",
+                        idle_ticks
+                    );
                     break;
                 }
 
                 // If crawl is still running but we've been idle for a long time, keep waiting
                 if idle_ticks > 100 {
-                    log::debug!("Scanner: Safety exit after {} ticks of no activity", idle_ticks);
+                    log::debug!(
+                        "Scanner: Safety exit after {} ticks of no activity",
+                        idle_ticks
+                    );
                     break;
                 }
             }
@@ -634,7 +651,7 @@ impl RagSystem {
         pb.set_style(
             ProgressStyle::default_spinner()
                 .template("{spinner:.green} {msg}")
-                .unwrap()
+                .unwrap(),
         );
         pb.enable_steady_tick(std::time::Duration::from_millis(200));
 
@@ -661,9 +678,15 @@ impl RagSystem {
                 } else {
                     stable_cycles += 1;
                     if stable_cycles < 4 {
-                        format!("Found {} files (scanning...) | {:.1}/s", current_count, rate)
+                        format!(
+                            "Found {} files (scanning...) | {:.1}/s",
+                            current_count, rate
+                        )
                     } else {
-                        format!("Found {} files (finalizing...) | {:.1}/s", current_count, rate)
+                        format!(
+                            "Found {} files (finalizing...) | {:.1}/s",
+                            current_count, rate
+                        )
                     }
                 };
 
@@ -744,7 +767,10 @@ impl RagSystem {
             }
         } else {
             eprintln!("\n⚠️  No markdown files found to process");
-            eprintln!("   The crawler processed {} pages but docrawl generated no markdown files.", crawled_pages);
+            eprintln!(
+                "   The crawler processed {} pages but docrawl generated no markdown files.",
+                crawled_pages
+            );
             eprintln!("   This can happen when:");
             eprintln!("   • The site uses JavaScript rendering that docrawl can't parse");
             eprintln!("   • The pages contain mostly non-text content (images, PDFs, etc.)");
@@ -765,7 +791,7 @@ impl RagSystem {
             pb_final.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.green} {msg}")
-                    .unwrap()
+                    .unwrap(),
             );
             pb_final.set_message("Finalizing embeddings and storing to database...");
             pb_final.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -807,7 +833,9 @@ impl RagSystem {
 
         if total_pages == 0 {
             eprintln!();
-            eprintln!("⚠️  No markdown files were found. Docrawl may not have generated any content.");
+            eprintln!(
+                "⚠️  No markdown files were found. Docrawl may not have generated any content."
+            );
             eprintln!("   This could mean the site structure is not compatible with crawling.");
         } else if total_stored == 0 {
             eprintln!();
