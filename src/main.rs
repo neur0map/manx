@@ -27,7 +27,8 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 
 // Global shared embedding model for efficient resource pooling
-static SHARED_EMBEDDING_MODEL: OnceCell<Arc<crate::rag::embeddings::EmbeddingModel>> = OnceCell::const_new();
+static SHARED_EMBEDDING_MODEL: OnceCell<Arc<crate::rag::embeddings::EmbeddingModel>> =
+    OnceCell::const_new();
 
 /// Create SearchEngine with shared embedding model for better performance
 /// Uses model pooling to avoid redundant initialization
@@ -57,21 +58,26 @@ async fn create_search_engine_with_pooling(
     match embedding_model_result {
         Ok(shared_model) => {
             // Use with_shared_embeddings to reuse the model
-            let search_engine = SearchEngine::with_shared_embeddings(client, Arc::clone(shared_model));
+            let search_engine =
+                SearchEngine::with_shared_embeddings(client, Arc::clone(shared_model));
 
             // Verify embeddings are available
             let search_mode_msg = if search_engine.has_embeddings() {
                 if !query.is_empty() {
-                    format!("🧠 Searching {} with semantic matching for '{}'", library, query)
+                    format!(
+                        "🧠 Searching {} with semantic matching for '{}'",
+                        library, query
+                    )
                 } else {
                     format!("🧠 Fetching {} with semantic processing", library)
                 }
+            } else if !query.is_empty() {
+                format!(
+                    "📝 Searching {} with text matching for '{}'",
+                    library, query
+                )
             } else {
-                if !query.is_empty() {
-                    format!("📝 Searching {} with text matching for '{}'", library, query)
-                } else {
-                    format!("📝 Fetching {} documentation", library)
-                }
+                format!("📝 Fetching {} documentation", library)
             };
             let pb = renderer.show_progress(&search_mode_msg);
             pb.finish_and_clear();
@@ -81,7 +87,10 @@ async fn create_search_engine_with_pooling(
         Err(e) => {
             log::warn!("Using fallback text-based search (no embeddings): {}", e);
             let search_mode_msg = if !query.is_empty() {
-                format!("📝 Searching {} with text matching for '{}'", library, query)
+                format!(
+                    "📝 Searching {} with text matching for '{}'",
+                    library, query
+                )
             } else {
                 format!("📝 Fetching {} documentation", library)
             };
