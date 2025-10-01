@@ -23,6 +23,74 @@ use crate::render::Renderer;
 use crate::search::SearchEngine;
 use crate::update::SelfUpdater;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
+
+// Global shared embedding model for efficient resource pooling
+static SHARED_EMBEDDING_MODEL: OnceCell<Arc<crate::rag::embeddings::EmbeddingModel>> = OnceCell::const_new();
+
+/// Create SearchEngine with shared embedding model for better performance
+/// Uses model pooling to avoid redundant initialization
+async fn create_search_engine_with_pooling(
+    client: Context7Client,
+    renderer: &Renderer,
+    library: &str,
+    query: &str,
+) -> Result<SearchEngine> {
+    // Try to get or initialize the shared embedding model
+    let embedding_model_result = SHARED_EMBEDDING_MODEL
+        .get_or_try_init(|| async {
+            log::debug!("Initializing shared embedding model for pooling");
+            match crate::rag::embeddings::EmbeddingModel::new().await {
+                Ok(model) => {
+                    log::info!("✓ Shared embedding model initialized successfully");
+                    Ok(Arc::new(model))
+                }
+                Err(e) => {
+                    log::warn!("Failed to initialize shared embedding model: {}", e);
+                    Err(e)
+                }
+            }
+        })
+        .await;
+
+    match embedding_model_result {
+        Ok(shared_model) => {
+            // Use with_shared_embeddings to reuse the model
+            let search_engine = SearchEngine::with_shared_embeddings(client, Arc::clone(shared_model));
+
+            // Verify embeddings are available
+            let search_mode_msg = if search_engine.has_embeddings() {
+                if !query.is_empty() {
+                    format!("🧠 Searching {} with semantic matching for '{}'", library, query)
+                } else {
+                    format!("🧠 Fetching {} with semantic processing", library)
+                }
+            } else {
+                if !query.is_empty() {
+                    format!("📝 Searching {} with text matching for '{}'", library, query)
+                } else {
+                    format!("📝 Fetching {} documentation", library)
+                }
+            };
+            let pb = renderer.show_progress(&search_mode_msg);
+            pb.finish_and_clear();
+
+            Ok(search_engine)
+        }
+        Err(e) => {
+            log::warn!("Using fallback text-based search (no embeddings): {}", e);
+            let search_mode_msg = if !query.is_empty() {
+                format!("📝 Searching {} with text matching for '{}'", library, query)
+            } else {
+                format!("📝 Fetching {} documentation", library)
+            };
+            let pb = renderer.show_progress(&search_mode_msg);
+            pb.finish_and_clear();
+            Ok(SearchEngine::new(client))
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -628,35 +696,9 @@ async fn handle_search_command(
     }
 
     // Initialize semantically-enhanced search engine for snippets
+    // Try to reuse shared embedding model for better performance
     let client = Context7Client::new(config.api_key.clone())?;
-    let search_engine = match SearchEngine::with_embeddings(client).await {
-        Ok(engine) => {
-            let search_mode = if engine.has_embeddings() {
-                format!(
-                    "🧠 Searching {} with semantic matching for '{}'",
-                    library, query
-                )
-            } else {
-                format!(
-                    "📝 Searching {} with text matching for '{}'",
-                    library, query
-                )
-            };
-            let pb = renderer.show_progress(&search_mode);
-            pb.finish_and_clear();
-            engine
-        }
-        Err(e) => {
-            log::warn!(
-                "Semantic embeddings initialization failed, using text-based search: {}",
-                e
-            );
-            let pb =
-                renderer.show_progress(&format!("📝 Searching {} for '{}'...", library, query));
-            pb.finish_and_clear();
-            SearchEngine::new(Context7Client::new(config.api_key.clone())?)
-        }
-    };
+    let search_engine = create_search_engine_with_pooling(client, renderer, library, query).await?;
 
     let (mut results, library_title, library_id) = search_engine
         .search(library, query, Some(config.default_limit))
@@ -939,29 +981,9 @@ async fn handle_doc_command(
         }
     }
 
-    // Initialize semantically-enhanced search engine
+    // Initialize semantically-enhanced search engine with pooling
     let client = Context7Client::new(config.api_key.clone())?;
-    let search_engine = match SearchEngine::with_embeddings(client).await {
-        Ok(engine) => {
-            let search_mode = if engine.has_embeddings() {
-                "🧠 Fetching documentation with semantic processing"
-            } else {
-                "📝 Fetching documentation (semantic embeddings unavailable)"
-            };
-            let pb = renderer.show_progress(search_mode);
-            pb.finish_and_clear();
-            engine
-        }
-        Err(e) => {
-            log::warn!(
-                "Semantic embeddings initialization failed, using text-based search: {}",
-                e
-            );
-            let pb = renderer.show_progress(&format!("📝 Fetching {} documentation...", library));
-            pb.finish_and_clear();
-            SearchEngine::new(Context7Client::new(config.api_key.clone())?)
-        }
-    };
+    let search_engine = create_search_engine_with_pooling(client, renderer, library, "").await?;
 
     let doc_text = search_engine
         .get_documentation(library, if query.is_empty() { None } else { Some(query) })

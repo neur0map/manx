@@ -167,4 +167,8 @@ impl ProviderTrait for HuggingFaceProvider {
             max_input_length: Some(max_length),
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

@@ -9,13 +9,20 @@ use crate::rag::providers::{
 };
 use crate::rag::{EmbeddingConfig, EmbeddingProvider};
 use anyhow::{anyhow, Result};
+use lru::LruCache;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::num::NonZeroUsize;
+use std::sync::Mutex;
 
-/// Text embedding model wrapper with configurable providers
+/// Text embedding model wrapper with configurable providers and LRU cache
 /// Supports hash-based embeddings (default), local ONNX models, and API services.
 /// Users can configure their preferred embedding method via `manx config`.
 pub struct EmbeddingModel {
     provider: Box<dyn ProviderTrait + Send + Sync>,
     config: EmbeddingConfig,
+    /// LRU cache for recent embeddings (text hash -> embedding vector)
+    cache: Mutex<LruCache<u64, Vec<f32>>>,
 }
 
 impl EmbeddingModel {
@@ -83,16 +90,158 @@ impl EmbeddingModel {
             }
         };
 
-        Ok(Self { provider, config })
+        // Initialize LRU cache with capacity for 1000 embeddings (configurable)
+        let cache_capacity = NonZeroUsize::new(1000).unwrap();
+        let cache = Mutex::new(LruCache::new(cache_capacity));
+
+        Ok(Self {
+            provider,
+            config,
+            cache,
+        })
     }
 
-    /// Generate embeddings for a single text using configured provider
+    /// Generate embeddings for a single text using configured provider with caching
     pub async fn embed_text(&self, text: &str) -> Result<Vec<f32>> {
         if text.trim().is_empty() {
             return Err(anyhow!("Cannot embed empty text"));
         }
 
-        self.provider.embed_text(text).await
+        // Compute hash of the text for cache key
+        let text_hash = Self::hash_text(text);
+
+        // Check cache first
+        {
+            let mut cache = self.cache.lock().unwrap();
+            if let Some(cached_embedding) = cache.get(&text_hash) {
+                log::debug!("Cache hit for text embedding");
+                return Ok(cached_embedding.clone());
+            }
+        }
+
+        // Cache miss - generate embedding with retry logic
+        log::debug!("Cache miss for text embedding, generating...");
+        let embedding = Self::retry_with_backoff(
+            || async { self.provider.embed_text(text).await },
+            3, // max retries
+        )
+        .await?;
+
+        // Store in cache
+        {
+            let mut cache = self.cache.lock().unwrap();
+            cache.put(text_hash, embedding.clone());
+        }
+
+        Ok(embedding)
+    }
+
+    /// Retry async operation with exponential backoff
+    async fn retry_with_backoff<F, Fut, T>(mut operation: F, max_retries: u32) -> Result<T>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        let mut retries = 0;
+        loop {
+            match operation().await {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    retries += 1;
+                    if retries > max_retries {
+                        log::error!("Operation failed after {} retries: {}", max_retries, e);
+                        return Err(e);
+                    }
+
+                    let delay_ms = 100 * (2_u64.pow(retries - 1)); // 100ms, 200ms, 400ms
+                    log::warn!(
+                        "Operation failed (attempt {}/{}), retrying in {}ms: {}",
+                        retries,
+                        max_retries,
+                        delay_ms,
+                        e
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                }
+            }
+        }
+    }
+
+    /// Hash text for cache key
+    fn hash_text(text: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Generate embeddings for multiple texts (batch processing)
+    /// More efficient than calling embed_text repeatedly - uses native batch for ONNX providers
+    pub async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Check which provider we're using and delegate appropriately
+        match &self.config.provider {
+            EmbeddingProvider::Onnx(_) => {
+                // Use ONNX's native batch processing - bypasses cache for batch operations
+                // This is more efficient as it processes all texts in one go
+                log::debug!(
+                    "Using ONNX native batch processing for {} texts",
+                    texts.len()
+                );
+
+                // Get the ONNX provider and call its batch method directly
+                // Use the as_any method to downcast the trait object
+                if let Some(onnx_provider) =
+                    self.provider.as_any().downcast_ref::<onnx::OnnxProvider>()
+                {
+                    return onnx_provider.embed_batch(texts).await;
+                }
+
+                // Fallback if downcast fails (shouldn't happen)
+                log::warn!("Failed to downcast ONNX provider, using sequential processing");
+                self.embed_batch_sequential(texts).await
+            }
+            _ => {
+                // For other providers, use sequential processing with cache
+                self.embed_batch_sequential(texts).await
+            }
+        }
+    }
+
+    /// Sequential batch processing with caching (fallback for non-ONNX providers)
+    async fn embed_batch_sequential(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
+        let mut embeddings = Vec::with_capacity(texts.len());
+        let mut failed_count = 0;
+
+        for (i, text) in texts.iter().enumerate() {
+            match self.embed_text(text).await {
+                Ok(embedding) => embeddings.push(embedding),
+                Err(e) => {
+                    log::warn!("Failed to embed text {} in batch: {}", i, e);
+                    failed_count += 1;
+                    continue;
+                }
+            }
+        }
+
+        if embeddings.is_empty() {
+            return Err(anyhow!(
+                "Batch embedding failed for all {} texts",
+                texts.len()
+            ));
+        }
+
+        if failed_count > 0 {
+            log::warn!(
+                "Batch embedding completed with {} failures out of {} texts",
+                failed_count,
+                texts.len()
+            );
+        }
+
+        Ok(embeddings)
     }
 
     /// Get the dimension of embeddings produced by this model

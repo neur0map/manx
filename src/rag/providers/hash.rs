@@ -46,6 +46,10 @@ impl ProviderTrait for HashProvider {
             max_input_length: Some(2048),
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl HashProvider {

@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use serde_json::json;
+use std::sync::Arc;
 
 use crate::rag::{
     llm::LlmClient,
@@ -38,13 +39,13 @@ pub enum VerificationMethod {
 
 /// Result verification system
 pub struct ResultVerifier {
-    llm_client: Option<LlmClient>,
+    llm_client: Option<Arc<LlmClient>>,
     config: SmartSearchConfig,
 }
 
 impl ResultVerifier {
     /// Create a new result verifier
-    pub fn new(llm_client: Option<LlmClient>, config: SmartSearchConfig) -> Self {
+    pub fn new(llm_client: Option<Arc<LlmClient>>, config: SmartSearchConfig) -> Self {
         Self { llm_client, config }
     }
 

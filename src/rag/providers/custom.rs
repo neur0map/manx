@@ -177,4 +177,8 @@ impl ProviderTrait for CustomProvider {
             max_input_length: None, // Unknown
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

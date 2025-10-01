@@ -10,6 +10,7 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 pub mod llm_verifier;
 pub mod official_sources;
@@ -93,8 +94,8 @@ pub struct VerificationResult {
 /// Documentation search system
 pub struct DocumentationSearchSystem {
     config: WebSearchConfig,
-    embedding_model: Option<crate::rag::embeddings::EmbeddingModel>,
-    llm_client: Option<crate::rag::llm::LlmClient>,
+    embedding_model: Option<Arc<crate::rag::embeddings::EmbeddingModel>>,
+    llm_client: Option<Arc<crate::rag::llm::LlmClient>>,
     official_sources: official_sources::OfficialSourceManager,
     query_analyzer: query_analyzer::QueryAnalyzer,
 }
@@ -110,14 +111,14 @@ impl DocumentationSearchSystem {
             return Err(anyhow!("Documentation search is disabled"));
         }
 
-        // Initialize semantic embeddings for similarity scoring
+        // Initialize semantic embeddings for similarity scoring (with Arc for sharing)
         let embedding_model = match match &embedding_config {
             Some(cfg) => crate::rag::embeddings::EmbeddingModel::new_with_config(cfg.clone()).await,
             None => crate::rag::embeddings::EmbeddingModel::new().await,
         } {
             Ok(model) => {
-                log::info!("Semantic embeddings initialized for search");
-                Some(model)
+                log::info!("Semantic embeddings initialized for search (pooled)");
+                Some(Arc::new(model))
             }
             Err(e) => {
                 log::warn!(
@@ -128,12 +129,12 @@ impl DocumentationSearchSystem {
             }
         };
 
-        // Initialize LLM client if configured
+        // Initialize LLM client if configured (with Arc for sharing)
         let llm_client = if let Some(llm_cfg) = llm_config {
             match crate::rag::llm::LlmClient::new(llm_cfg) {
                 Ok(client) => {
-                    log::info!("LLM client initialized for result verification");
-                    Some(client)
+                    log::info!("LLM client initialized for result verification (pooled)");
+                    Some(Arc::new(client))
                 }
                 Err(e) => {
                     log::warn!("LLM client unavailable: {}", e);
@@ -165,7 +166,7 @@ impl DocumentationSearchSystem {
         // Step 0: Analyze query intent to enhance search strategy
         let query_analysis = self
             .query_analyzer
-            .analyze_query(query, self.llm_client.as_ref())
+            .analyze_query(query, self.llm_client.as_deref())
             .await?;
         log::info!(
             "🧠 Query analysis: {} -> {} (confidence: {:.1}%)",

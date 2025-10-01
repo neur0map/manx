@@ -6,6 +6,7 @@
 use anyhow::Result;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::rag::{
     embeddings::EmbeddingModel,
@@ -24,9 +25,9 @@ pub struct SmartSearchEngine {
     config: RagConfig,
     query_enhancer: QueryEnhancer,
     result_verifier: ResultVerifier,
-    embedding_model: Option<EmbeddingModel>,
+    embedding_model: Option<Arc<EmbeddingModel>>,
     #[allow(dead_code)] // Used in public API methods
-    llm_client: Option<LlmClient>,
+    llm_client: Option<Arc<LlmClient>>,
 }
 
 impl SmartSearchEngine {
@@ -37,26 +38,31 @@ impl SmartSearchEngine {
             config.smart_search
         );
 
+        // Wrap LLM client in Arc for sharing
+        let llm_client_arc = llm_client.map(Arc::new);
+
         // Initialize embedding model based on smart search preferences
         let embedding_model = Self::initialize_embedding_model(&config).await?;
 
         // Create query enhancer
-        let query_enhancer = QueryEnhancer::new(llm_client.clone(), config.smart_search.clone());
+        let query_enhancer =
+            QueryEnhancer::new(llm_client_arc.clone(), config.smart_search.clone());
 
         // Create result verifier
-        let result_verifier = ResultVerifier::new(llm_client.clone(), config.smart_search.clone());
+        let result_verifier =
+            ResultVerifier::new(llm_client_arc.clone(), config.smart_search.clone());
 
         Ok(Self {
             config,
             query_enhancer,
             result_verifier,
             embedding_model,
-            llm_client,
+            llm_client: llm_client_arc,
         })
     }
 
-    /// Initialize the best available embedding model
-    async fn initialize_embedding_model(config: &RagConfig) -> Result<Option<EmbeddingModel>> {
+    /// Initialize the best available embedding model (wrapped in Arc for sharing)
+    async fn initialize_embedding_model(config: &RagConfig) -> Result<Option<Arc<EmbeddingModel>>> {
         if !config.smart_search.prefer_semantic {
             log::info!("Semantic embeddings disabled by config");
             return Ok(None);
@@ -68,10 +74,10 @@ impl SmartSearchEngine {
             match EmbeddingModel::new_auto_select().await {
                 Ok(model) => {
                     log::info!(
-                        "Successfully auto-selected embedding model: {:?}",
+                        "Successfully auto-selected embedding model (pooled): {:?}",
                         model.get_config().provider
                     );
-                    return Ok(Some(model));
+                    return Ok(Some(Arc::new(model)));
                 }
                 Err(e) => {
                     log::warn!("Auto-selection failed, trying configured provider: {}", e);
@@ -83,10 +89,10 @@ impl SmartSearchEngine {
         match EmbeddingModel::new_with_config(config.embedding.clone()).await {
             Ok(model) => {
                 log::info!(
-                    "Successfully initialized embedding model: {:?}",
+                    "Successfully initialized embedding model (pooled): {:?}",
                     config.embedding.provider
                 );
-                Ok(Some(model))
+                Ok(Some(Arc::new(model)))
             }
             Err(e) => {
                 log::warn!(

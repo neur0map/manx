@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use serde_json::json;
+use std::sync::Arc;
 
 use crate::rag::{llm::LlmClient, SmartSearchConfig};
 
@@ -54,13 +55,13 @@ pub enum QueryIntent {
 
 /// Query enhancement system
 pub struct QueryEnhancer {
-    llm_client: Option<LlmClient>,
+    llm_client: Option<Arc<LlmClient>>,
     config: SmartSearchConfig,
 }
 
 impl QueryEnhancer {
     /// Create a new query enhancer
-    pub fn new(llm_client: Option<LlmClient>, config: SmartSearchConfig) -> Self {
+    pub fn new(llm_client: Option<Arc<LlmClient>>, config: SmartSearchConfig) -> Self {
         Self { llm_client, config }
     }
 

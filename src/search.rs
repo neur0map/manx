@@ -3,6 +3,7 @@ use crate::rag::embeddings::EmbeddingModel;
 use anyhow::Result;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 struct ParsedQuery {
@@ -14,7 +15,7 @@ struct ParsedQuery {
 pub struct SearchEngine {
     client: Context7Client,
     matcher: SkimMatcherV2,
-    embedding_model: Option<EmbeddingModel>,
+    embedding_model: Option<Arc<EmbeddingModel>>,
 }
 
 impl SearchEngine {
@@ -27,27 +28,18 @@ impl SearchEngine {
         }
     }
 
-    /// Create SearchEngine with semantic embeddings
-    pub async fn with_embeddings(client: Context7Client) -> Result<Self> {
-        let embedding_model = match EmbeddingModel::new().await {
-            Ok(model) => {
-                log::info!("🧠 Semantic embeddings initialized for Context7 search");
-                Some(model)
-            }
-            Err(e) => {
-                log::warn!(
-                    "Semantic embeddings unavailable for Context7, using text matching: {}",
-                    e
-                );
-                None
-            }
-        };
-
-        Ok(Self {
+    /// Create SearchEngine with a shared embedding model (for pooling/reuse)
+    /// Recommended approach for better performance and memory efficiency
+    pub fn with_shared_embeddings(
+        client: Context7Client,
+        embedding_model: Arc<EmbeddingModel>,
+    ) -> Self {
+        log::info!("🔄 Reusing shared embedding model for Context7 search");
+        Self {
             client,
             matcher: SkimMatcherV2::default(),
-            embedding_model,
-        })
+            embedding_model: Some(embedding_model),
+        }
     }
 
     /// Check if semantic embeddings are available
@@ -232,31 +224,48 @@ impl SearchEngine {
         // Split documentation into individual code snippets/sections
         let sections = self.split_into_sections(docs);
 
-        for (idx, section) in sections.iter().enumerate() {
-            // Calculate relevance score with embeddings + keyword hybrid scoring
-            let relevance = if self.embedding_model.is_some() {
-                self.calculate_embedding_section_relevance(
-                    section,
-                    &parsed_query.original_query,
-                    parsed_query,
-                    is_phrase_search,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    log::warn!(
-                        "Embedding scoring failed, falling back to keyword matching: {}",
-                        e
-                    );
+        // OPTIMIZATION: Batch embed all sections at once if embeddings available
+        let relevance_scores = if self.embedding_model.is_some() {
+            self.calculate_embedding_relevance_batch(
+                &sections,
+                &parsed_query.original_query,
+                parsed_query,
+                is_phrase_search,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "Batch embedding failed, falling back to keyword matching: {}",
+                    e
+                );
+                // Fallback to keyword scoring for all sections
+                sections
+                    .iter()
+                    .map(|section| {
+                        self.calculate_enhanced_section_relevance(
+                            section,
+                            parsed_query,
+                            is_phrase_search,
+                        )
+                    })
+                    .collect()
+            })
+        } else {
+            // Use keyword-only scoring
+            sections
+                .iter()
+                .map(|section| {
                     self.calculate_enhanced_section_relevance(
                         section,
                         parsed_query,
                         is_phrase_search,
                     )
                 })
-            } else {
-                self.calculate_enhanced_section_relevance(section, parsed_query, is_phrase_search)
-            };
+                .collect()
+        };
 
+        for (idx, (section, &relevance)) in sections.iter().zip(relevance_scores.iter()).enumerate()
+        {
             // Lower threshold for including results when we have multiple sections
             let relevance_threshold = if sections.len() > 1 { 0.05 } else { 0.1 };
 
@@ -489,7 +498,83 @@ impl SearchEngine {
         max_proximity_score
     }
 
-    /// Calculate section relevance using semantic embeddings + keyword hybrid scoring
+    /// OPTIMIZED: Calculate relevance for all sections using batch embedding generation
+    async fn calculate_embedding_relevance_batch(
+        &self,
+        sections: &[String],
+        query: &str,
+        parsed_query: &ParsedQuery,
+        is_phrase_search: bool,
+    ) -> Result<Vec<f32>> {
+        let embedding_model = self
+            .embedding_model
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Embedding model not available"))?;
+
+        // Generate query embedding once
+        let query_embedding = embedding_model.embed_text(query).await?;
+
+        // Prepare all sections for embedding
+        let section_texts: Vec<String> = sections
+            .iter()
+            .map(|section| self.prepare_section_for_embedding(section))
+            .collect();
+
+        // Batch generate embeddings for all sections at once (MAJOR OPTIMIZATION)
+        let section_text_refs: Vec<&str> = section_texts.iter().map(|s| s.as_str()).collect();
+        let section_embeddings = embedding_model.embed_batch(&section_text_refs).await?;
+
+        // Calculate scores for all sections
+        let mut scores = Vec::with_capacity(sections.len());
+
+        for (i, section) in sections.iter().enumerate() {
+            if let Some(section_embedding) = section_embeddings.get(i) {
+                // Calculate semantic similarity (0.0-1.0)
+                let embedding_score =
+                    EmbeddingModel::cosine_similarity(&query_embedding, section_embedding);
+
+                // Calculate existing keyword-based relevance (0.0-N)
+                let keyword_score = self.calculate_enhanced_section_relevance(
+                    section,
+                    parsed_query,
+                    is_phrase_search,
+                );
+
+                // Calculate quoted phrase bonus for exact matches
+                let phrase_bonus =
+                    self.calculate_phrase_bonus(section, parsed_query, is_phrase_search);
+
+                // Hybrid scoring: Embeddings (70%) + Keywords (20%) + Phrase bonus (10%)
+                let normalized_keyword_score = (keyword_score / 5.0).min(1.0);
+                let normalized_phrase_bonus = (phrase_bonus / 10.0).min(1.0);
+
+                let final_score = (embedding_score * 0.7)
+                    + (normalized_keyword_score * 0.2)
+                    + (normalized_phrase_bonus * 0.1);
+
+                scores.push(final_score);
+            } else {
+                // Fallback to keyword-only if embedding failed for this section
+                log::warn!("Missing embedding for section {}, using keyword scoring", i);
+                scores.push(self.calculate_enhanced_section_relevance(
+                    section,
+                    parsed_query,
+                    is_phrase_search,
+                ));
+            }
+        }
+
+        log::debug!(
+            "Batch embedded {} sections with average score: {:.3}",
+            sections.len(),
+            scores.iter().sum::<f32>() / scores.len() as f32
+        );
+
+        Ok(scores)
+    }
+
+    /// Calculate section relevance using semantic embeddings + keyword hybrid scoring (single section - legacy)
+    #[allow(dead_code)]
     async fn calculate_embedding_section_relevance(
         &self,
         section: &str,

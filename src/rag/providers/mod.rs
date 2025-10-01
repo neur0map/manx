@@ -9,7 +9,7 @@ pub mod openai;
 
 /// Trait for embedding providers
 #[async_trait::async_trait]
-pub trait EmbeddingProvider {
+pub trait EmbeddingProvider: std::any::Any {
     /// Generate embeddings for a single text
     async fn embed_text(&self, text: &str) -> Result<Vec<f32>>;
 
@@ -21,6 +21,9 @@ pub trait EmbeddingProvider {
 
     /// Get provider-specific information
     fn get_info(&self) -> ProviderInfo;
+
+    /// Downcast support for accessing provider-specific methods
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Information about an embedding provider

@@ -1,6 +1,6 @@
 [package]
 name = "manx-cli"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2021"
 authors = ["neur0map <neur0map@prowl.sh>"]
 description = "A blazing-fast CLI documentation finder powered by Context7 MCP"
@@ -94,6 +94,9 @@ libc = "0.2"
 
 # File-based vector storage
 uuid = { version = "1.6", features = ["v4"] }
+
+# LRU cache for embedding optimization
+lru = "0.12"
 
 # Embedding model dependencies  
 ort = { version = "2.0.0-rc.10", features = ["download-binaries", "copy-dylibs"], optional = true }
