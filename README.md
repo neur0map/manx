@@ -143,6 +143,16 @@ Future enhancement to search directly within GitHub repositories for code exampl
 
 Example: `manx search "Tauri tables"` would search official docs AND `tauri-apps/tauri` repo for real implementations.
 
+## ⭐ Star History
+
+<a href="https://star-history.com/#neur0map/manx&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=neur0map/manx&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=neur0map/manx&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=neur0map/manx&type=Date" />
+ </picture>
+</a>
+
 ## 📄 License
 
 GPL-3 © [neur0map](https://github.com/neur0map)
