@@ -1,8 +1,8 @@
-# 📖 Commands Reference
+# Commands Reference
 
-Complete reference for all manx commands with examples and options.
+Reference for all manx commands with examples and options.
 
-## 🔍 Search Commands
+## Search Commands
 
 ### `manx snippet <library> [query]`
 Find code snippets and examples from official documentation.
@@ -19,7 +19,7 @@ manx snippet python "error handling decorators"
 manx snippet rust "lifetime annotations"
 ```
 
-**Options:**
+Options:
 - `--limit <N>` - Limit results (default: 12)
 - `--save-all` - Export all results to file
 - `--rag` - Search only indexed documents
@@ -40,7 +40,7 @@ manx search "team coding standards" --rag
 manx search "deployment process" --rag
 ```
 
-**Options:**
+Options:
 - `--rag` - Search indexed documents only
 - `--limit <N>` - Limit results
 - `--no-llm` - Disable AI synthesis
@@ -73,7 +73,7 @@ manx get doc-3 -o documentation.md
 manx get snippet-7 -o example.py
 ```
 
-## 📁 Document Management
+## Document Management
 
 ### `manx index <path>`
 Index local documents or web URLs for RAG search.
@@ -89,13 +89,13 @@ manx index https://docs.rust-lang.org/book --crawl-depth 3
 manx index https://react.dev --crawl-all
 ```
 
-**Options:**
+Options:
 - `--id <alias>` - Custom alias for indexed source
 - `--crawl` - Enable crawling for URLs (follows links with default depth)
 - `--crawl-depth <N>` - Crawl with specific depth (implies crawling)
 - `--crawl-all` - Crawl entire documentation site (implies crawling)
 
-**Supported formats:**
+Supported formats:
 - Text: `.md`, `.txt`, `.rst`
 - Documents: `.docx`
 - Web: Any HTTP/HTTPS URL
@@ -114,7 +114,7 @@ manx sources add <path> [--id <alias>]
 manx sources clear
 ```
 
-## 🧠 Embedding Management
+## Embedding Management
 
 ### `manx embedding`
 Manage neural embedding models for semantic search.
@@ -133,7 +133,7 @@ manx embedding download all-MiniLM-L6-v2
 manx embedding test "your test query"
 ```
 
-**Available models:**
+Available models:
 - `sentence-transformers/all-MiniLM-L6-v2` (87MB, fast)
 - `sentence-transformers/all-mpnet-base-v2` (400MB, high quality)
 - `sentence-transformers/multi-qa-MiniLM-L6-cos-v1` (87MB, QA focused)
@@ -142,7 +142,7 @@ manx embedding test "your test query"
 - `BAAI/bge-base-en-v1.5` (438MB, balanced)
 - `BAAI/bge-large-en-v1.5` (1.34GB, best quality)
 
-## ⚙️ Configuration
+## Configuration
 
 ### `manx config`
 Configure manx settings and providers.
@@ -163,7 +163,7 @@ manx config --llm-model "claude-3-5-sonnet"
 manx config --api-key "sk-your-context7-key"
 ```
 
-## 🗂️ Cache Management
+## Cache Management
 
 ### `manx cache`
 Manage local documentation cache.
@@ -179,7 +179,7 @@ manx cache stats
 manx cache list
 ```
 
-## 🔗 Utility Commands
+## Utility Commands
 
 ### `manx open <id>`
 Open documentation section by ID in browser.
@@ -197,37 +197,37 @@ manx update
 manx update --force
 ```
 
-## 🎯 Command Examples by Use Case
+## Command Examples by Use Case
 
-### **Learning New Framework**
+### Learning New Framework
 ```bash
 manx doc svelte                           # Overview
 manx snippet svelte "component props"     # Code examples
 manx search "svelte vs react comparison"  # Detailed comparison
 ```
 
-### **Debugging Issues**
+### Debugging Issues
 ```bash
 manx search "rust borrow checker errors"
 manx snippet python "exception handling"
 manx search "memory leaks javascript" --rag  # Check team notes
 ```
 
-### **Team Collaboration**
+### Team Collaboration
 ```bash
 manx index ~/team-handbook/               # One-time setup
 manx search "deployment checklist" --rag  # Daily usage
 manx snippet "code review process" --rag  # Team procedures
 ```
 
-### **Research & Analysis**
+### Research & Analysis
 ```bash
 manx config --openai-api "sk-key"        # Enable AI
 manx search "microservices patterns"      # Comprehensive analysis
 manx doc kubernetes "ingress"             # Technical deep dive
 ```
 
-## 🚀 Global Options
+## Global Options
 
 Available for all commands:
 
@@ -238,9 +238,9 @@ Available for all commands:
 - `--clear-cache` - Clear cache before command
 - `--auto-cache-on/off` - Enable/disable automatic caching
 
-## 💡 Tips & Tricks
+## Tips & Tricks
 
-### **Efficient Querying**
+### Efficient Querying
 ```bash
 # Use specific terms for better results
 manx snippet react "useState with objects"  # Better than "state"
@@ -249,7 +249,7 @@ manx snippet react "useState with objects"  # Better than "state"
 manx search "fastapi dependency injection"  # Better than "dependency injection"
 ```
 
-### **Progressive Enhancement**
+### Progressive Enhancement
 ```bash
 # Start with defaults
 manx snippet python "functions"
@@ -265,7 +265,7 @@ manx index ~/dev-notes/
 manx config --openai-api "sk-key"
 ```
 
-### **Result Management**
+### Result Management
 ```bash
 # Save interesting results
 manx snippet react hooks --save-all

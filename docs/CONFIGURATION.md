@@ -1,8 +1,8 @@
-# ⚙️ Configuration Guide
+# Configuration Guide
 
-Complete guide to configuring manx for your workflow and preferences.
+Guide to configuring manx for your workflow and preferences.
 
-## 🔧 Quick Configuration
+## Quick Configuration
 
 ### View Current Settings
 ```bash
@@ -16,7 +16,7 @@ manx config --show
 rm ~/.config/manx/config.json
 ```
 
-## 🧠 Embedding Configuration
+## Embedding Configuration
 
 ### Set Embedding Provider
 ```bash
@@ -39,7 +39,7 @@ manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx embedding status
 ```
 
-## 🤖 LLM Configuration
+## LLM Configuration
 
 ### OpenAI
 ```bash
@@ -92,7 +92,7 @@ manx config --llm-model "your-model-name"
 manx config --llm-provider ""
 ```
 
-## 🔑 API Keys
+## API Keys
 
 ### Context7 (Documentation Access)
 ```bash
@@ -109,7 +109,7 @@ manx config --api-key "sk-your-context7-key"
 manx search "test query" --limit 1
 ```
 
-## 📁 RAG Configuration
+## RAG Configuration
 
 ### Enable RAG Mode
 ```bash
@@ -121,7 +121,7 @@ manx config --rag on
 manx config --rag off
 ```
 
-## 🎛️ Advanced Settings
+## Advanced Settings
 
 ### Cache Configuration
 ```bash
@@ -131,7 +131,7 @@ manx config --cache-ttl 168  # Time to live in hours
 manx config --auto-cache on  # Enable auto-caching
 ```
 
-## 🔧 Environment Variables
+## Environment Variables
 
 Limited environment variable support:
 
@@ -143,7 +143,7 @@ export NO_COLOR=1
 # Use the config command instead: manx config --show
 ```
 
-## 📁 Configuration File
+## Configuration File
 
 Manx stores configuration in `~/.config/manx/config.json`:
 
@@ -177,7 +177,7 @@ Manx stores configuration in `~/.config/manx/config.json`:
 }
 ```
 
-## 🎯 Configuration Presets
+## Configuration Presets
 
 ### Minimal Setup (Default)
 ```bash
@@ -219,7 +219,7 @@ manx config --api-key ""  # Disable Context7
 manx config --rag-default  # Use only indexed docs
 ```
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### API Key Storage
 - Keys are stored in `~/.config/manx/config.json`
@@ -236,7 +236,7 @@ manx config --rag-default  # Use only indexed docs
 - Certificate validation is enforced
 - Timeouts prevent hanging connections
 
-## 🔄 Migration & Backup
+## Migration & Backup
 
 ### Backup Configuration
 ```bash
@@ -254,7 +254,7 @@ cp ~/manx-config-backup.json ~/.config/manx/config.json
 # Manual backup and restore using cp commands above
 ```
 
-## ❓ Configuration Troubleshooting
+## Configuration Troubleshooting
 
 ### Check Configuration Status
 ```bash
@@ -280,7 +280,7 @@ export RUST_LOG=debug
 manx --debug search "test query"
 ```
 
-## 💡 Pro Tips
+## Pro Tips
 
 ### Context-Aware Configuration
 ```bash

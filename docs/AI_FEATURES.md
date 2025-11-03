@@ -1,18 +1,18 @@
-# 🤖 AI Features Guide
+# AI Features Guide
 
-Complete guide to manx's AI-powered features for enhanced documentation search and analysis.
+Guide to manx's AI-powered features for enhanced documentation search and analysis.
 
-## ✨ What AI Adds to Manx
+## What AI Adds to Manx
 
-AI integration transforms manx from a search tool into an **intelligent documentation assistant** that:
+AI integration transforms manx from a search tool into a documentation assistant that:
 
-- **🧠 Synthesizes information** from multiple sources
-- **📝 Provides explanations** with working code examples  
-- **🔗 Includes citations** to original documentation
-- **🎯 Understands context** and intent behind queries
-- **💡 Suggests related topics** and best practices
+- Synthesizes information from multiple sources
+- Provides explanations with working code examples
+- Includes citations to original documentation
+- Understands context and intent behind queries
+- Suggests related topics and best practices
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # 1. Configure LLM provider
@@ -23,7 +23,7 @@ manx snippet react hooks  # Now includes AI explanations
 manx search "authentication patterns"  # Comprehensive analysis
 ```
 
-## 🔧 Supported LLM Providers
+## Supported LLM Providers
 
 ### OpenAI
 ```bash
@@ -70,7 +70,7 @@ manx config --custom-endpoint "https://your-api-endpoint.com"
 manx config --llm-model "your-model-name"
 ```
 
-## 🎯 AI-Enhanced Commands
+## AI-Enhanced Commands
 
 ### Snippet Search with AI
 ```bash
@@ -81,12 +81,12 @@ manx snippet react hooks --no-llm
 manx snippet react hooks
 ```
 
-**AI Enhancement Includes:**
-- **Code explanations** line-by-line
-- **Best practices** and common pitfalls
-- **Related patterns** and alternatives  
-- **Performance considerations**
-- **Testing strategies**
+AI Enhancement Includes:
+- Code explanations line-by-line
+- Best practices and common pitfalls
+- Related patterns and alternatives
+- Performance considerations
+- Testing strategies
 
 ### Intelligent Documentation Search
 ```bash
@@ -96,12 +96,12 @@ manx search "react performance optimization strategies"
 manx search "rust memory safety guarantees"
 ```
 
-**AI Analysis Provides:**
-- **Comprehensive overview** of the topic
-- **Pros/cons comparison** of different approaches
-- **Real-world examples** and use cases
-- **Implementation guidance** step-by-step
-- **Related technologies** and alternatives
+AI Analysis Provides:
+- Comprehensive overview of the topic
+- Pros/cons comparison of different approaches
+- Real-world examples and use cases
+- Implementation guidance step-by-step
+- Related technologies and alternatives
 
 ### RAG + AI = Powerful Insights
 ```bash
@@ -114,12 +114,12 @@ manx search "deployment architecture decisions" --rag
 manx snippet "authentication implementation" --rag
 ```
 
-**Combined Power:**
-- **Your knowledge** + **Official docs** + **AI synthesis**
-- **Context-aware** responses using your team's decisions
-- **Consistent** with your coding standards and practices
+Combined Power:
+- Your knowledge + Official docs + AI synthesis
+- Context-aware responses using your team's decisions
+- Consistent with your coding standards and practices
 
-## 🎛️ AI Control Options
+## AI Control Options
 
 ### Per-Command Control
 ```bash
@@ -145,7 +145,7 @@ manx snippet python --no-llm
 manx snippet python  # Uses AI if configured
 ```
 
-## 💡 AI Use Cases
+## AI Use Cases
 
 ### Learning New Technologies
 ```bash
@@ -194,13 +194,13 @@ manx search "our deployment process best practices" --rag
 manx search "coding standards for new developers" --rag
 ```
 
-## 🔒 Privacy & Security
+## Privacy & Security
 
 ### Data Handling
-- **Search queries** are sent to configured LLM providers for analysis
-- **Documentation content** is sent to provide context for responses
-- **Your indexed documents** are only included if using `--rag` flag
-- **API keys** are stored securely in local config files
+- Search queries are sent to configured LLM providers for analysis
+- Documentation content is sent to provide context for responses
+- Your indexed documents are only included if using `--rag` flag
+- API keys are stored securely in local config files
 
 ### Privacy Options
 ```bash
@@ -215,12 +215,12 @@ manx search "query" --rag --no-external
 ```
 
 ### Enterprise Security
-- **SOC2 compliance** varies by provider (check individual provider policies)
-- **Data retention policies** differ by LLM provider
-- **Zero-data retention** available with some providers
-- **Local deployment** possible with Ollama
+- SOC2 compliance varies by provider (check individual provider policies)
+- Data retention policies differ by LLM provider
+- Zero-data retention available with some providers
+- Local deployment possible with Ollama
 
-## 💰 Cost Management
+## Cost Management
 
 ### Cost-Effective Providers
 ```bash
@@ -243,7 +243,7 @@ manx config --llm-model "llama-3.1-8b"       # Groq (fast + cheap)
 manx snippet python --no-llm
 ```
 
-## 🚀 Advanced AI Features
+## Advanced AI Features
 
 ### AI Behavior
 ```bash
@@ -269,7 +269,7 @@ manx config --openai-api "sk-your-key"
 # 3. Comprehensive explanations with citations
 ```
 
-## 🛠️ AI Configuration Examples
+## AI Configuration Examples
 
 ### Development Team Setup
 ```bash
@@ -306,7 +306,7 @@ manx config --ai-style "beginner"
 manx config --ai-verbosity "detailed"
 ```
 
-## ❓ Troubleshooting AI Features
+## Troubleshooting AI Features
 
 ### Common Issues
 ```bash
@@ -332,7 +332,7 @@ manx config --ai-token-limit 2000  # Reduce context size
 manx config --ai-budget-daily 5.00  # Increase budget
 ```
 
-## 💡 Best Practices
+## Best Practices
 
 ### Effective AI Queries
 ```bash

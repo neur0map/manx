@@ -1,20 +1,20 @@
-# 🚀 Manx Setup Guide for Beginners
+# Manx Setup Guide
 
-This guide walks you through setting up Manx step-by-step, from basic installation to advanced AI-powered documentation search.
+Setup guide for Manx, from basic installation to advanced features.
 
-## 📋 Table of Contents
+## Table of Contents
 
-1. [Installation](#-installation)
-2. [Quick Test](#-quick-test)
-3. [Enhanced Search (Recommended)](#-enhanced-search-recommended)
-4. [Available Models](#-available-embedding-models)
-5. [Personal Documentation (RAG)](#-personal-documentation-rag)
-6. [AI Integration](#-ai-integration)
-7. [Available LLM Providers](#-available-llm-providers)
-8. [Common Workflows](#-common-workflows)
-9. [Troubleshooting](#-troubleshooting)
+1. [Installation](#installation)
+2. [Quick Test](#quick-test)
+3. [Enhanced Search](#enhanced-search)
+4. [Available Models](#available-embedding-models)
+5. [Personal Documentation (RAG)](#personal-documentation-rag)
+6. [AI Integration](#ai-integration)
+7. [Available LLM Providers](#available-llm-providers)
+8. [Common Workflows](#common-workflows)
+9. [Troubleshooting](#troubleshooting)
 
-## 🔧 Installation
+## Installation
 
 ### Option 1: Cargo (Recommended)
 ```bash
@@ -33,12 +33,12 @@ curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bas
 ### Option 3: Manual Download
 Download the latest binary from [GitHub Releases](https://github.com/neur0map/manx/releases).
 
-**Binary Details:**
-- **Size**: ~25MB (includes ONNX Runtime for neural embeddings)
-- **Dependencies**: None - completely self-contained
-- **Models**: Downloaded separately as needed (87MB-1.3GB each)
+Binary Details:
+- Size: ~25MB (includes ONNX Runtime for neural embeddings)
+- Dependencies: None - self-contained
+- Models: Downloaded separately as needed (87MB-1.3GB each)
 
-## ⚡ Quick Test
+## Quick Test
 
 After installation, test that everything works:
 
@@ -49,11 +49,11 @@ manx search "rust error handling"
 manx doc react "hooks"
 ```
 
-**What's happening:** Manx uses built-in hash embeddings and connects to Context7 API for official documentation. No setup required!
+Manx uses built-in hash embeddings and connects to Context7 API for official documentation. No setup required.
 
-## 🧠 Enhanced Search (Recommended)
+## Enhanced Search
 
-For much better search quality with semantic understanding:
+For better search quality with semantic understanding:
 
 ### Step 1: Download a Model
 ```bash
@@ -73,25 +73,25 @@ manx snippet react "state management"
 manx search "database connections"
 ```
 
-**What's improved:** 
-- 🎯 **Semantic understanding**: "database" matches "data storage"
-- 📊 **Better ranking**: More relevant results first
-- 🧠 **Intent matching**: Understands what you're really looking for
+Improvements:
+- Semantic understanding: "database" matches "data storage"
+- Better ranking: More relevant results first
+- Intent matching: Understands what you're looking for
 
-## 📚 Available Embedding Models
+## Available Embedding Models
 
 Choose the model that fits your needs:
 
-### Lightweight & Fast (Recommended for Most Users)
+### Lightweight & Fast
 ```bash
-# MiniLM - Best balance of speed and quality (87MB, 384 dimensions)
+# MiniLM - Balance of speed and quality (87MB, 384 dimensions)
 manx embedding download all-MiniLM-L6-v2
 manx config --embedding-provider onnx:all-MiniLM-L6-v2
 ```
 
-### High Quality (For Better Semantic Understanding)
+### High Quality
 ```bash
-# MPNet - Superior quality, larger model (400MB, 768 dimensions)
+# MPNet - Better quality, larger model (400MB, 768 dimensions)
 manx embedding download all-mpnet-base-v2
 manx config --embedding-provider onnx:all-mpnet-base-v2
 ```
@@ -128,7 +128,7 @@ manx config --embedding-provider onnx:BAAI/bge-small-en-v1.5
 manx embedding status
 ```
 
-## 📁 Personal Documentation (RAG)
+## Personal Documentation (RAG)
 
 Index your own documentation for private, semantic search:
 
@@ -165,12 +165,12 @@ manx sources clear
 ```
 
 ### Supported File Formats
-- **Text files**: `.md`, `.txt`, `.rst`
-- **Documents**: `.docx`
-- **Web content**: Any HTTP/HTTPS URL
-- **Crawling**: Automatic discovery of linked pages
+- Text files: `.md`, `.txt`, `.rst`
+- Documents: `.docx`
+- Web content: Any HTTP/HTTPS URL
+- Crawling: Automatic discovery of linked pages
 
-## 🤖 AI Integration
+## AI Integration
 
 Add AI-powered synthesis for comprehensive answers:
 
@@ -202,7 +202,7 @@ manx snippet python --no-llm
 manx config --llm-provider ""
 ```
 
-## 🌐 Available LLM Providers
+## Available LLM Providers
 
 ### OpenAI
 ```bash
@@ -258,7 +258,7 @@ manx config --show
 manx search "test query" --limit 1
 ```
 
-## 🔄 Common Workflows
+## Common Workflows
 
 ### For Developers
 ```bash
@@ -297,7 +297,7 @@ manx search "machine learning architectures"
 manx doc pytorch "transformers implementation"
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Installation Issues
 ```bash
@@ -344,37 +344,35 @@ manx embedding status
 
 ### Common Error Messages
 
-**"Model not found"**
+"Model not found"
 ```bash
 # Download the model first
 manx embedding download all-MiniLM-L6-v2
 ```
 
-**"ONNX embeddings feature not enabled"**
+"ONNX embeddings feature not enabled"
 ```bash
 # This shouldn't happen with cargo install, but if it does:
 cargo install manx-cli --features onnx-embeddings
 ```
 
-**"Failed to connect to Context7"**
+"Failed to connect to Context7"
 ```bash
 # Check internet connection or use offline mode
 manx search "topic" --offline
 ```
 
-## 🎯 Next Steps
+## Next Steps
 
-1. **Start simple**: Use default installation for immediate value
-2. **Enhance search**: Download a model for better semantic understanding  
-3. **Add your docs**: Index personal documentation with RAG
-4. **Optional AI**: Add LLM integration for comprehensive answers
+1. Start simple: Use default installation for immediate value
+2. Enhance search: Download a model for better semantic understanding
+3. Add your docs: Index personal documentation with RAG
+4. Optional AI: Add LLM integration for comprehensive answers
 
-Each step is optional and builds on the previous one. You can stop at any level that meets your needs!
+Each step is optional and builds on the previous one.
 
-## 📞 Getting Help
+## Getting Help
 
-- **Documentation**: Full command reference in the main README
-- **Issues**: [GitHub Issues](https://github.com/neur0map/manx/issues)
-- **Examples**: Check the `examples/` directory in the repository
-
-Happy documenting! 🚀
+- Documentation: Full command reference in the main README
+- Issues: [GitHub Issues](https://github.com/neur0map/manx/issues)
+- Examples: Check the `examples/` directory in the repository

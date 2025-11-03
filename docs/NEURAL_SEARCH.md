@@ -1,18 +1,18 @@
-# 🔍 Neural Search Guide
+# Neural Search Guide
 
-Complete guide to manx's neural embedding capabilities for semantic search and enhanced documentation discovery.
+Guide to manx's neural embedding capabilities for semantic search and enhanced documentation discovery.
 
-## ✨ What is Neural Search?
+## What is Neural Search?
 
-Neural Search replaces simple keyword matching with **semantic understanding**:
+Neural Search replaces simple keyword matching with semantic understanding:
 
-- 🧠 **Understands meaning**: "database" matches "data storage", "persistence layer"
-- 🎯 **Intent recognition**: Knows what you're really looking for
-- 📊 **Better ranking**: Most relevant results first, not just keyword frequency
-- 🌐 **Context awareness**: Understands relationships between concepts
-- ⚡ **Works locally**: All processing happens on your machine
+- Understands meaning: "database" matches "data storage", "persistence layer"
+- Intent recognition: Knows what you're looking for
+- Better ranking: Most relevant results first, not just keyword frequency
+- Context awareness: Understands relationships between concepts
+- Works locally: All processing happens on your machine
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # 1. Download a neural model (one-time setup)
@@ -25,39 +25,39 @@ manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx snippet react "state management"  # Much smarter results!
 ```
 
-## 📚 Available Models
+## Available Models
 
-### 🚀 Lightweight & Fast (384D)
+### Lightweight & Fast (384D)
 ```bash
 # MiniLM - Best balance of speed and quality
 manx embedding download all-MiniLM-L6-v2
-# Size: 87MB | Speed: ⚡ Fastest | Quality: 📊 Good | Use: General purpose
+# Size: 87MB | Speed: Fastest | Quality: Good | Use: General purpose
 
-# BGE Small - Optimized for technical content  
+# BGE Small - Optimized for technical content
 manx embedding download bge-small-en-v1.5
-# Size: 128MB | Speed: ⚡ Fast | Quality: 📈 Very Good | Use: Code, docs, retrieval
+# Size: 128MB | Speed: Fast | Quality: Very Good | Use: Code, docs, retrieval
 
 # Multi-QA - Question-answer focused
-manx embedding download multi-qa-MiniLM-L6-cos-v1  
-# Size: 87MB | Speed: ⚡ Fast | Quality: 📊 Good | Use: FAQ, troubleshooting
+manx embedding download multi-qa-MiniLM-L6-cos-v1
+# Size: 87MB | Speed: Fast | Quality: Good | Use: FAQ, troubleshooting
 ```
 
-### 🎯 High Quality (768D+)
+### High Quality (768D+)
 ```bash
 # MPNet - Superior semantic understanding
 manx embedding download all-mpnet-base-v2
-# Size: 416MB | Speed: 🐌 Slower | Quality: 🏆 Best | Use: Research, precision
+# Size: 416MB | Speed: Slower | Quality: Best | Use: Research, precision
 
 # BGE Base - Excellent for technical content
 manx embedding download bge-base-en-v1.5
-# Size: 440MB | Speed: 🐌 Slower | Quality: 🏆 Best | Use: Professional, technical
+# Size: 440MB | Speed: Slower | Quality: Best | Use: Professional, technical
 
 # BGE Large - Highest quality available
-manx embedding download bge-large-en-v1.5  
-# Size: 1.2GB | Speed: 🐌 Slowest | Quality: 🏆 Supreme | Use: Critical accuracy
+manx embedding download bge-large-en-v1.5
+# Size: 1.2GB | Speed: Slowest | Quality: Supreme | Use: Critical accuracy
 ```
 
-### 🌐 API-Based Providers (No Download Required)
+### API-Based Providers (No Download Required)
 ```bash
 # OpenAI embeddings
 manx config --embedding-provider openai:text-embedding-3-small
@@ -76,14 +76,14 @@ manx config --embedding-provider custom:http://localhost:8080/embeddings
 # For self-hosted embedding services
 ```
 
-### 🌍 Multilingual Models
+### Multilingual Models
 ```bash
 # Multilingual MiniLM - Supports 50+ languages
 manx embedding download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-# Size: 278MB | Speed: 🐌 Slower | Quality: 📊 Good | Use: Non-English content
+# Size: 278MB | Speed: Slower | Quality: Good | Use: Non-English content
 ```
 
-## 🔧 Model Installation & Management
+## Model Installation & Management
 
 ### Download Models
 ```bash
@@ -127,7 +127,7 @@ manx embedding test "machine learning algorithms"
 # Use embedding test for basic verification
 ```
 
-## 🎯 Semantic Search Examples
+## Semantic Search Examples
 
 ### Before vs After Neural Search
 
@@ -170,7 +170,7 @@ manx search "database connections"
 #                inter-service communication, distributed systems
 ```
 
-## 🧠 How Neural Search Works
+## How Neural Search Works
 
 ### Embedding Generation Process
 1. **Text Input**: "React state management"
@@ -192,7 +192,7 @@ manx search "database connections"
 - **Similarity Metric**: Cosine similarity
 - **Normalization**: L2 normalization for consistent scoring
 
-## ⚙️ Performance Tuning
+## Performance Tuning
 
 ### Model Selection by Use Case
 
@@ -232,7 +232,7 @@ manx config --embedding-threads 4
 manx config --embedding-batch-size 16
 ```
 
-## 🔄 Model Comparison
+## Model Comparison
 
 ### Speed Comparison
 | Model | Size | Dimensions | Inference Time | Use Case |
@@ -258,7 +258,7 @@ Based on semantic search benchmarks:
 - **Question Answering**: multi-qa-MiniLM-L6-cos-v1
 - **Multilingual**: paraphrase-multilingual-MiniLM-L12-v2
 
-## 🎯 Advanced Usage
+## Advanced Usage
 
 ### Combining with RAG
 ```bash
@@ -296,7 +296,7 @@ manx search "microservices architecture" > bge_results.txt
 # Compare results and choose your preferred model
 ```
 
-## 🔍 Search Quality Tips
+## Search Quality Tips
 
 ### Effective Query Patterns
 ```bash
@@ -334,7 +334,7 @@ manx search "specific error message here"
 manx sources list
 ```
 
-## 🛠️ Integration Examples
+## Integration Examples
 
 ### Development Workflow
 ```bash
@@ -374,7 +374,7 @@ manx search "machine learning model deployment strategies"
 manx search "frontend architecture patterns"
 ```
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 ### Model Download Issues
 ```bash
@@ -424,7 +424,7 @@ manx config --embedding-provider onnx:all-MiniLM-L6-v2
 manx config --embedding-cache-size 500
 ```
 
-## 💡 Best Practices
+## Best Practices
 
 ### Model Selection
 - **Start with MiniLM-L6-v2**: Great quality, fast, small download
@@ -444,7 +444,7 @@ manx config --embedding-cache-size 500
 - **Cache management**: Clear caches if experiencing issues
 - **Regular updates**: Keep models updated for best performance
 
-## 🚀 Future Features
+## Future Features
 
 Planned neural search enhancements:
 - **Custom model support**: Upload your own fine-tuned models

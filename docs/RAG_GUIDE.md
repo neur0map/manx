@@ -1,18 +1,18 @@
-# 📁 RAG Mode Guide
+# RAG Mode Guide
 
-Complete guide to manx's RAG (Retrieval-Augmented Generation) capabilities for indexing and searching your personal documentation.
+Guide to manx's RAG (Retrieval-Augmented Generation) capabilities for indexing and searching your personal documentation.
 
-## ✨ What is RAG Mode?
+## What is RAG Mode?
 
-RAG Mode transforms manx into a **personal knowledge base** that can:
+RAG Mode transforms manx into a personal knowledge base that can:
 
-- 🔒 **Index your private documents** (never leaves your machine)
-- 🎯 **Semantic search** through your own documentation  
-- 🧠 **AI-powered insights** from your team's knowledge
-- 📁 **Multi-format support** for various document types
-- 🔍 **Hybrid search** combining your docs with official documentation
+- Index your private documents (never leaves your machine)
+- Semantic search through your own documentation
+- AI-powered insights from your team's knowledge
+- Multi-format support for various document types
+- Hybrid search combining your docs with official documentation
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # 1. Index your documentation
@@ -27,7 +27,7 @@ manx snippet python "team coding standards" --rag
 manx sources list
 ```
 
-## 📁 Indexing Documents
+## Indexing Documents
 
 ### Local Files & Directories
 ```bash
@@ -89,7 +89,7 @@ manx index https://docs.site.com --crawl-depth 2
 manx index ~/docs/ --verbose
 ```
 
-## 🔍 Searching Indexed Content
+## Searching Indexed Content
 
 ### RAG-Only Search
 ```bash
@@ -126,7 +126,7 @@ manx search "error handling patterns" --rag
 manx search "why we chose postgresql over mongodb" --rag
 ```
 
-## 🗂️ Managing Indexed Sources
+## Managing Indexed Sources
 
 ### List All Sources
 ```bash
@@ -159,7 +159,7 @@ manx index ~/team-docs/ --force
 manx index https://docs.updated-site.com --force
 ```
 
-## 🧠 RAG + Neural Search
+## RAG + Neural Search
 
 ### Enable Semantic Search
 ```bash
@@ -185,7 +185,7 @@ manx search "auth middleware" --rag
 # Finds: Authentication, authorization, middleware, guards, interceptors, etc.
 ```
 
-## 🤖 RAG + AI Integration
+## RAG + AI Integration
 
 ### Setup AI with RAG
 ```bash
@@ -214,7 +214,7 @@ manx search "microservices communication" --rag
 - **Lessons learned** (from your postmortem docs)
 - **AI synthesis** connecting everything with best practices
 
-## 🔒 Security Features
+## Security Features
 
 manx implements comprehensive security measures when indexing code and documents:
 
@@ -314,7 +314,7 @@ manx search "payment processing logic" --rag
 manx search "API rate limiting" --rag
 ```
 
-## ⚙️ RAG Configuration
+## RAG Configuration
 
 ### RAG Configuration
 ```bash
@@ -338,7 +338,7 @@ manx config --embedding-dimension 384
 # implemented. RAG uses default settings optimized for most use cases.
 ```
 
-## 🔒 Privacy & Security
+## Privacy & Security
 
 ### Data Handling
 - **All documents stay local** - never uploaded to external services
@@ -357,7 +357,7 @@ manx config --embedding-dimension 384
 - **SOC2 compatible** - no unauthorized data transmission  
 - **Enterprise ready** - suitable for confidential documentation
 
-## 🚀 Advanced RAG Features
+## Advanced RAG Features
 
 ### Advanced Features
 ```bash
@@ -386,7 +386,7 @@ manx sources list
 # metrics are not currently implemented.
 ```
 
-## ❓ Troubleshooting RAG
+## Troubleshooting RAG
 
 ### Common Issues
 
@@ -435,7 +435,7 @@ manx config --rag-memory-limit "2GB"
 manx config --rag-disk-cache enabled
 ```
 
-## 💡 Best Practices
+## Best Practices
 
 ### Effective Document Organization
 ```bash
