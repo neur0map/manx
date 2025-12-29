@@ -1,6 +1,6 @@
 //! Multi-provider LLM integration for answer synthesis
 //!
-//! Supports OpenAI GPT, Anthropic Claude, Groq, OpenRouter, HuggingFace, and custom endpoints
+//! Supports OpenAI GPT, Anthropic Claude, Groq, OpenRouter, HuggingFace, Z.AI, and custom endpoints
 //! with automatic failover and comprehensive error handling.
 
 use anyhow::{anyhow, Result};
@@ -16,6 +16,7 @@ pub struct LlmConfig {
     pub groq_api_key: Option<String>,
     pub openrouter_api_key: Option<String>,
     pub huggingface_api_key: Option<String>,
+    pub zai_api_key: Option<String>,
     pub custom_endpoint: Option<String>,
     pub preferred_provider: LlmProvider,
     pub fallback_providers: Vec<LlmProvider>,
@@ -34,6 +35,7 @@ impl Default for LlmConfig {
             groq_api_key: None,
             openrouter_api_key: None,
             huggingface_api_key: None,
+            zai_api_key: None,
             custom_endpoint: None,
             preferred_provider: LlmProvider::Auto,
             fallback_providers: vec![
@@ -41,6 +43,7 @@ impl Default for LlmConfig {
                 LlmProvider::Anthropic,
                 LlmProvider::Groq,
                 LlmProvider::OpenRouter,
+                LlmProvider::Zai,
             ],
             timeout_seconds: 30,
             max_tokens: 1000,
@@ -60,6 +63,7 @@ pub enum LlmProvider {
     Groq,
     OpenRouter,
     HuggingFace,
+    Zai,
     Custom,
 }
 
@@ -114,6 +118,7 @@ impl LlmClient {
             || self.has_groq_key()
             || self.has_openrouter_key()
             || self.has_huggingface_key()
+            || self.has_zai_key()
             || self.config.custom_endpoint.is_some()
     }
 
@@ -153,6 +158,13 @@ impl LlmClient {
             .is_some_and(|key| !key.is_empty())
     }
 
+    pub fn has_zai_key(&self) -> bool {
+        self.config
+            .zai_api_key
+            .as_ref()
+            .is_some_and(|key| !key.is_empty())
+    }
+
     /// Get the best available provider based on configuration and API key availability
     pub fn get_best_provider(&self) -> Option<LlmProvider> {
         if self.config.preferred_provider != LlmProvider::Auto {
@@ -180,6 +192,7 @@ impl LlmClient {
             LlmProvider::Groq => self.has_groq_key(),
             LlmProvider::OpenRouter => self.has_openrouter_key(),
             LlmProvider::HuggingFace => self.has_huggingface_key(),
+            LlmProvider::Zai => self.has_zai_key(),
             LlmProvider::Custom => self.config.custom_endpoint.is_some(),
             LlmProvider::Auto => false, // Auto is not a real provider
         }
@@ -203,6 +216,7 @@ impl LlmClient {
             LlmProvider::Groq => self.synthesize_with_groq(query, results).await,
             LlmProvider::OpenRouter => self.synthesize_with_openrouter(query, results).await,
             LlmProvider::HuggingFace => self.synthesize_with_huggingface(query, results).await,
+            LlmProvider::Zai => self.synthesize_with_zai(query, results).await,
             LlmProvider::Custom => self.synthesize_with_custom(query, results).await,
             LlmProvider::Auto => unreachable!(),
         };
@@ -242,6 +256,7 @@ impl LlmClient {
                     LlmProvider::HuggingFace => {
                         self.synthesize_with_huggingface(query, results).await
                     }
+                    LlmProvider::Zai => self.synthesize_with_zai(query, results).await,
                     LlmProvider::Custom => self.synthesize_with_custom(query, results).await,
                     LlmProvider::Auto => continue,
                 };
@@ -268,6 +283,7 @@ impl LlmClient {
             LlmProvider::Groq => "llama-3.1-8b-instant".to_string(),
             LlmProvider::OpenRouter => "openai/gpt-3.5-turbo".to_string(),
             LlmProvider::HuggingFace => "microsoft/DialoGPT-medium".to_string(),
+            LlmProvider::Zai => "glm-4.7".to_string(),
             LlmProvider::Custom => "custom-model".to_string(),
             LlmProvider::Auto => "auto".to_string(),
         }
@@ -779,6 +795,81 @@ STYLE:
             finish_reason: response_json["choices"][0]["finish_reason"]
                 .as_str()
                 .map(|s| s.to_string()),
+            citations,
+        })
+    }
+
+    /// Z.AI GLM Coding Plan integration
+    async fn synthesize_with_zai(
+        &self,
+        query: &str,
+        results: &[RagSearchResult],
+    ) -> Result<LlmResponse> {
+        let api_key = self
+            .config
+            .zai_api_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("Z.AI API key not configured"))?;
+
+        let model = self.get_model_name(&LlmProvider::Zai);
+        let system_prompt = self.create_system_prompt();
+        let user_prompt = self.create_user_prompt(query, results);
+
+        let payload = serde_json::json!({
+            "model": model.to_uppercase(), // Z.AI expects uppercase model names
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt
+                }
+            ],
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+            "stream": false
+        });
+
+        let response = self
+            .http_client
+            .post("https://api.z.ai/api/coding/paas/v4/chat/completions")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(anyhow!("Z.AI API error: {}", error_text));
+        }
+
+        let response_json: serde_json::Value = response.json().await?;
+
+        let raw_answer = response_json["choices"][0]["message"]["content"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Invalid Z.AI response format"))?;
+        let answer = self.extract_final_answer(raw_answer);
+
+        let usage = &response_json["usage"];
+        let tokens_used = usage["total_tokens"].as_u64().map(|t| t as u32);
+        let finish_reason = response_json["choices"][0]["finish_reason"]
+            .as_str()
+            .map(|s| s.to_string());
+
+        let citations = self.extract_citations(&answer, results);
+
+        Ok(LlmResponse {
+            answer,
+            sources_used: results.iter().map(|r| r.id.clone()).collect(),
+            confidence: Some(0.88), // GLM-4.7 is high quality
+            provider_used: LlmProvider::Zai,
+            model_used: model,
+            tokens_used,
+            response_time_ms: 0,
+            finish_reason,
             citations,
         })
     }

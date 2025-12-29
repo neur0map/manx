@@ -161,10 +161,7 @@ impl SetupWizard {
         println!();
         println!("{}", style("─".repeat(50)).dim());
         println!();
-        println!(
-            "🎉 {} manx is ready!",
-            style("Setup complete!").green().bold()
-        );
+        println!("{} manx is ready!", style("Setup complete!").green().bold());
         println!();
         println!("Get started with these commands:");
 
@@ -189,7 +186,11 @@ impl SetupWizard {
         }
 
         println!();
-        println!("📚 {}", style("Need help? Try: manx --help").dim());
+        println!(
+            "{} {}",
+            style("Need help? Try:").dim(),
+            style("manx --help").bold()
+        );
         println!();
 
         Ok(())

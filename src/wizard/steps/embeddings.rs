@@ -10,21 +10,21 @@ use crate::wizard::navigation::WizardAction;
 pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardAction> {
     println!();
     println!(
-        "🔍 Choose your {} - this affects how well manx understands your searches:",
+        "Choose your {} - this affects how well manx understands your searches:",
         style("search engine").bold()
     );
     println!();
 
     println!("{}:", style("Hash Search (Default)").cyan());
-    println!("  ✓ Works immediately, no setup required");
-    println!("  ✓ Fast and reliable");
-    println!("  ✓ Perfect for exact keyword matching");
+    println!("  - Works immediately, no setup required");
+    println!("  - Fast and reliable");
+    println!("  - Perfect for exact keyword matching");
     println!();
 
     println!("{}:", style("Neural Search (Recommended)").green());
-    println!("  ✓ Understands meaning: \"auth\" finds \"authentication\"");
-    println!("  ✓ Better results for complex queries");
-    println!("  ✓ Small download (~22MB), runs locally");
+    println!("  - Understands meaning: \"auth\" finds \"authentication\"");
+    println!("  - Better results for complex queries");
+    println!("  - Small download (~22MB), runs locally");
     println!();
 
     let choices = vec![
@@ -48,7 +48,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
             config.rag.embedding.provider = EmbeddingProvider::Hash;
             config.rag.embedding.dimension = 384;
             println!();
-            println!("{}", style("✓ Hash search configured!").green().bold());
+            println!("{}", style("Hash search configured!").green().bold());
             println!("{}", style("  Fast keyword search ready to use.").dim());
             Ok(WizardAction::Next)
         }
@@ -88,7 +88,7 @@ async fn select_neural_model(config: &mut Config, theme: &ColorfulTheme) -> Resu
 
     loop {
         println!();
-        println!("{}", style("🧠 Choose Neural Search Model").cyan().bold());
+        println!("{}", style("Choose Neural Search Model").cyan().bold());
         println!();
         println!("Available models (runs locally, no data sent to external servers):");
         println!();
@@ -211,7 +211,7 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
     println!();
     println!(
         "{}",
-        style("📥 Preparing to download neural search model")
+        style("Preparing to download neural search model")
             .cyan()
             .bold()
     );
@@ -252,7 +252,7 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
         Ok(()) => {
             spinner.success(&format!(
                 "{} Neural search model installed successfully!",
-                style("✓").green().bold()
+                style("OK").green().bold()
             ));
 
             // Configure the provider
@@ -266,7 +266,7 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
 
                     // Show installation details
                     println!();
-                    println!("{}", style("📊 Installation Summary:").green().bold());
+                    println!("{}", style("Installation Summary:").green().bold());
                     println!("  {} {}", style("Model:").dim(), style(model_name).cyan());
                     println!(
                         "  {} {}D",
@@ -293,18 +293,14 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
                 println!();
                 println!(
                     "{}",
-                    style(format!(
-                        "⚠️  Warning: Could not detect model dimension: {}",
-                        e
-                    ))
-                    .yellow()
+                    style(format!("Warning: Could not detect model dimension: {}", e)).yellow()
                 );
                 println!("{}", style("   Using default dimension (384)").dim());
                 config.rag.embedding.dimension = 384;
             }
 
             println!();
-            println!("{}", style("🎉 Neural search is ready!").green().bold());
+            println!("{}", style("Neural search is ready!").green().bold());
             println!(
                 "{}",
                 style("   Your searches will now understand context and meaning.").dim()
@@ -317,14 +313,14 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
         Err(e) => {
             spinner.fail(&format!(
                 "{} Download failed: {}",
-                style("✗").red().bold(),
+                style("Error").red().bold(),
                 e
             ));
 
             println!();
             println!(
                 "{}",
-                style("⚠️  Download unsuccessful - falling back to hash search")
+                style("Download unsuccessful - falling back to hash search")
                     .yellow()
                     .bold()
             );

@@ -10,7 +10,7 @@ use crate::wizard::{
 
 pub async fn show_and_test(config: &Config, theme: &ColorfulTheme) -> Result<WizardAction> {
     println!();
-    println!("{}", style("🎯 Your manx is configured!").green().bold());
+    println!("{}", style("Your manx is configured!").green().bold());
     println!();
 
     // Show configuration summary
@@ -78,13 +78,13 @@ fn show_config_summary(config: &Config) {
     // Context7 API
     if config.api_key.is_some() {
         println!(
-            "  {} Context7 API for official documentation",
-            style("✓").green().bold()
+            "  - {} Context7 API for official documentation",
+            style("Enabled").green().bold()
         );
     } else {
         println!(
-            "  {} Context7 API (limited search without this)",
-            style("○").dim()
+            "  - {} Context7 API (limited search without this)",
+            style("Disabled").dim()
         );
     }
 
@@ -92,21 +92,21 @@ fn show_config_summary(config: &Config) {
     match &config.rag.embedding.provider {
         crate::rag::EmbeddingProvider::Hash => {
             println!(
-                "  {} Hash search engine (fast keyword matching)",
-                style("✓").green().bold()
+                "  - {} Hash search engine (fast keyword matching)",
+                style("Enabled").green().bold()
             );
         }
         crate::rag::EmbeddingProvider::Onnx(model) => {
             println!(
-                "  {} Neural search engine: {} (semantic understanding)",
-                style("✓").green().bold(),
+                "  - {} Neural search engine: {} (semantic understanding)",
+                style("Enabled").green().bold(),
                 style(model).yellow()
             );
         }
         _ => {
             println!(
-                "  {} Custom search engine configured",
-                style("✓").green().bold()
+                "  - {} Custom search engine configured",
+                style("Enabled").green().bold()
             );
         }
     }
@@ -115,14 +115,14 @@ fn show_config_summary(config: &Config) {
     if config.has_llm_configured() {
         let provider_name = get_llm_provider_name(config);
         println!(
-            "  {} AI features with {}",
-            style("✓").green().bold(),
+            "  - {} AI features with {}",
+            style("Enabled").green().bold(),
             provider_name
         );
     } else {
         println!(
-            "  {} AI features (raw docs only - still very useful!)",
-            style("○").dim()
+            "  - {} AI features (raw docs only - still very useful!)",
+            style("Disabled").dim()
         );
     }
 }
@@ -156,7 +156,7 @@ fn show_next_steps(config: &Config) {
     println!();
     println!(
         "{}",
-        style("💡 Your config is saved to ~/.config/manx/config.json").dim()
+        style("Your config is saved to ~/.config/manx/config.json").dim()
     );
 }
 
@@ -167,6 +167,7 @@ fn get_llm_provider_name(config: &Config) -> &'static str {
         crate::rag::llm::LlmProvider::Groq => "Groq",
         crate::rag::llm::LlmProvider::OpenRouter => "OpenRouter",
         crate::rag::llm::LlmProvider::HuggingFace => "HuggingFace",
+        crate::rag::llm::LlmProvider::Zai => "Z.AI",
         crate::rag::llm::LlmProvider::Custom => "Custom",
         crate::rag::llm::LlmProvider::Auto => "Auto",
     }
@@ -179,6 +180,7 @@ fn get_llm_api_key(config: &Config) -> Option<&str> {
         crate::rag::llm::LlmProvider::Groq => config.llm.groq_api_key.as_deref(),
         crate::rag::llm::LlmProvider::OpenRouter => config.llm.openrouter_api_key.as_deref(),
         crate::rag::llm::LlmProvider::HuggingFace => config.llm.huggingface_api_key.as_deref(),
+        crate::rag::llm::LlmProvider::Zai => config.llm.zai_api_key.as_deref(),
         _ => None,
     }
 }

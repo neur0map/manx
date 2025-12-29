@@ -9,7 +9,7 @@ use crate::wizard::{navigation::WizardAction, validators};
 pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardAction> {
     println!();
     println!(
-        "🤖 Enable {} for comprehensive answers with explanations?",
+        "Enable {} for comprehensive answers with explanations?",
         style("AI features").bold()
     );
     println!();
@@ -28,6 +28,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         "OpenAI (GPT models) - most popular",
         "Anthropic (Claude models) - this tool's creator",
         "Groq (fastest inference)",
+        "Z.AI (GLM Coding Plan) - affordable, code-optimized",
         "I'll set this up later",
         "── Navigation ──",
         "← Back to previous step",
@@ -79,6 +80,14 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
             }
         }
         4 => {
+            // Zai
+            if setup_zai(config, theme)? {
+                Ok(WizardAction::Next)
+            } else {
+                Ok(WizardAction::Skip)
+            }
+        }
+        5 => {
             // Skip for now
             println!();
             println!("{}", style("AI setup deferred.").dim());
@@ -88,15 +97,15 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
             );
             Ok(WizardAction::Next)
         }
-        5 => {
+        6 => {
             // Separator - should not be selectable
             Ok(WizardAction::Next)
         }
-        6 => {
+        7 => {
             // Back
             Ok(WizardAction::Back)
         }
-        7 => {
+        8 => {
             // Quit
             Ok(WizardAction::Quit)
         }
@@ -140,7 +149,7 @@ fn setup_openai(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("✓ OpenAI configured!").green().bold());
+    println!("{}", style("OpenAI configured!").green().bold());
     println!("{}", style(format!("  Using {}", model)).dim());
 
     Ok(true)
@@ -182,7 +191,7 @@ fn setup_anthropic(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("✓ Anthropic configured!").green().bold());
+    println!("{}", style("Anthropic configured!").green().bold());
     println!("{}", style(format!("  Using {}", model)).dim());
 
     Ok(true)
@@ -224,7 +233,7 @@ fn setup_groq(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("✓ Groq configured!").green().bold());
+    println!("{}", style("Groq configured!").green().bold());
     println!("{}", style(format!("  Using {}", model)).dim());
 
     Ok(true)
@@ -232,7 +241,7 @@ fn setup_groq(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
 
 fn select_openai_model(theme: &ColorfulTheme) -> Result<String> {
     println!();
-    println!("{}", style("🤖 Choose OpenAI Model").cyan().bold());
+    println!("{}", style("Choose OpenAI Model").cyan().bold());
     println!();
 
     let models = [
@@ -261,7 +270,7 @@ fn select_openai_model(theme: &ColorfulTheme) -> Result<String> {
 
 fn select_anthropic_model(theme: &ColorfulTheme) -> Result<String> {
     println!();
-    println!("{}", style("🤖 Choose Anthropic Model").cyan().bold());
+    println!("{}", style("Choose Anthropic Model").cyan().bold());
     println!();
 
     let models = [
@@ -299,7 +308,7 @@ fn select_anthropic_model(theme: &ColorfulTheme) -> Result<String> {
 
 fn select_groq_model(theme: &ColorfulTheme) -> Result<String> {
     println!();
-    println!("{}", style("🤖 Choose Groq Model").cyan().bold());
+    println!("{}", style("Choose Groq Model").cyan().bold());
     println!();
 
     let models = [
@@ -335,6 +344,79 @@ fn select_groq_model(theme: &ColorfulTheme) -> Result<String> {
         .with_prompt("Select Groq model")
         .items(&choices)
         .default(0) // Default to llama-3.1-8b-instant (recommended)
+        .interact()?;
+
+    Ok(models[selection].0.to_string())
+}
+
+fn setup_zai(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
+    println!();
+    println!("{}", style("Setting up Z.AI GLM Coding Plan...").cyan());
+    println!(
+        "{}",
+        style("Get your API key from: https://z.ai/model-api").dim()
+    );
+    println!();
+
+    let api_key: String = dialoguer::Input::with_theme(theme)
+        .with_prompt("Enter your Z.AI API key (or press Enter to skip)")
+        .allow_empty(true)
+        .validate_with(|input: &String| {
+            if input.is_empty() {
+                Ok(())
+            } else if input.len() < 10 {
+                Err("API key too short - please enter a valid key")
+            } else {
+                Ok(())
+            }
+        })
+        .interact_text()?;
+
+    if api_key.is_empty() {
+        println!("{}", style("Z.AI setup skipped.").dim());
+        return Ok(false);
+    }
+
+    // Select Zai model
+    let model = select_zai_model(theme)?;
+
+    config.llm.zai_api_key = Some(api_key);
+    config.llm.preferred_provider = LlmProvider::Zai;
+    config.llm.model_name = Some(model.clone());
+
+    println!();
+    println!("{}", style("Z.AI configured!").green().bold());
+    println!("{}", style(format!("  Using {}", model)).dim());
+
+    Ok(true)
+}
+
+fn select_zai_model(theme: &ColorfulTheme) -> Result<String> {
+    println!();
+    println!("{}", style("Choose Z.AI Model").cyan().bold());
+    println!();
+
+    let models = [
+        ("glm-4.7", "Recommended - Best quality, optimized for code"),
+        (
+            "glm-4.5-air",
+            "Lightweight - Faster response, good for quick tasks",
+        ),
+        (
+            "glm-4-flash",
+            "Ultra-fast - Minimal latency for simple queries",
+        ),
+    ];
+
+    let choices: Vec<String> = models
+        .iter()
+        .map(|(model, desc)| format!("{} - {}", model, desc))
+        .collect();
+
+    let selection = dialoguer::Select::with_theme(theme)
+        .with_prompt("Select Z.AI model")
+        .items(&choices)
+        .default(0) // Default to glm-4.7 (recommended)
         .interact()?;
 
     Ok(models[selection].0.to_string())

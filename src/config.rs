@@ -237,6 +237,14 @@ impl Config {
             ));
         }
 
+        if let Some(key) = &self.llm.zai_api_key {
+            output.push_str(&format!(
+                "  Z.AI API Key: {}...{}\n",
+                &key[..4],
+                &key[key.len() - 4..]
+            ));
+        }
+
         if let Some(endpoint) = &self.llm.custom_endpoint {
             output.push_str(&format!("  Custom Endpoint: {}\n", endpoint));
         }
@@ -265,6 +273,7 @@ impl Config {
             || self.llm.groq_api_key.is_some()
             || self.llm.openrouter_api_key.is_some()
             || self.llm.huggingface_api_key.is_some()
+            || self.llm.zai_api_key.is_some()
             || self.llm.custom_endpoint.is_some()
     }
 
@@ -367,9 +376,10 @@ impl Config {
             "groq" => self.llm.preferred_provider = LlmProvider::Groq,
             "openrouter" => self.llm.preferred_provider = LlmProvider::OpenRouter,
             "huggingface" => self.llm.preferred_provider = LlmProvider::HuggingFace,
+            "zai" => self.llm.preferred_provider = LlmProvider::Zai,
             "custom" => self.llm.preferred_provider = LlmProvider::Custom,
             "auto" => self.llm.preferred_provider = LlmProvider::Auto,
-            _ => anyhow::bail!("Invalid provider '{}'. Use: openai, anthropic, groq, openrouter, huggingface, custom, auto", provider),
+            _ => anyhow::bail!("Invalid provider '{}'. Use: openai, anthropic, groq, openrouter, huggingface, zai, custom, auto", provider),
         }
         self.save()
     }
@@ -429,7 +439,7 @@ impl Config {
                 EmbeddingProvider::Custom(endpoint)
             },
             _ => anyhow::bail!(
-                "Invalid embedding provider '{}'. Use: hash, onnx:model, ollama:model, openai:model, huggingface:model, custom:url", 
+                "Invalid embedding provider '{}'. Use: hash, onnx:model, ollama:model, openai:model, huggingface:model, custom:url",
                 provider_str
             ),
         };

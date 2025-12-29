@@ -4,8 +4,8 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     name = "manx",
-    about = "A blazing-fast CLI documentation finder",
-    long_about = r#"🚀 Intelligent documentation finder with native RAG and AI synthesis
+    about = "A fast CLI documentation finder",
+    long_about = r#"Intelligent documentation finder with native RAG and AI synthesis
 
 CORE COMMANDS:
   snippet <lib> [query]          Search code snippets and examples (official + local docs)
@@ -18,22 +18,22 @@ LOCAL RAG COMMANDS:
   sources list                   View indexed document sources
   sources clear                  Clear all indexed documents
 
-EMBEDDING SYSTEM - Smart semantic search (works great out of the box):
+EMBEDDING SYSTEM - Smart semantic search:
   embedding status               View current embedding configuration
   embedding list                 Show installed models
   embedding download <model>     Install neural models from HuggingFace
   embedding test <query>         Test embedding quality
 
 DEFAULT MODE (No setup required):
-  ⚡ Hash-based embeddings       Built-in algorithm (0ms, offline, 0MB storage)
-  📚 Official documentation      Context7 API integration
-  🔍 Keyword matching           Excellent for exact phrases and terms
+  Hash-based embeddings          Built-in algorithm (0ms, offline, 0MB storage)
+  Official documentation         Context7 API integration
+  Keyword matching               Excellent for exact phrases and terms
 
 ENHANCED MODE (Optional setup for better results):
-  🧠 Neural embeddings          Install: sentence-transformers/all-MiniLM-L6-v2
-  🎯 Semantic understanding     "database connection" = "data storage"
-  📊 Intent matching            Superior relevance ranking
-  🔄 Easy switching             manx embedding set onnx:model-name
+  Neural embeddings              Install: sentence-transformers/all-MiniLM-L6-v2
+  Semantic understanding         "database connection" = "data storage"
+  Intent matching                Superior relevance ranking
+  Easy switching                 manx embedding set onnx:model-name
 
 AI SYNTHESIS - Get comprehensive answers with citations (optional):
   manx config --openai-api "sk-your-key"   Enable OpenAI GPT models
@@ -95,7 +95,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum Commands {
-    /// 📚 Browse comprehensive documentation sections and guides
+    /// Browse comprehensive documentation sections and guides
     Doc {
         /// Library name (examples: 'fastapi', 'react@18', 'django')
         #[arg(value_name = "LIBRARY")]
@@ -117,7 +117,7 @@ pub enum Commands {
         rag: bool,
     },
 
-    /// 🔍 Search code snippets and examples with AI-powered understanding
+    /// Search code snippets and examples with AI-powered understanding
     ///
     /// ENHANCED SEARCH:
     ///   • Searches official docs (Context7) + your indexed documents (RAG)
@@ -173,7 +173,7 @@ pub enum Commands {
         rag: bool,
     },
 
-    /// 🔍 Search official documentation across the web
+    /// Search official documentation across the web
     ///
     /// INTELLIGENT WEB SEARCH:
     ///   • Prioritizes official documentation sites (docs.python.org, reactjs.org, etc.)
@@ -184,7 +184,7 @@ pub enum Commands {
     /// OFFICIAL-FIRST STRATEGY:
     ///   • Always searches official sources first (10x relevance boost)
     ///   • Expands to community sources only if insufficient official results
-    ///   • Transparent fallback notifications: "⚠️ Expanded to community sources"
+    ///   • Transparent fallback notifications: "Expanded to community sources"
     ///
     /// EXAMPLES:
     ///   manx search "hydra configuration commands"      # Auto-detects LLM availability  
@@ -209,7 +209,7 @@ pub enum Commands {
         rag: bool,
     },
 
-    /// 📥 Get specific item by ID (doc-3, section-5, etc.)
+    /// Get specific item by ID (doc-3, section-5, etc.)
     Get {
         /// Item ID from previous search or doc command output
         #[arg(value_name = "ITEM_ID")]
@@ -219,13 +219,13 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// 🗂️ Manage local documentation cache
+    /// Manage local documentation cache
     Cache {
         #[command(subcommand)]
         command: CacheCommands,
     },
 
-    /// ⚙️ Configure Manx settings, API keys, and AI integration
+    /// Configure Manx settings, API keys, and AI integration
     Config {
         /// Display current configuration settings
         #[arg(long)]
@@ -263,7 +263,7 @@ pub enum Commands {
         /// Set custom endpoint URL for self-hosted models
         #[arg(long, value_name = "URL")]
         custom_endpoint: Option<String>,
-        /// Set preferred LLM provider (openai, anthropic, groq, openrouter, huggingface, custom, auto)
+        /// Set preferred LLM provider (openai, anthropic, groq, openrouter, huggingface, zai, custom, auto)
         #[arg(long, value_name = "PROVIDER")]
         llm_provider: Option<String>,
         /// Set specific model name (overrides provider defaults)
@@ -292,7 +292,7 @@ pub enum Commands {
         embedding_dimension: Option<usize>,
     },
 
-    /// 📁 Index local documents or web URLs for RAG search
+    /// Index local documents or web URLs for RAG search
     ///
     /// INDEXING SOURCES:
     ///   • Local files: manx index ~/docs/api.md
@@ -349,13 +349,13 @@ pub enum Commands {
         crawl_max_pages: Option<usize>,
     },
 
-    /// 📂 Manage indexed document sources
+    /// Manage indexed document sources
     Sources {
         #[command(subcommand)]
         command: SourceCommands,
     },
 
-    /// 🔗 Open a specific documentation section by ID
+    /// Open a specific documentation section by ID
     Open {
         /// Section ID from previous doc command output
         #[arg(value_name = "SECTION_ID")]
@@ -365,7 +365,7 @@ pub enum Commands {
         output: Option<PathBuf>,
     },
 
-    /// 🔄 Update Manx to the latest version from GitHub
+    /// Update Manx to the latest version from GitHub
     Update {
         /// Check for updates without installing
         #[arg(long)]
@@ -375,7 +375,7 @@ pub enum Commands {
         force: bool,
     },
 
-    /// 🧠 Manage embedding models and providers for semantic search
+    /// Manage embedding models and providers for semantic search
     ///
     /// EMBEDDING PROVIDERS:
     ///   • hash: Hash-based embeddings (default, fast, lightweight)
@@ -397,7 +397,7 @@ pub enum Commands {
         command: EmbeddingCommands,
     },
 
-    /// 🚀 Interactive setup wizard for configuring manx
+    /// Interactive setup wizard for configuring manx
     ///
     /// WHAT IT DOES:
     ///   • Guides you through initial configuration

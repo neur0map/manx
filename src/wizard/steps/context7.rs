@@ -9,18 +9,18 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
     loop {
         println!();
         println!(
-            "🚀 {} provides access to official documentation from thousands of projects.",
+            "{} provides access to official documentation from thousands of projects.",
             style("Context7").bold()
         );
         println!("It's optional but highly recommended for the best search experience.");
         println!();
         println!("{}:", style("Without Context7").dim());
-        println!("  • Limited to hash-based search");
-        println!("  • No official documentation access");
+        println!("  - Limited to hash-based search");
+        println!("  - No official documentation access");
         println!("{}:", style("With Context7").green());
-        println!("  • Search official docs from React, Python, Rust, etc.");
-        println!("  • Access to latest documentation");
-        println!("  • Better search results");
+        println!("  - Search official docs from React, Python, Rust, etc.");
+        println!("  - Access to latest documentation");
+        println!("  - Better search results");
         println!();
 
         let mut choices = vec![
@@ -47,7 +47,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
                 println!("{}", style("Context7 setup skipped.").dim());
                 println!(
                     "{}",
-                    style("💡 You can set this up later with: manx config --api-key <key>").dim()
+                    style("You can set this up later with: manx config --api-key <key>").dim()
                 );
                 config.api_key = None;
                 return Ok(WizardAction::Next);
@@ -111,7 +111,7 @@ async fn handle_browser_api_setup(
     loop {
         println!(
             "{}",
-            style("💡 Press Enter with empty input to go back to main menu").dim()
+            style("Press Enter with empty input to go back to main menu").dim()
         );
 
         if let Some(api_key) = prompts::prompt_for_api_key(theme, "Context7")? {
@@ -122,7 +122,7 @@ async fn handle_browser_api_setup(
 
             // Show confirmation with options
             println!();
-            println!("{}", style("✓ API key looks valid!").green());
+            println!("{}", style("API key looks valid!").green());
 
             let choices = vec![
                 "Save and continue",
@@ -141,7 +141,7 @@ async fn handle_browser_api_setup(
                     // Save and continue
                     config.api_key = Some(api_key);
                     println!();
-                    println!("{}", style("✓ Context7 API configured!").green().bold());
+                    println!("{}", style("Context7 API configured!").green().bold());
                     return Ok(WizardAction::Next);
                 }
                 1 => {
@@ -172,7 +172,7 @@ async fn handle_manual_api_setup(
     loop {
         println!(
             "{}",
-            style("💡 Press Enter with empty input to go back to main menu").dim()
+            style("Press Enter with empty input to go back to main menu").dim()
         );
 
         let api_key: String = dialoguer::Input::with_theme(theme)
@@ -196,7 +196,7 @@ async fn handle_manual_api_setup(
 
         // Show confirmation with options
         println!();
-        println!("{}", style("✓ API key looks valid!").green());
+        println!("{}", style("API key looks valid!").green());
 
         let choices = vec![
             "Save and continue",
@@ -215,7 +215,7 @@ async fn handle_manual_api_setup(
                 // Save and continue
                 config.api_key = Some(api_key);
                 println!();
-                println!("{}", style("✓ Context7 API configured!").green().bold());
+                println!("{}", style("Context7 API configured!").green().bold());
                 return Ok(WizardAction::Next);
             }
             1 => {

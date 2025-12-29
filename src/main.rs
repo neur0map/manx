@@ -44,7 +44,7 @@ async fn create_search_engine_with_pooling(
             log::debug!("Initializing shared embedding model for pooling");
             match crate::rag::embeddings::EmbeddingModel::new().await {
                 Ok(model) => {
-                    log::info!("✓ Shared embedding model initialized successfully");
+                    log::info!("Shared embedding model initialized successfully");
                     Ok(Arc::new(model))
                 }
                 Err(e) => {
@@ -65,19 +65,16 @@ async fn create_search_engine_with_pooling(
             let search_mode_msg = if search_engine.has_embeddings() {
                 if !query.is_empty() {
                     format!(
-                        "🧠 Searching {} with semantic matching for '{}'",
+                        "Searching {} with semantic matching for '{}'",
                         library, query
                     )
                 } else {
-                    format!("🧠 Fetching {} with semantic processing", library)
+                    format!("Fetching {} with semantic processing", library)
                 }
             } else if !query.is_empty() {
-                format!(
-                    "📝 Searching {} with text matching for '{}'",
-                    library, query
-                )
+                format!("Searching {} with text matching for '{}'", library, query)
             } else {
-                format!("📝 Fetching {} documentation", library)
+                format!("Fetching {} documentation", library)
             };
             let pb = renderer.show_progress(&search_mode_msg);
             pb.finish_and_clear();
@@ -87,12 +84,9 @@ async fn create_search_engine_with_pooling(
         Err(e) => {
             log::warn!("Using fallback text-based search (no embeddings): {}", e);
             let search_mode_msg = if !query.is_empty() {
-                format!(
-                    "📝 Searching {} with text matching for '{}'",
-                    library, query
-                )
+                format!("Searching {} with text matching for '{}'", library, query)
             } else {
-                format!("📝 Fetching {} documentation", library)
+                format!("Fetching {} documentation", library)
             };
             let pb = renderer.show_progress(&search_mode_msg);
             pb.finish_and_clear();
@@ -206,7 +200,7 @@ async fn run() -> Result<()> {
                         }
                     };
 
-                    renderer.print_success("🔍 Web Search Configuration:");
+                    renderer.print_success("Web Search Configuration:");
                     println!("  Available: {}", search_system.is_available());
                     println!("  Configuration: {:?}", search_system.config());
 
@@ -376,14 +370,14 @@ async fn run() -> Result<()> {
                             if let Err(e) = config.rag.embedding.detect_and_update_dimension().await
                             {
                                 log::warn!("Could not detect dimension for new provider: {}", e);
-                                println!("   ⚠️  Dimension will be detected on first use");
+                                println!("   Dimension will be detected on first use");
                             } else {
                                 // Save the updated dimension
                                 if let Err(e) = config.save() {
                                     log::warn!("Could not save updated dimension: {}", e);
                                 } else {
                                     println!(
-                                        "   ✅ Detected and updated dimension: {}",
+                                        "   Detected and updated dimension: {}",
                                         config.rag.embedding.dimension
                                     );
                                 }
@@ -595,19 +589,19 @@ async fn run() -> Result<()> {
                 let update_info = updater.check_for_updates().await?;
 
                 if update_info.update_available {
-                    println!("🎉 Update available!");
+                    println!("Update available!");
                     println!("Current version: v{}", update_info.current_version);
                     println!("Latest version:  v{}", update_info.latest_version);
 
                     if !update_info.release_notes.trim().is_empty() {
-                        println!("\n📝 Release Notes:");
+                        println!("\nRelease Notes:");
                         println!("{}", update_info.release_notes);
                     }
 
                     println!("\nRun 'manx update' to install the latest version.");
                 } else {
                     println!(
-                        "✅ You're already on the latest version (v{})",
+                        "You're already on the latest version (v{})",
                         update_info.current_version
                     );
                 }

@@ -93,20 +93,15 @@ impl EmbeddingConfig {
 }
 
 /// Security level for code processing
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum CodeSecurityLevel {
     /// Strict: Reject files with any suspicious patterns
     Strict,
     /// Moderate: Log warnings but allow most files
+    #[default]
     Moderate,
     /// Permissive: Minimal security checks
     Permissive,
-}
-
-impl Default for CodeSecurityLevel {
-    fn default() -> Self {
-        Self::Moderate
-    }
 }
 
 /// Configuration for smart search capabilities
@@ -378,7 +373,7 @@ impl RagSystem {
 
         // If explicitly depth 0 and not crawl-all, do single-page fetch without the crawler
         if matches!(max_depth, Some(0)) && !crawl_all {
-            eprintln!("\n🧭 Indexing single page (no crawl): {}", url);
+            eprintln!("\nIndexing single page (no crawl): {}", url);
             let embedding_model = std::sync::Arc::new(
                 EmbeddingModel::new_with_config(self.config.embedding.clone()).await?,
             );
@@ -398,7 +393,7 @@ impl RagSystem {
 
         // If depth is 1 (shallow), prefer our manual shallow crawler to avoid docrawl host-scope quirks
         if matches!(max_depth, Some(1)) && !crawl_all {
-            eprintln!("\n🧭 Shallow crawl (depth 1) for: {}", url);
+            eprintln!("\nShallow crawl (depth 1) for: {}", url);
             let embedding_model = std::sync::Arc::new(
                 EmbeddingModel::new_with_config(self.config.embedding.clone()).await?,
             );
@@ -420,8 +415,8 @@ impl RagSystem {
         std::fs::create_dir_all(&temp_dir)?;
 
         // Show initial status
-        eprintln!("\n🌐 Starting document crawl for: {}", url);
-        eprintln!("   This will: 1) Crawl pages → 2) Chunk content → 3) Create embeddings");
+        eprintln!("\nStarting document crawl for: {}", url);
+        eprintln!("   This will: 1) Crawl pages -> 2) Chunk content -> 3) Create embeddings");
         log::debug!("Temp directory: {}", temp_dir.display());
         eprintln!();
 
@@ -634,18 +629,18 @@ impl RagSystem {
         // Wait for crawl to complete first
         let crawl_result = crawl_handle.await;
         let crawled_pages = if let Ok(Ok(stats)) = &crawl_result {
-            eprintln!("\n✓ Crawl completed: {} pages crawled", stats.pages);
+            eprintln!("\nCrawl completed: {} pages crawled", stats.pages);
             stats.pages
         } else if let Ok(Err(e)) = &crawl_result {
-            eprintln!("\n⚠️ Crawl completed with error: {}", e);
+            eprintln!("\nCrawl completed with error: {}", e);
             0
         } else {
-            eprintln!("\n⚠️ Crawl status unknown");
+            eprintln!("\nCrawl status unknown");
             0
         };
 
         // Monitor file discovery with a proper progress spinner
-        eprintln!("\n📂 Scanning for markdown files...");
+        eprintln!("\nScanning for markdown files...");
 
         let pb = ProgressBar::new_spinner();
         pb.set_style(
@@ -710,7 +705,7 @@ impl RagSystem {
         // Stop the monitor and finish the progress bar
         monitor_handle.abort();
         let final_count = pages_counter.load(Ordering::Relaxed);
-        pb.finish_with_message(format!("✓ Found {} markdown files", final_count));
+        pb.finish_with_message(format!("Found {} markdown files", final_count));
 
         drop(tx);
 
@@ -725,7 +720,7 @@ impl RagSystem {
 
         // If we have pages to process, show chunking progress with a progress bar
         if total_pages_found > 0 {
-            eprintln!("\n📄 Processing {} markdown files...", total_pages_found);
+            eprintln!("\nProcessing {} markdown files...", total_pages_found);
 
             // Create a progress bar for chunking
             let pb = ProgressBar::new(total_pages_found as u64);
@@ -761,12 +756,12 @@ impl RagSystem {
             pb.set_position(processed_so_far as u64);
 
             if processed_so_far == total_pages_found {
-                pb.finish_with_message("✓ All files processed");
+                pb.finish_with_message("All files processed");
             } else {
                 pb.abandon_with_message("Processing incomplete - some files may have failed");
             }
         } else {
-            eprintln!("\n⚠️  No markdown files found to process");
+            eprintln!("\nNo markdown files found to process");
             eprintln!(
                 "   The crawler processed {} pages but docrawl generated no markdown files.",
                 crawled_pages
@@ -786,7 +781,7 @@ impl RagSystem {
 
         if total_pages_found > 0 {
             // Only show spinner if we had files to process
-            eprintln!("\n⏳ Waiting for workers to finish...");
+            eprintln!("\nWaiting for workers to finish...");
             let pb_final = ProgressBar::new_spinner();
             pb_final.set_style(
                 ProgressStyle::default_spinner()
@@ -803,7 +798,7 @@ impl RagSystem {
                 }
             }
 
-            pb_final.finish_with_message("✓ Index finalized");
+            pb_final.finish_with_message("Index finalized");
         } else {
             // Just wait for workers without showing spinner
             for j in joins {
@@ -833,13 +828,11 @@ impl RagSystem {
 
         if total_pages == 0 {
             eprintln!();
-            eprintln!(
-                "⚠️  No markdown files were found. Docrawl may not have generated any content."
-            );
+            eprintln!("No markdown files were found. Docrawl may not have generated any content.");
             eprintln!("   This could mean the site structure is not compatible with crawling.");
         } else if total_stored == 0 {
             eprintln!();
-            eprintln!("⚠️  No chunks were stored. The markdown files may have been empty.");
+            eprintln!("No chunks were stored. The markdown files may have been empty.");
         }
 
         Ok(total_stored)
@@ -1008,14 +1001,14 @@ impl RagSystem {
         let _embedding_model = EmbeddingModel::new_with_config(self.config.embedding.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Embedding model unavailable: {}", e))?;
-        log::info!("✓ Embedding model loaded successfully");
+        log::info!("Embedding model loaded successfully");
 
         // Check if index directory exists and is accessible
         let indexer = Indexer::new(&self.config)?;
         let index_path = indexer.get_index_path();
 
         if index_path.exists() {
-            log::info!("✓ Local index directory exists: {:?}", index_path);
+            log::info!("Local index directory exists: {:?}", index_path);
 
             // Check embeddings directory
             let embedding_dir = index_path.join("embeddings");
@@ -1025,22 +1018,22 @@ impl RagSystem {
                     Ok(entries) => {
                         let count = entries.filter_map(|e| e.ok()).count();
                         log::info!(
-                            "✓ Local vector storage accessible with {} embedding files",
+                            "Local vector storage accessible with {} embedding files",
                             count
                         );
                     }
                     Err(e) => {
                         log::warn!(
-                            "⚠ Local vector storage directory exists but cannot read contents: {}",
+                            "Local vector storage directory exists but cannot read contents: {}",
                             e
                         );
                     }
                 }
             } else {
-                log::info!("✓ Local vector storage will be created when needed");
+                log::info!("Local vector storage will be created when needed");
             }
         } else {
-            log::info!("✓ Local index directory will be created: {:?}", index_path);
+            log::info!("Local index directory will be created: {:?}", index_path);
         }
 
         // Test file system write access
@@ -1049,7 +1042,7 @@ impl RagSystem {
             Ok(_) => {
                 match std::fs::write(&test_file, "health_check") {
                     Ok(_) => {
-                        log::info!("✓ File system write access confirmed");
+                        log::info!("File system write access confirmed");
                         let _ = std::fs::remove_file(&test_file); // Clean up test file
                     }
                     Err(e) => {
