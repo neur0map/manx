@@ -16,6 +16,22 @@ struct GitHubRelease {
     // Other fields are ignored by serde when not present
 }
 
+#[derive(Debug, Deserialize)]
+struct CrateData {
+    #[serde(default)]
+    newest_version: String,
+    #[serde(default)]
+    max_version: String,
+    #[serde(default)]
+    max_stable_version: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CratesIOResponse {
+    #[serde(rename = "crate")]
+    crate_data: CrateData,
+}
+
 #[derive(Debug, Clone)]
 enum InstallationMethod {
     Cargo,
@@ -46,9 +62,37 @@ impl SelfUpdater {
         Ok(Self { client, renderer })
     }
 
-    pub async fn check_for_updates(&self) -> Result<UpdateInfo> {
-        let pb = self.renderer.show_progress("Checking for updates...");
+    async fn check_cratesio_version(&self) -> Result<Option<String>> {
+        let url = format!("https://crates.io/api/v1/crates/{}", "manx-cli");
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to fetch crates.io information")?;
 
+        if !response.status().is_success() {
+            log::warn!("Failed to check crates.io: {}", response.status());
+            return Ok(None);
+        }
+
+        let crates_info: CratesIOResponse = response
+            .json()
+            .await
+            .context("Failed to parse crates.io information")?;
+
+        let latest_version = if !crates_info.crate_data.newest_version.is_empty() {
+            Some(crates_info.crate_data.newest_version.clone())
+        } else if !crates_info.crate_data.max_version.is_empty() {
+            Some(crates_info.crate_data.max_version.clone())
+        } else {
+            None
+        };
+
+        Ok(latest_version)
+    }
+
+    async fn check_github_version(&self) -> Result<(String, String)> {
         let url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
         let response = self
             .client
@@ -66,14 +110,41 @@ impl SelfUpdater {
             .await
             .context("Failed to parse release information")?;
 
-        pb.finish_and_clear();
+        let version = release.tag_name.trim_start_matches('v').to_string();
+        Ok((version, release.body))
+    }
 
-        let latest_version = release.tag_name.trim_start_matches('v');
-        let current_version = CURRENT_VERSION;
-
-        let update_available = version_compare(latest_version, current_version)?;
+    pub async fn check_for_updates(&self) -> Result<UpdateInfo> {
+        let pb = self.renderer.show_progress("Checking for updates...");
 
         let install_method = self.detect_installation_method();
+        let (latest_version, release_notes) = match install_method {
+            InstallationMethod::Cargo => {
+                match self.check_cratesio_version().await {
+                    Ok(Some(version)) => (version, String::new()),
+                    Ok(None) => {
+                        log::warn!("Failed to get crates.io version, falling back to GitHub");
+                        let (version, notes) = self.check_github_version().await?;
+                        (version, notes)
+                    }
+                    Err(e) => {
+                        log::warn!("Crates.io check failed: {}, falling back to GitHub", e);
+                        let (version, notes) = self.check_github_version().await?;
+                        (version, notes)
+                    }
+                }
+            }
+            InstallationMethod::Github => {
+                let (version, notes) = self.check_github_version().await?;
+                (version, notes)
+            }
+        };
+
+        pb.finish_and_clear();
+
+        let current_version = CURRENT_VERSION;
+        let update_available = version_compare(&latest_version, current_version)?;
+
         let install_method_str = match install_method {
             InstallationMethod::Cargo => "cargo".to_string(),
             InstallationMethod::Github => "github".to_string(),
@@ -81,9 +152,9 @@ impl SelfUpdater {
 
         Ok(UpdateInfo {
             current_version: current_version.to_string(),
-            latest_version: latest_version.to_string(),
+            latest_version,
             update_available,
-            release_notes: release.body,
+            release_notes,
             install_method: Some(install_method_str),
         })
     }
