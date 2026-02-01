@@ -592,12 +592,6 @@ async fn run() -> Result<()> {
                     println!("Update available!");
                     println!("Current version: v{}", update_info.current_version);
                     println!("Latest version:  v{}", update_info.latest_version);
-
-                    if !update_info.release_notes.trim().is_empty() {
-                        println!("\nRelease Notes:");
-                        println!("{}", update_info.release_notes);
-                    }
-
                     println!("\nRun 'manx update' to install the latest version.");
                 } else {
                     println!(

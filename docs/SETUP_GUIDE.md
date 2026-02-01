@@ -16,7 +16,6 @@ Setup guide for Manx, from basic installation to advanced features.
 
 ## Installation
 
-### Option 1: Cargo (Recommended)
 ```bash
 # Install from crates.io
 cargo install manx-cli
@@ -24,19 +23,6 @@ cargo install manx-cli
 # Verify installation
 manx --version
 ```
-
-### Option 2: Shell Script
-```bash
-curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
-```
-
-### Option 3: Manual Download
-Download the latest binary from [GitHub Releases](https://github.com/neur0map/manx/releases).
-
-Binary Details:
-- Size: ~25MB (includes ONNX Runtime for neural embeddings)
-- Dependencies: None - self-contained
-- Models: Downloaded separately as needed (87MB-1.3GB each)
 
 ## Quick Test
 

@@ -4,7 +4,6 @@
 
 <div align="center">
 
-![GitHub Release](https://img.shields.io/github/v/release/neur0map/manx)
 ![Crates.io Version](https://img.shields.io/crates/v/manx-cli)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Language](https://img.shields.io/badge/language-Rust-orange.svg)
@@ -30,11 +29,8 @@ Click to watch: Complete walkthrough of Manx features and capabilities
 cargo install manx-cli
 manx init  # Interactive setup wizard
 
-# Exisiting users
+# Existing users
 manx update
-
-# Or install and start immediately
-curl -fsSL https://raw.githubusercontent.com/neur0map/manx/main/install.sh | bash
 
 # Find code snippets instantly
 manx snippet react "useState hook"
@@ -106,9 +102,6 @@ Provides comprehensive answers with code examples, explanations, and citations.
 - [AI Features](docs/AI_FEATURES.md) - LLM integration and capabilities
 - [RAG Mode](docs/RAG_GUIDE.md) - Index and search personal documentation
 - [Neural Search](docs/NEURAL_SEARCH.md) - Enhanced semantic understanding
-
-### Manual Download
-- Binary: Download from [GitHub Releases](https://github.com/neur0map/manx/releases)
 
 ## Getting Help
 

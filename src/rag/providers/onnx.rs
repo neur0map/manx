@@ -224,13 +224,13 @@ impl OnnxProvider {
                 .commit_from_file(_onnx_path)?;
 
             // Get model output metadata
-            let outputs = &session.outputs;
+            let outputs = session.outputs();
             if let Some(first_output) = outputs.first() {
                 // Try to extract shape from output_type
                 log::info!(
                     "Output: {} - Type: {:?}",
-                    first_output.name,
-                    first_output.output_type
+                    first_output.name(),
+                    first_output.dtype()
                 );
 
                 // For now, use a common dimension for sentence transformers as fallback
@@ -241,12 +241,12 @@ impl OnnxProvider {
             }
 
             // If we can't determine from outputs, try inputs as fallback
-            let inputs = &session.inputs;
+            let inputs = session.inputs();
             log::warn!(
                 "Could not determine dimension from outputs, input info: {:?}",
                 inputs
                     .iter()
-                    .map(|i| (&i.name, &i.input_type))
+                    .map(|i| (i.name(), i.dtype()))
                     .collect::<Vec<_>>()
             );
 
@@ -448,9 +448,9 @@ impl OnnxProvider {
         {
             let session = self.session.read().await;
             let input_names: Vec<&str> = session
-                .inputs
+                .inputs()
                 .iter()
-                .map(|input| input.name.as_str())
+                .map(|input| input.name())
                 .collect();
 
             if input_names.contains(&"token_type_ids") {
