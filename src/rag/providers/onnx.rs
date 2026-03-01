@@ -447,11 +447,8 @@ impl OnnxProvider {
         // Add token_type_ids only if the model requires it
         {
             let session = self.session.read().await;
-            let input_names: Vec<&str> = session
-                .inputs()
-                .iter()
-                .map(|input| input.name())
-                .collect();
+            let input_names: Vec<&str> =
+                session.inputs().iter().map(|input| input.name()).collect();
 
             if input_names.contains(&"token_type_ids") {
                 let token_type_ids: Vec<i64> = vec![0i64; self.max_length];
