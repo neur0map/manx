@@ -57,7 +57,7 @@ impl SearchEngine {
         let (lib_name, _version) = parse_library_spec(library);
 
         // Step 1: Resolve library to Context7 ID
-        let (library_id, library_title) = self.client.resolve_library(lib_name).await?;
+        let (library_id, library_title) = self.client.resolve_library(lib_name, query).await?;
 
         // Step 2: Parse the query to extract phrases and terms
         let parsed_query = self.parse_search_query(query);
@@ -869,7 +869,10 @@ impl SearchEngine {
         let (lib_name, _version) = parse_library_spec(library);
 
         // Step 1: Resolve library to Context7 ID
-        let (library_id, _library_title) = self.client.resolve_library(lib_name).await?;
+        let (library_id, _library_title) = self
+            .client
+            .resolve_library(lib_name, query.unwrap_or(""))
+            .await?;
 
         // Step 2: Get documentation
         self.client.get_documentation(&library_id, query).await

@@ -98,7 +98,11 @@ impl Context7Client {
         CONTEXT7_MCP_URL
     }
 
-    pub async fn resolve_library(&self, library_name: &str) -> Result<(String, String)> {
+    pub async fn resolve_library(
+        &self,
+        library_name: &str,
+        query: &str,
+    ) -> Result<(String, String)> {
         // Always use MCP tools/call format for now
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -106,7 +110,8 @@ impl Context7Client {
             params: json!({
                 "name": "resolve-library-id",
                 "arguments": {
-                    "libraryName": library_name
+                    "libraryName": library_name,
+                    "query": query
                 }
             }),
             id: 1,
@@ -285,19 +290,17 @@ impl Context7Client {
 
     pub async fn get_documentation(&self, library_id: &str, topic: Option<&str>) -> Result<String> {
         let mut params = json!({
-            "context7CompatibleLibraryID": library_id
+            "libraryId": library_id
         });
 
-        if let Some(topic_str) = topic {
-            params["topic"] = json!(topic_str);
-        }
+        params["query"] = json!(topic.unwrap_or_default());
 
         // Always use MCP tools/call format for now
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             method: "tools/call".to_string(),
             params: json!({
-                "name": "get-library-docs",
+                "name": "query-docs",
                 "arguments": params
             }),
             id: 2,
@@ -320,6 +323,7 @@ impl Context7Client {
             .and_then(|text| text.as_str())
             .context("Failed to extract documentation from response")?;
 
+        log::debug!("{:?}", content);
         Ok(content.to_string())
     }
 
