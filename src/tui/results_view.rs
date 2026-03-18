@@ -1,5 +1,7 @@
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{
+    Block, Borders, List, ListItem, ListState, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
 
 use super::Theme;
 
@@ -79,17 +81,13 @@ impl ResultsView {
         let items: Vec<ListItem> = self
             .items
             .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                let is_selected = self.state.selected() == Some(i);
-                render_result_item(item, is_selected, theme)
-            })
+            .map(|item| render_result_item(item, theme))
             .collect();
 
         let list = List::new(items)
             .block(
                 Block::default()
-                    .title(" Results ")
+                    .title(format!(" {} results ", self.items.len()))
                     .title_style(theme.header_title)
                     .borders(Borders::ALL)
                     .border_style(theme.border_focused),
@@ -104,47 +102,35 @@ impl ResultsView {
         frame.render_stateful_widget(list, area, &mut self.state);
 
         // Scrollbar
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("^"))
-            .end_symbol(Some("v"));
-        frame.render_stateful_widget(
-            scrollbar,
-            area.inner(Margin { vertical: 1, horizontal: 0 }),
-            &mut self.scrollbar_state,
-        );
+        if self.items.len() > area.height as usize {
+            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("^"))
+                .end_symbol(Some("v"));
+            frame.render_stateful_widget(
+                scrollbar,
+                area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut self.scrollbar_state,
+            );
+        }
     }
 }
 
-fn render_result_item<'a>(item: &ResultItem, _is_selected: bool, theme: &Theme) -> ListItem<'a> {
-    let number = Span::styled(
-        format!("[{}] ", item.index + 1),
-        theme.result_number,
-    );
-    let title = Span::styled(
-        item.title.clone(),
-        theme.result_title,
-    );
-    let library = Span::styled(
-        format!("  ({})", item.library),
-        theme.result_library,
-    );
+fn render_result_item<'a>(item: &ResultItem, theme: &Theme) -> ListItem<'a> {
+    // Compact: just number + truncated title on one line, thin separator
+    let max_title_len = 45;
+    let title_display = if item.title.len() > max_title_len {
+        format!("{}...", &item.title[..max_title_len.saturating_sub(3)])
+    } else {
+        item.title.clone()
+    };
 
-    let title_line = Line::from(vec![number, title, library]);
-
-    let id_line = Line::from(vec![
-        Span::styled("    ID: ", theme.dimmed),
-        Span::styled(item.id.clone(), theme.result_id),
+    let title_line = Line::from(vec![
+        Span::styled(format!("{:>2}  ", item.index + 1), theme.result_number),
+        Span::styled(title_display, theme.result_title),
     ]);
 
-    // Truncate excerpt to ~80 chars
-    let excerpt_text = if item.excerpt.len() > 80 {
-        format!("    {}...", &item.excerpt[..77])
-    } else {
-        format!("    {}", &item.excerpt)
-    };
-    let excerpt_line = Line::from(Span::styled(excerpt_text, theme.result_excerpt));
-
-    let spacer = Line::from("");
-
-    ListItem::new(vec![title_line, id_line, excerpt_line, spacer])
+    ListItem::new(vec![title_line])
 }

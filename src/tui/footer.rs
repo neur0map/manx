@@ -32,8 +32,6 @@ pub fn results_hints() -> Vec<KeyHint> {
     vec![
         KeyHint { key: "j/k", desc: "navigate" },
         KeyHint { key: "Enter", desc: "expand" },
-        KeyHint { key: "/", desc: "filter" },
-        KeyHint { key: "s", desc: "save" },
         KeyHint { key: "q", desc: "quit" },
     ]
 }
@@ -42,8 +40,6 @@ pub fn detail_hints() -> Vec<KeyHint> {
     vec![
         KeyHint { key: "j/k", desc: "scroll" },
         KeyHint { key: "Esc", desc: "back" },
-        KeyHint { key: "s", desc: "save" },
-        KeyHint { key: "o", desc: "open URL" },
         KeyHint { key: "q", desc: "quit" },
     ]
 }

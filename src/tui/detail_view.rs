@@ -1,8 +1,10 @@
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
+use ratatui::widgets::{
+    Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+};
 
-use super::Theme;
 use super::results_view::ResultItem;
+use super::Theme;
 
 pub struct DetailView {
     pub scroll_offset: u16,
@@ -19,7 +21,9 @@ impl DetailView {
 
     pub fn scroll_down(&mut self, amount: u16) {
         if self.content_height > 0 {
-            self.scroll_offset = self.scroll_offset.saturating_add(amount)
+            self.scroll_offset = self
+                .scroll_offset
+                .saturating_add(amount)
                 .min(self.content_height.saturating_sub(1));
         }
     }
@@ -58,19 +62,22 @@ impl DetailView {
                 .end_symbol(Some("v"));
             frame.render_stateful_widget(
                 scrollbar,
-                area.inner(Margin { vertical: 1, horizontal: 0 }),
+                area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
                 &mut scrollbar_state,
             );
         }
     }
 
-    /// Render as a preview pane (right side, showing selected item summary)
+    /// Render as a preview pane — shows full content with wrapping
     pub fn render_preview(&self, frame: &mut Frame, area: Rect, item: &ResultItem, theme: &Theme) {
         let text = build_preview_text(item, theme);
 
         let block = Block::default()
-            .title(" Preview ")
-            .title_style(theme.dimmed)
+            .title(format!(" {} ", truncate_str(&item.title, 50)))
+            .title_style(theme.header_title)
             .borders(Borders::ALL)
             .border_style(theme.border);
 
@@ -82,42 +89,25 @@ impl DetailView {
     }
 }
 
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max.saturating_sub(3)])
+    }
+}
+
 fn build_preview_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
     let mut lines = vec![];
 
-    // Title
-    lines.push(Line::from(Span::styled(
-        item.title.clone(),
-        theme.result_title,
-    )));
-    lines.push(Line::from(""));
-
-    // Library + ID
-    lines.push(Line::from(vec![
-        Span::styled("Library: ", theme.dimmed),
-        Span::styled(item.library.clone(), theme.header_title),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("ID: ", theme.dimmed),
-        Span::styled(item.id.clone(), theme.result_id),
-    ]));
-
+    // Source URL if available
     if let Some(url) = &item.url {
-        lines.push(Line::from(vec![
-            Span::styled("URL: ", theme.dimmed),
-            Span::styled(url.clone(), theme.result_url),
-        ]));
+        lines.push(Line::from(Span::styled(url.clone(), theme.result_url)));
+        lines.push(Line::from(""));
     }
 
-    lines.push(Line::from(""));
-
-    // Excerpt
-    for line in item.excerpt.lines() {
-        lines.push(Line::from(Span::styled(
-            line.to_string(),
-            theme.result_excerpt,
-        )));
-    }
+    // Show full content, parsed with Context7 awareness
+    render_content_lines(&item.full_content, theme, &mut lines);
 
     Text::from(lines)
 }
@@ -125,34 +115,42 @@ fn build_preview_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
 fn build_detail_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
     let mut lines = vec![];
 
-    // Metadata header
-    lines.push(Line::from(vec![
-        Span::styled("Library: ", theme.dimmed),
-        Span::styled(item.library.clone(), theme.header_title),
-        Span::styled("  ID: ", theme.dimmed),
-        Span::styled(item.id.clone(), theme.result_id),
-    ]));
-
+    // Compact metadata
     if let Some(url) = &item.url {
-        lines.push(Line::from(vec![
-            Span::styled("Source: ", theme.dimmed),
-            Span::styled(url.clone(), theme.result_url),
-        ]));
+        lines.push(Line::from(Span::styled(url.clone(), theme.result_url)));
     }
-
     lines.push(Line::from(""));
 
-    // Full content with basic markdown-like parsing
-    let content = &item.full_content;
+    // Full content
+    render_content_lines(&item.full_content, theme, &mut lines);
+
+    Text::from(lines)
+}
+
+/// Parse Context7 / markdown-ish content into styled lines
+fn render_content_lines<'a>(content: &str, theme: &Theme, lines: &mut Vec<Line<'a>>) {
     let mut in_code_block = false;
 
     for line in content.lines() {
+        // Code block toggles
         if line.starts_with("```") {
             in_code_block = !in_code_block;
-            lines.push(Line::from(Span::styled(
-                line.to_string(),
-                theme.dimmed,
-            )));
+            if in_code_block {
+                let lang = line.trim_start_matches('`').trim();
+                if !lang.is_empty() {
+                    lines.push(Line::from(""));
+                    lines.push(Line::from(Span::styled(
+                        format!("--- {} ---", lang),
+                        theme.warning,
+                    )));
+                }
+            } else {
+                lines.push(Line::from(Span::styled(
+                    "----------",
+                    theme.dimmed,
+                )));
+                lines.push(Line::from(""));
+            }
             continue;
         }
 
@@ -161,11 +159,40 @@ fn build_detail_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
                 format!("  {}", line),
                 theme.code_block,
             )));
-        } else if line.starts_with("# ") || line.starts_with("TITLE: ") {
-            let heading = line.trim_start_matches("# ").trim_start_matches("TITLE: ");
+            continue;
+        }
+
+        // Context7 structured fields
+        if let Some(title) = line.strip_prefix("TITLE: ") {
             lines.push(Line::from(""));
             lines.push(Line::from(Span::styled(
-                heading.to_string(),
+                title.to_string(),
+                theme.section_heading,
+            )));
+        } else if let Some(desc) = line.strip_prefix("DESCRIPTION: ") {
+            lines.push(Line::from(Span::styled(desc.to_string(), theme.dimmed)));
+            lines.push(Line::from(""));
+        } else if let Some(source) = line.strip_prefix("SOURCE: ") {
+            lines.push(Line::from(Span::styled(
+                source.to_string(),
+                theme.result_url,
+            )));
+        } else if let Some(lang) = line.strip_prefix("LANGUAGE: ") {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                format!("--- {} ---", lang),
+                theme.warning,
+            )));
+        } else if line.starts_with("CODE:") {
+            // Skip the "CODE:" label, the ``` follows
+        } else if line.starts_with("====") {
+            // Skip separator lines
+        } else if line.starts_with("---") {
+            lines.push(Line::from(""));
+        } else if line.starts_with("# ") {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                line.trim_start_matches("# ").to_string(),
                 theme.section_heading,
             )));
         } else if line.starts_with("## ") {
@@ -174,33 +201,12 @@ fn build_detail_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
                 line.trim_start_matches("## ").to_string(),
                 theme.section_heading,
             )));
-        } else if line.starts_with("DESCRIPTION: ") {
-            lines.push(Line::from(Span::styled(
-                line.trim_start_matches("DESCRIPTION: ").to_string(),
-                theme.dimmed,
-            )));
-        } else if line.starts_with("SOURCE: ") {
-            lines.push(Line::from(vec![
-                Span::styled("Source: ", theme.dimmed),
-                Span::styled(
-                    line.trim_start_matches("SOURCE: ").to_string(),
-                    theme.result_url,
-                ),
-            ]));
-        } else if line.starts_with("LANGUAGE: ") {
-            lines.push(Line::from(Span::styled(
-                format!("Language: {}", line.trim_start_matches("LANGUAGE: ")),
-                theme.warning,
-            )));
-        } else if line.starts_with("---") {
-            lines.push(Line::from(Span::styled(
-                "-".repeat(60),
-                theme.dimmed,
-            )));
+        } else if line.starts_with("- ") || line.starts_with("* ") {
+            lines.push(Line::from(format!("  {}", line)));
+        } else if line.trim().is_empty() {
+            lines.push(Line::from(""));
         } else {
             lines.push(Line::from(line.to_string()));
         }
     }
-
-    Text::from(lines)
 }
