@@ -65,10 +65,14 @@ impl OnnxProvider {
 
         // Initialize ONNX Runtime session with optimizations
         log::info!("Loading ONNX model: {:?}", onnx_path);
-        let session = Session::builder()?
-            .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_intra_threads(4)?
-            .commit_from_file(onnx_path)?;
+        let session = Session::builder()
+            .map_err(|e| anyhow!("Failed to create session builder: {e}"))?
+            .with_optimization_level(GraphOptimizationLevel::Level3)
+            .map_err(|e| anyhow!("Failed to set optimization level: {e}"))?
+            .with_intra_threads(4)
+            .map_err(|e| anyhow!("Failed to set intra threads: {e}"))?
+            .commit_from_file(onnx_path)
+            .map_err(|e| anyhow!("Failed to load ONNX model: {e}"))?;
 
         log::info!("ONNX session created successfully");
 
