@@ -38,3 +38,6 @@ docs/dist/
 docs/.env
 docs/.env.local
 docs/.env.production
+
+# Prowl snapshot cache
+.prowl/

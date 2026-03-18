@@ -137,55 +137,68 @@ impl Context7Client {
         // Parse the response following Context7's selection criteria:
         // 1. First result is pre-ranked by Context7 (prioritize it)
         // 2. For ties, prefer exact name matches
-        // 3. Secondary: higher snippet count, trust score 7-10
+        // 3. Secondary: higher snippet count, benchmark score
         let lines: Vec<&str> = content.lines().collect();
         let mut libraries = Vec::new();
 
-        // Parse all libraries from response
-        let mut current_lib: Option<(String, String, f64, u32)> = None; // (id, title, trust_score, snippets)
+        // Parse all libraries from response - collect all fields before pushing
+        let mut current_id = String::new();
+        let mut current_title = String::new();
+        let mut current_score: f64 = 0.0;
+        let mut current_snippets: u32 = 0;
+        let mut has_current = false;
 
         for line in &lines {
-            // Look for library title (first line of each library block)
+            // Look for library title (start of a new library block)
             if let Some(stripped) = line.strip_prefix("- Title: ") {
-                let title = stripped.trim().to_string();
-                current_lib = Some((String::new(), title, 0.0, 0));
+                // Push previous library if we have one
+                if has_current && !current_id.is_empty() {
+                    libraries.push((
+                        current_id.clone(),
+                        current_title.clone(),
+                        current_score,
+                        current_snippets,
+                    ));
+                }
+                current_title = stripped.trim().to_string();
+                current_id = String::new();
+                current_score = 0.0;
+                current_snippets = 0;
+                has_current = true;
             }
             // Look for library ID
-            else if line.contains("Context7-compatible library ID:") {
-                if let Some((_, title, trust, snippets)) = current_lib.as_mut() {
-                    if let Some(start) = line.find('/') {
-                        let id_part = &line[start..];
-                        let end = id_part.find(char::is_whitespace).unwrap_or(id_part.len());
-                        *title = title.clone(); // Keep title
-                        libraries.push((
-                            id_part[..end].trim().to_string(),
-                            title.clone(),
-                            *trust,
-                            *snippets,
-                        ));
-                    }
+            else if has_current && line.contains("Context7-compatible library ID:") {
+                if let Some(start) = line.find('/') {
+                    let id_part = &line[start..];
+                    let end = id_part.find(char::is_whitespace).unwrap_or(id_part.len());
+                    current_id = id_part[..end].trim().to_string();
                 }
             }
             // Look for code snippets count
-            else if line.contains("Code Snippets:") {
-                if let Some((_, _, _, snippets)) = current_lib.as_mut() {
-                    if let Some(count_str) = line.split("Code Snippets:").nth(1) {
-                        if let Ok(count) = count_str.trim().parse::<u32>() {
-                            *snippets = count;
-                        }
+            else if has_current && line.contains("Code Snippets:") {
+                if let Some(count_str) = line.split("Code Snippets:").nth(1) {
+                    if let Ok(count) = count_str.trim().parse::<u32>() {
+                        current_snippets = count;
                     }
                 }
             }
-            // Look for trust score
-            else if line.contains("Trust Score:") {
-                if let Some((_, _, trust, _)) = current_lib.as_mut() {
-                    if let Some(score_str) = line.split("Trust Score:").nth(1) {
-                        if let Ok(score) = score_str.trim().parse::<f64>() {
-                            *trust = score;
-                        }
+            // Look for benchmark score (replaces old Trust Score)
+            else if has_current && line.contains("Benchmark Score:") {
+                if let Some(score_str) = line.split("Benchmark Score:").nth(1) {
+                    if let Ok(score) = score_str.trim().parse::<f64>() {
+                        current_score = score;
                     }
                 }
             }
+        }
+        // Push the last library
+        if has_current && !current_id.is_empty() {
+            libraries.push((
+                current_id,
+                current_title,
+                current_score,
+                current_snippets,
+            ));
         }
 
         log::debug!(
@@ -193,20 +206,20 @@ impl Context7Client {
             libraries.len(),
             library_name
         );
-        for (i, (id, title, trust, snippets)) in libraries.iter().enumerate() {
+        for (i, (id, title, benchmark, snippets)) in libraries.iter().enumerate() {
             log::debug!(
-                "  {}: {} ({}) - Trust: {}, Snippets: {}",
+                "  {}: {} ({}) - Benchmark: {}, Snippets: {}",
                 i + 1,
                 title,
                 id,
-                trust,
+                benchmark,
                 snippets
             );
         }
 
         // Apply Context7 selection criteria to find the best match
         let selected_library = libraries.iter().enumerate().max_by_key(
-            |(index, (_id, title, trust_score, snippet_count))| {
+            |(index, (_id, title, benchmark_score, snippet_count))| {
                 let mut score = 0;
 
                 // 1. First result gets highest priority (Context7 pre-ranks)
@@ -222,20 +235,18 @@ impl Context7Client {
                     score += 200;
                 }
 
-                // 4. Trust score 7-10 gets bonus
-                if *trust_score >= 7.0 {
-                    score += (*trust_score * 10.0) as usize;
-                }
+                // 4. Higher benchmark score (0-100) gets bonus
+                score += *benchmark_score as usize;
 
                 // 5. Higher snippet count indicates better documentation
                 score += (*snippet_count as usize).min(100);
 
                 log::debug!(
-                    "Library '{}' score: {} (index: {}, trust: {}, snippets: {})",
+                    "Library '{}' score: {} (index: {}, benchmark: {}, snippets: {})",
                     title,
                     score,
                     index,
-                    trust_score,
+                    benchmark_score,
                     snippet_count
                 );
 
@@ -243,12 +254,13 @@ impl Context7Client {
             },
         );
 
-        if let Some((index, (library_id, title, trust_score, snippet_count))) = selected_library {
+        if let Some((index, (library_id, title, benchmark_score, snippet_count))) = selected_library
+        {
             log::debug!(
-                "Selected library: '{}' ({}), Trust: {}, Snippets: {}, Position: {}",
+                "Selected library: '{}' ({}), Benchmark: {}, Snippets: {}, Position: {}",
                 title,
                 library_id,
-                trust_score,
+                benchmark_score,
                 snippet_count,
                 index + 1
             );
