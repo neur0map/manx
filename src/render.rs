@@ -549,6 +549,7 @@ pub struct ProgressHandle {
     active: bool,
 }
 
+#[allow(dead_code)]
 impl ProgressHandle {
     pub fn hidden() -> Self {
         Self { active: false }

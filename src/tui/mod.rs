@@ -1,10 +1,16 @@
+#[allow(dead_code)]
 pub mod app;
-pub mod results_view;
+#[allow(dead_code)]
 pub mod detail_view;
-pub mod header;
+#[allow(dead_code)]
 pub mod footer;
-pub mod loading;
+#[allow(dead_code)]
+pub mod header;
+#[allow(dead_code)]
+pub mod results_view;
+#[allow(dead_code)]
 pub mod theme;
 
 pub use app::App;
+pub use results_view::ResultItem;
 pub use theme::Theme;

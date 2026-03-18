@@ -6,6 +6,7 @@ mod export;
 mod rag;
 mod render;
 mod search;
+mod tui;
 mod update;
 mod web_search;
 mod wizard;
@@ -492,6 +493,7 @@ async fn run() -> Result<()> {
                     false,
                     limit,
                     no_llm,
+                    args.quiet,
                 )
                 .await?;
             }
@@ -537,6 +539,7 @@ async fn run() -> Result<()> {
                     json,
                     limit,
                     no_llm,
+                    args.quiet,
                 )
                 .await?;
             }
@@ -567,6 +570,7 @@ async fn run() -> Result<()> {
                     limit,
                     &config,
                     &renderer,
+                    args.quiet,
                 )
                 .await?;
             }
@@ -664,6 +668,7 @@ async fn handle_search_command(
     json_format: bool,
     limit: Option<usize>,
     no_llm: bool,
+    quiet: bool,
 ) -> Result<()> {
     let cache_manager = if let Some(dir) = &config.cache_dir {
         CacheManager::with_custom_dir(dir.clone())?
@@ -745,8 +750,8 @@ async fn handle_search_command(
         }
     }
 
-    // Apply LLM synthesis if configured and not disabled
-    if config.should_use_llm(no_llm) && !results.is_empty() {
+    // Apply LLM synthesis if configured and not disabled (only in quiet/pipe mode)
+    if quiet && config.should_use_llm(no_llm) && !results.is_empty() {
         println!("Synthesizing answer with AI...");
 
         // Convert search results to RAG format for LLM synthesis
@@ -842,17 +847,30 @@ async fn handle_search_command(
         }
     }
 
-    // Add clear separation before search results
-    if config.should_use_llm(no_llm) && !results.is_empty() {
-        println!("\n{}", "Detailed Results");
-    }
+    // Display results: TUI for interactive mode, plain renderer for quiet/pipe mode
+    if !quiet {
+        // Convert SearchResults to TUI ResultItems
+        let items: Vec<crate::tui::ResultItem> = results
+            .iter()
+            .enumerate()
+            .map(|(i, r)| crate::tui::ResultItem::from((i, r)))
+            .collect();
 
-    // Render results with library information and limit
-    renderer.render_search_results_with_library(
-        &results,
-        Some((&library_title, &library_id)),
-        limit,
-    )?;
+        let app = crate::tui::App::new(&library_id, query, items);
+        app.run().map_err(|e| anyhow::anyhow!("TUI error: {}", e))?;
+    } else {
+        // Add clear separation before search results
+        if config.should_use_llm(no_llm) && !results.is_empty() {
+            println!("\n{}", "Detailed Results");
+        }
+
+        // Render results with library information and limit
+        renderer.render_search_results_with_library(
+            &results,
+            Some((&library_title, &library_id)),
+            limit,
+        )?;
+    }
 
     // Export if requested
     if let Some(path) = output {
@@ -940,6 +958,7 @@ async fn handle_doc_command(
     offline: bool,
     limit: Option<usize>,
     no_llm: bool,
+    quiet: bool,
 ) -> Result<()> {
     let cache_manager = if let Some(dir) = &config.cache_dir {
         CacheManager::with_custom_dir(dir.clone())?
@@ -979,8 +998,8 @@ async fn handle_doc_command(
         cache_manager.set("docs", &cache_key, &doc_text).await.ok();
     }
 
-    // Apply LLM synthesis if configured and not disabled
-    if config.should_use_llm(no_llm) && !doc_text.trim().is_empty() {
+    // Apply LLM synthesis if configured and not disabled (only in quiet/pipe mode)
+    if quiet && config.should_use_llm(no_llm) && !doc_text.trim().is_empty() {
         println!("Synthesizing documentation with AI...");
 
         // Convert documentation to RAG format for LLM synthesis
@@ -1085,8 +1104,16 @@ async fn handle_doc_command(
         println!("\n{}", "Full Documentation");
     }
 
-    // Render documentation using the new Context7 parser
-    renderer.render_context7_documentation_with_limit(library, &doc_text, limit)?;
+    // Display documentation: TUI for interactive mode, plain renderer for quiet/pipe mode
+    if !quiet {
+        // Parse doc_text sections into ResultItems for TUI display
+        let items = parse_doc_sections_to_items(library, &doc_text);
+        let app = crate::tui::App::new(library, query, items);
+        app.run().map_err(|e| anyhow::anyhow!("TUI error: {}", e))?;
+    } else {
+        // Render documentation using the Context7 parser
+        renderer.render_context7_documentation_with_limit(library, &doc_text, limit)?;
+    }
 
     // Export if requested
     if let Some(path) = output {
@@ -1096,6 +1123,64 @@ async fn handle_doc_command(
     }
 
     Ok(())
+}
+
+/// Parse Context7 documentation text into TUI ResultItems by splitting on TITLE: markers
+fn parse_doc_sections_to_items(library: &str, content: &str) -> Vec<crate::tui::ResultItem> {
+    let mut items = Vec::new();
+    let lines: Vec<&str> = content.lines().collect();
+    let mut i = 0;
+    let mut section_idx = 0;
+
+    while i < lines.len() {
+        if let Some(title) = lines[i].strip_prefix("TITLE: ") {
+            let section_start = i;
+            let mut section_end = lines.len();
+
+            // Find end of section
+            for j in (i + 1)..lines.len() {
+                if lines[j].starts_with("TITLE: ") {
+                    section_end = j;
+                    break;
+                }
+            }
+
+            let section_lines = &lines[section_start..section_end];
+            let full_content = section_lines.join("\n");
+
+            // Extract description
+            let desc = section_lines
+                .iter()
+                .find(|l| l.starts_with("DESCRIPTION: "))
+                .map(|l| l.trim_start_matches("DESCRIPTION: ").to_string())
+                .unwrap_or_default();
+
+            // Extract source URL
+            let url = section_lines
+                .iter()
+                .find(|l| l.starts_with("SOURCE: "))
+                .map(|l| l.trim_start_matches("SOURCE: ").to_string());
+
+            let clean_title = crate::render::Renderer::strip_emojis(title);
+
+            items.push(crate::tui::ResultItem {
+                index: section_idx,
+                title: clean_title,
+                library: library.to_string(),
+                id: format!("{}-doc-{}", library, section_idx + 1),
+                url,
+                excerpt: crate::render::Renderer::strip_emojis(&desc),
+                full_content: crate::render::Renderer::strip_emojis(&full_content),
+            });
+
+            section_idx += 1;
+            i = section_end;
+        } else {
+            i += 1;
+        }
+    }
+
+    items
 }
 
 async fn handle_open_command(
@@ -2076,6 +2161,7 @@ async fn handle_web_search_command(
     limit: Option<usize>,
     config: &Config,
     renderer: &render::Renderer,
+    quiet: bool,
 ) -> Result<()> {
     if query.trim().is_empty() {
         renderer.print_error("Search query cannot be empty");
@@ -2149,8 +2235,8 @@ async fn handle_web_search_command(
                 return Ok(());
             }
 
-            // Apply LLM synthesis if configured and not disabled
-            if config.should_use_llm(no_llm) && !response.results.is_empty() {
+            // Apply LLM synthesis if configured and not disabled (only in quiet/pipe mode)
+            if quiet && config.should_use_llm(no_llm) && !response.results.is_empty() {
                 println!("Synthesizing answer with AI...");
 
                 // Convert search results to RAG format for LLM synthesis
@@ -2260,58 +2346,82 @@ async fn handle_web_search_command(
                 }
             }
 
-            // Add clear separation before search results
-            if config.should_use_llm(no_llm) && !response.results.is_empty() {
-                println!("\n{}", "Detailed Results");
-            }
+            // Display results: TUI for interactive mode, plain renderer for quiet/pipe mode
+            if !quiet {
+                let items: Vec<crate::tui::ResultItem> = response
+                    .results
+                    .iter()
+                    .enumerate()
+                    .take(max_display_results)
+                    .map(|(i, result)| {
+                        crate::tui::ResultItem {
+                            index: i,
+                            title: crate::render::Renderer::strip_emojis(&result.title),
+                            library: result.source_domain.clone(),
+                            id: result.url.clone(),
+                            url: Some(result.url.clone()),
+                            excerpt: crate::render::Renderer::strip_emojis(&result.snippet),
+                            full_content: result.snippet.clone(),
+                        }
+                    })
+                    .collect();
 
-            // Show summary (truncated)
-            println!("\nSummary:");
-            let summary = truncate_text(&response.summary, 150, true);
-            println!("{}", summary);
+                let app = crate::tui::App::new("web", query, items);
+                app.run().map_err(|e| anyhow::anyhow!("TUI error: {}", e))?;
+            } else {
+                // Add clear separation before search results
+                if config.should_use_llm(no_llm) && !response.results.is_empty() {
+                    println!("\n{}", "Detailed Results");
+                }
 
-            // Show top results
-            println!("\nDocumentation Results:");
-            let separator = "-".repeat(70);
-            for (i, result) in response
-                .results
-                .iter()
-                .enumerate()
-                .take(max_display_results)
-            {
-                if i > 0 {
+                // Show summary (truncated)
+                println!("\nSummary:");
+                let summary = truncate_text(&response.summary, 150, true);
+                println!("{}", summary);
+
+                // Show top results
+                println!("\nDocumentation Results:");
+                let separator = "-".repeat(70);
+                for (i, result) in response
+                    .results
+                    .iter()
+                    .enumerate()
+                    .take(max_display_results)
+                {
+                    if i > 0 {
+                        println!("{}", separator);
+                    }
+                    // Truncate title if too long
+                    let title = truncate_text(&result.title, 80, false);
+                    println!("\n{}. {}", i + 1, title);
+                    println!("   URL: {}", result.url);
+
+                    let source_indicator = if result.is_official {
+                        "Official Documentation"
+                    } else {
+                        "Community Source"
+                    };
+                    let relevance = result.similarity_score * 100.0;
+                    let relevance_str = format!("{:.1}%", relevance);
+                    println!("   {} • Relevance: {}", source_indicator, relevance_str);
+
+                    // Show snippet (smart truncated)
+                    // Show a longer preview so users can judge relevance
+                    let snippet = truncate_text(&result.snippet, 220, true);
+                    println!("   {}", snippet);
+                }
+
+                if !response.results.is_empty() {
                     println!("{}", separator);
                 }
-                // Truncate title if too long
-                let title = truncate_text(&result.title, 80, false);
-                println!("\n{}. {}", i + 1, title);
-                println!("   URL: {}", result.url);
 
-                let source_indicator = if result.is_official {
-                    "Official Documentation"
-                } else {
-                    "Community Source"
-                };
-                let relevance = result.similarity_score * 100.0;
-                let relevance_str = format!("{:.1}%", relevance);
-                println!("   {} • Relevance: {}", source_indicator, relevance_str);
-
-                // Show snippet (smart truncated)
-                // Show a longer preview so users can judge relevance
-                let snippet = truncate_text(&result.snippet, 220, true);
-                println!("   {}", snippet);
+                // Show search stats
+                println!("\nSearch Statistics:");
+                println!("• Total found: {}", response.total_found);
+                println!("• Official sources: {}", response.official_results_count);
+                println!("• Search time: {}ms", response.search_time_ms);
+                println!("• Sources: {}", response.sources.join(", "));
             }
-
-            if !response.results.is_empty() {
-                println!("{}", separator);
-            }
-
-            // Show search stats
-            println!("\nSearch Statistics:");
-            println!("• Total found: {}", response.total_found);
-            println!("• Official sources: {}", response.official_results_count);
-            println!("• Search time: {}ms", response.search_time_ms);
-            println!("• Sources: {}", response.sources.join(", "));
 
             // Export if requested
             if let Some(output_path) = output {

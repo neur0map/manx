@@ -5,6 +5,7 @@ use tokio::time::sleep;
 
 /// A simple spinner handle that prints start/success/fail messages.
 pub struct SpinnerHandle {
+    #[allow(dead_code)]
     message: String,
 }
 

@@ -4,15 +4,13 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;
 
 use super::detail_view::DetailView;
-use super::footer::{self, KeyHint};
+use super::footer;
 use super::header;
-use super::loading::LoadingView;
 use super::results_view::{ResultItem, ResultsView};
 use super::Theme;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum View {
-    Loading,
     Results,
     Detail,
 }
@@ -23,31 +21,31 @@ pub struct App {
     pub library: String,
     pub results: ResultsView,
     pub detail: DetailView,
-    pub loading: LoadingView,
     pub theme: Theme,
     pub should_quit: bool,
 }
 
 impl App {
-    pub fn new(library: &str, query: &str) -> Self {
+    pub fn new(library: &str, query: &str, items: Vec<ResultItem>) -> Self {
         Self {
-            view: View::Loading,
+            view: View::Results,
             query: query.to_string(),
             library: library.to_string(),
-            results: ResultsView::new(vec![]),
+            results: ResultsView::new(items),
             detail: DetailView::new(),
-            loading: LoadingView::new("Searching..."),
             theme: Theme::default(),
             should_quit: false,
         }
     }
 
-    pub fn set_results(&mut self, items: Vec<ResultItem>) {
-        self.results = ResultsView::new(items);
-        self.view = View::Results;
-    }
+    /// Launch the TUI. Call this after results have been fetched.
+    pub fn run(mut self) -> io::Result<()> {
+        if self.results.items.is_empty() {
+            // Nothing to show interactively
+            eprintln!("No results found.");
+            return Ok(());
+        }
 
-    pub fn run_tui(mut self) -> io::Result<()> {
         let mut terminal = ratatui::init();
         let result = self.main_loop(&mut terminal);
         ratatui::restore();
@@ -87,9 +85,6 @@ impl App {
         }
 
         match self.view {
-            View::Loading => {
-                // No input during loading
-            }
             View::Results => self.handle_results_key(code),
             View::Detail => self.handle_detail_key(code),
         }
@@ -112,7 +107,9 @@ impl App {
             }
             KeyCode::End => {
                 if !self.results.items.is_empty() {
-                    self.results.state.select(Some(self.results.items.len() - 1));
+                    self.results
+                        .state
+                        .select(Some(self.results.items.len() - 1));
                 }
             }
             _ => {}
@@ -137,9 +134,9 @@ impl App {
         let area = frame.area();
 
         let layout = Layout::vertical([
-            Constraint::Length(2),  // header
-            Constraint::Fill(1),   // main content
-            Constraint::Length(1),  // footer
+            Constraint::Length(2), // header
+            Constraint::Fill(1),  // main content
+            Constraint::Length(1), // footer
         ])
         .split(area);
 
@@ -155,9 +152,6 @@ impl App {
 
         // Main content
         match self.view {
-            View::Loading => {
-                self.loading.render(frame, layout[1], &self.theme);
-            }
             View::Results => {
                 self.render_results_layout(frame, layout[1]);
             }
@@ -170,7 +164,6 @@ impl App {
 
         // Footer
         let hints = match self.view {
-            View::Loading => vec![KeyHint { key: "q", desc: "quit" }],
             View::Results => footer::results_hints(),
             View::Detail => footer::detail_hints(),
         };
@@ -190,7 +183,23 @@ impl App {
 
         // Preview pane for selected item
         if let Some(item) = self.results.selected().cloned() {
-            self.detail.render_preview(frame, chunks[1], &item, &self.theme);
+            self.detail
+                .render_preview(frame, chunks[1], &item, &self.theme);
+        }
+    }
+}
+
+/// Convert client::SearchResult into TUI ResultItem
+impl From<(usize, &crate::client::SearchResult)> for ResultItem {
+    fn from((index, result): (usize, &crate::client::SearchResult)) -> Self {
+        Self {
+            index,
+            title: crate::render::Renderer::strip_emojis(&result.title),
+            library: result.library.clone(),
+            id: result.id.clone(),
+            url: result.url.clone(),
+            excerpt: crate::render::Renderer::strip_emojis(&result.excerpt),
+            full_content: result.excerpt.clone(),
         }
     }
 }
