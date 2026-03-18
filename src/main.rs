@@ -789,9 +789,9 @@ async fn handle_search_command(
                     Ok(synthesis) => {
                         let mut answer = synthesis.answer.clone();
                         if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3 {
-                            answer.push_str("\n\nSources:\n");
+                            answer.push('\n');
                             for citation in synthesis.citations.iter().take(3) {
-                                answer.push_str(&format!("  - {}\n", citation.source_title));
+                                answer.push_str(&format!("SOURCE: {}\n", citation.source_title));
                             }
                         }
                         llm_answer = Some(answer);
