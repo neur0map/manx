@@ -119,18 +119,11 @@ impl ResultsView {
 }
 
 fn render_result_item<'a>(item: &ResultItem, theme: &Theme) -> ListItem<'a> {
-    // Compact: just number + truncated title on one line, thin separator
-    let max_title_len = 45;
-    let title_display = if item.title.len() > max_title_len {
-        format!("{}...", &item.title[..max_title_len.saturating_sub(3)])
-    } else {
-        item.title.clone()
-    };
-
     let title_line = Line::from(vec![
         Span::styled(format!("{:>2}  ", item.index + 1), theme.result_number),
-        Span::styled(title_display, theme.result_title),
+        Span::styled(item.title.clone(), theme.result_title),
     ]);
 
-    ListItem::new(vec![title_line])
+    // Add empty line after each item for breathing room
+    ListItem::new(vec![title_line, Line::from("")])
 }

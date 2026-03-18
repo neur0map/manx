@@ -76,7 +76,7 @@ impl DetailView {
         let text = build_preview_text(item, theme);
 
         let block = Block::default()
-            .title(format!(" {} ", truncate_str(&item.title, 50)))
+            .title(format!(" {} ", item.title))
             .title_style(theme.header_title)
             .borders(Borders::ALL)
             .border_style(theme.border);

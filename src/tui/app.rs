@@ -199,10 +199,12 @@ impl From<(usize, &crate::client::SearchResult)> for ResultItem {
             id: result.id.clone(),
             url: result.url.clone(),
             excerpt: crate::render::Renderer::strip_emojis(&result.excerpt),
-            full_content: result
-                .full_content
-                .clone()
-                .unwrap_or_else(|| result.excerpt.clone()),
+            full_content: crate::render::Renderer::strip_emojis(
+                result
+                    .full_content
+                    .as_deref()
+                    .unwrap_or(&result.excerpt),
+            ),
         }
     }
 }
