@@ -293,6 +293,7 @@ impl SearchEngine {
                     excerpt,
                     url: None,
                     relevance_score: relevance,
+                    full_content: Some(section.to_string()),
                 });
             }
         }
@@ -338,7 +339,8 @@ impl SearchEngine {
                     title,
                     excerpt,
                     url: None,
-                    relevance_score: 0.5, // Default relevance for unmatched sections
+                    relevance_score: 0.5,
+                    full_content: Some(section.to_string()),
                 });
             }
         }

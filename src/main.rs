@@ -725,6 +725,7 @@ async fn handle_search_command(
                                 excerpt: rag_result.content,
                                 url: None,
                                 relevance_score: rag_result.score,
+                                full_content: None,
                             };
                             results.push(search_result);
                         }

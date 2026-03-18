@@ -171,10 +171,10 @@ impl App {
     }
 
     fn render_results_layout(&mut self, frame: &mut Frame, area: Rect) {
-        // Split into list (left) + preview (right)
+        // Split: narrow list on left, wide preview on right
         let chunks = Layout::horizontal([
-            Constraint::Percentage(45),
-            Constraint::Percentage(55),
+            Constraint::Percentage(35),
+            Constraint::Percentage(65),
         ])
         .split(area);
 
@@ -199,7 +199,10 @@ impl From<(usize, &crate::client::SearchResult)> for ResultItem {
             id: result.id.clone(),
             url: result.url.clone(),
             excerpt: crate::render::Renderer::strip_emojis(&result.excerpt),
-            full_content: result.excerpt.clone(),
+            full_content: result
+                .full_content
+                .clone()
+                .unwrap_or_else(|| result.excerpt.clone()),
         }
     }
 }

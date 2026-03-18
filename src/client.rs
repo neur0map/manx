@@ -80,6 +80,9 @@ pub struct SearchResult {
     pub excerpt: String,
     pub url: Option<String>,
     pub relevance_score: f32,
+    /// Full section content (not truncated). Falls back to excerpt if unavailable.
+    #[serde(default)]
+    pub full_content: Option<String>,
 }
 
 impl Context7Client {
