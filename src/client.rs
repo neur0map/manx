@@ -193,12 +193,7 @@ impl Context7Client {
         }
         // Push the last library
         if has_current && !current_id.is_empty() {
-            libraries.push((
-                current_id,
-                current_title,
-                current_score,
-                current_snippets,
-            ));
+            libraries.push((current_id, current_title, current_score, current_snippets));
         }
 
         log::debug!(
