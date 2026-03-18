@@ -11,7 +11,7 @@ mod web_search;
 mod wizard;
 
 use anyhow::{Context, Result};
-use colored::{control, Colorize};
+
 use std::process;
 
 use crate::cache::CacheManager;
@@ -118,10 +118,8 @@ async fn run() -> Result<()> {
     // Merge CLI arguments with config
     config.merge_with_cli(args.api_key, args.cache_dir, args.offline);
 
-    // Handle NO_COLOR environment variable
-    if std::env::var("NO_COLOR").is_ok() || !config.color_output {
-        control::set_override(false);
-    }
+    // Handle NO_COLOR environment variable (color stripping handled by renderer)
+    // NO_COLOR and config.color_output are respected downstream
 
     // Create renderer
     let renderer = Renderer::new(args.quiet);
@@ -782,9 +780,9 @@ async fn handle_search_command(
             Ok(llm_client) => {
                 match llm_client.synthesize_answer(query, &rag_results).await {
                     Ok(synthesis) => {
-                        println!("\n{}", "AI Summary".bold().cyan());
+                        println!("\n{}", "AI Summary");
 
-                        // Clean, colorized AI response
+                        // Clean AI response
                         for line in synthesis.answer.lines() {
                             if line.trim().is_empty() {
                                 println!();
@@ -797,7 +795,7 @@ async fn handle_search_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Quick Answer**",
-                                        &format!("{}", "> Quick Answer".bold().green())
+                                        "> Quick Answer"
                                     )
                                 );
                             } else if trimmed.starts_with("**Key Points**") {
@@ -805,7 +803,7 @@ async fn handle_search_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Key Points**",
-                                        &format!("{}", "> Key Points".bold().blue())
+                                        "> Key Points"
                                     )
                                 );
                             } else if trimmed.starts_with("**Code Example**") {
@@ -813,28 +811,18 @@ async fn handle_search_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Code Example**",
-                                        &format!("{}", "> Code Example".bold().magenta())
+                                        "> Code Example"
                                     )
                                 );
-                            } else if trimmed.starts_with("- ") {
-                                // Bullet points in cyan
-                                println!("  {}", trimmed.cyan());
-                            } else if trimmed.starts_with("```") {
-                                // Code blocks in yellow background
-                                println!("  {}", trimmed.on_bright_black().yellow());
-                            } else if trimmed.contains("[Source") {
-                                // Lines with source citations in dim white
-                                println!("  {}", trimmed.bright_white());
                             } else {
-                                // Regular text in white
-                                println!("  {}", trimmed.white());
+                                println!("  {}", trimmed);
                             }
                         }
 
                         if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3 {
-                            println!("\n  {}", "Sources used:".dimmed());
+                            println!("\n  {}", "Sources used:");
                             for citation in synthesis.citations.iter().take(3) {
-                                println!("  {} {}", "•".dimmed(), citation.source_title.dimmed());
+                                println!("  {} {}", "•", citation.source_title);
                             }
                         }
                         println!();
@@ -856,7 +844,7 @@ async fn handle_search_command(
 
     // Add clear separation before search results
     if config.should_use_llm(no_llm) && !results.is_empty() {
-        println!("\n{}", "Detailed Results".bold().blue());
+        println!("\n{}", "Detailed Results");
     }
 
     // Render results with library information and limit
@@ -1034,9 +1022,9 @@ async fn handle_doc_command(
             Ok(llm_client) => {
                 match llm_client.synthesize_answer(&ai_query, &doc_sections).await {
                     Ok(synthesis) => {
-                        println!("\n{}", "AI Summary".bold().cyan());
+                        println!("\n{}", "AI Summary");
 
-                        // Clean, colorized AI response
+                        // Clean AI response
                         for line in synthesis.answer.lines() {
                             if line.trim().is_empty() {
                                 println!();
@@ -1049,7 +1037,7 @@ async fn handle_doc_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Quick Answer**",
-                                        &format!("{}", "> Quick Answer".bold().green())
+                                        "> Quick Answer"
                                     )
                                 );
                             } else if trimmed.starts_with("**Key Points**") {
@@ -1057,7 +1045,7 @@ async fn handle_doc_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Key Points**",
-                                        &format!("{}", "> Key Points".bold().blue())
+                                        "> Key Points"
                                     )
                                 );
                             } else if trimmed.starts_with("**Code Example**") {
@@ -1065,24 +1053,18 @@ async fn handle_doc_command(
                                     "  {}",
                                     trimmed.replace(
                                         "**Code Example**",
-                                        &format!("{}", "> Code Example".bold().magenta())
+                                        "> Code Example"
                                     )
                                 );
-                            } else if trimmed.starts_with("- ") {
-                                println!("  {}", trimmed.cyan());
-                            } else if trimmed.starts_with("```") {
-                                println!("  {}", trimmed.on_bright_black().yellow());
-                            } else if trimmed.contains("[Source") {
-                                println!("  {}", trimmed.bright_white());
                             } else {
-                                println!("  {}", trimmed.white());
+                                println!("  {}", trimmed);
                             }
                         }
 
                         if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3 {
-                            println!("\n  {}", "Sources used:".dimmed());
+                            println!("\n  {}", "Sources used:");
                             for citation in synthesis.citations.iter().take(3) {
-                                println!("  {} {}", "•".dimmed(), citation.source_title.dimmed());
+                                println!("  {} {}", "•", citation.source_title);
                             }
                         }
                         println!();
@@ -1100,7 +1082,7 @@ async fn handle_doc_command(
         }
 
         // Add clear separation before documentation
-        println!("\n{}", "Full Documentation".bold().blue());
+        println!("\n{}", "Full Documentation");
     }
 
     // Render documentation using the new Context7 parser
@@ -1483,7 +1465,7 @@ async fn handle_index_command(
     let is_url = path_or_url.starts_with("http://") || path_or_url.starts_with("https://");
 
     // Don't show progress spinner for indexing operations - let underlying tools handle progress display
-    let pb: Option<indicatif::ProgressBar> = None;
+    let pb: Option<crate::render::ProgressHandle> = None;
 
     match RagSystem::new(config.rag.clone()).await {
         Ok(mut rag_system) => {
@@ -2211,9 +2193,9 @@ async fn handle_web_search_command(
                     Ok(llm_client) => {
                         match llm_client.synthesize_answer(query, &rag_results).await {
                             Ok(synthesis) => {
-                                println!("\n{}", "AI Summary".bold().cyan());
+                                println!("\n{}", "AI Summary");
 
-                                // Clean, colorized AI response
+                                // Clean AI response
                                 for line in synthesis.answer.lines() {
                                     if line.trim().is_empty() {
                                         println!();
@@ -2226,7 +2208,7 @@ async fn handle_web_search_command(
                                             "  {}",
                                             trimmed.replace(
                                                 "**Quick Answer**",
-                                                &format!("{}", "> Quick Answer".bold().green())
+                                                "> Quick Answer"
                                             )
                                         );
                                     } else if trimmed.starts_with("**Key Points**") {
@@ -2234,7 +2216,7 @@ async fn handle_web_search_command(
                                             "  {}",
                                             trimmed.replace(
                                                 "**Key Points**",
-                                                &format!("{}", "> Key Points".bold().blue())
+                                                "> Key Points"
                                             )
                                         );
                                     } else if trimmed.starts_with("**Code Example**") {
@@ -2242,28 +2224,22 @@ async fn handle_web_search_command(
                                             "  {}",
                                             trimmed.replace(
                                                 "**Code Example**",
-                                                &format!("{}", "> Code Example".bold().magenta())
+                                                "> Code Example"
                                             )
                                         );
-                                    } else if trimmed.starts_with("- ") {
-                                        println!("  {}", trimmed.cyan());
-                                    } else if trimmed.starts_with("```") {
-                                        println!("  {}", trimmed.on_bright_black().yellow());
-                                    } else if trimmed.contains("[Source") {
-                                        println!("  {}", trimmed.bright_white());
                                     } else {
-                                        println!("  {}", trimmed.white());
+                                        println!("  {}", trimmed);
                                     }
                                 }
 
                                 if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3
                                 {
-                                    println!("\n  {}", "Sources used:".dimmed());
+                                    println!("\n  {}", "Sources used:");
                                     for citation in synthesis.citations.iter().take(3) {
                                         println!(
                                             "  {} {}",
-                                            "•".dimmed(),
-                                            citation.source_title.dimmed()
+                                            "•",
+                                            citation.source_title
                                         );
                                     }
                                 }
@@ -2286,7 +2262,7 @@ async fn handle_web_search_command(
 
             // Add clear separation before search results
             if config.should_use_llm(no_llm) && !response.results.is_empty() {
-                println!("\n{}", "Detailed Results".bold().blue());
+                println!("\n{}", "Detailed Results");
             }
 
             // Show summary (truncated)
@@ -2304,12 +2280,12 @@ async fn handle_web_search_command(
                 .take(max_display_results)
             {
                 if i > 0 {
-                    println!("{}", separator.dimmed());
+                    println!("{}", separator);
                 }
                 // Truncate title if too long
                 let title = truncate_text(&result.title, 80, false);
                 println!("\n{}. {}", i + 1, title);
-                println!("   URL: {}", result.url.bright_blue().underline());
+                println!("   URL: {}", result.url);
 
                 let source_indicator = if result.is_official {
                     "Official Documentation"
@@ -2318,14 +2294,7 @@ async fn handle_web_search_command(
                 };
                 let relevance = result.similarity_score * 100.0;
                 let relevance_str = format!("{:.1}%", relevance);
-                let relevance_colored = if relevance >= 85.0 {
-                    relevance_str.bright_green()
-                } else if relevance >= 70.0 {
-                    relevance_str.yellow()
-                } else {
-                    relevance_str.red()
-                };
-                println!("   {} • Relevance: {}", source_indicator, relevance_colored);
+                println!("   {} • Relevance: {}", source_indicator, relevance_str);
 
                 // Show snippet (smart truncated)
                 // Show a longer preview so users can judge relevance
@@ -2334,7 +2303,7 @@ async fn handle_web_search_command(
             }
 
             if !response.results.is_empty() {
-                println!("{}", separator.dimmed());
+                println!("{}", separator);
             }
 
             // Show search stats

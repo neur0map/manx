@@ -1,27 +1,26 @@
 use anyhow::Result;
-use console::{style, Term};
 
-pub fn show(_term: &Term) -> Result<()> {
+pub fn show() -> Result<()> {
     // Display ASCII art banner with dynamic version
     println!();
     let banner_with_version = BANNER.replace("{}", env!("CARGO_PKG_VERSION"));
-    println!("{}", style(banner_with_version).cyan().bold());
+    println!("{}", banner_with_version);
     println!();
 
     // Welcome message
-    println!("{}", style("Welcome to Manx Setup Wizard!").bold().cyan());
-    println!("{}", style("━".repeat(50)).dim());
+    println!("Welcome to Manx Setup Wizard!");
+    println!("{}", "=".repeat(50));
     println!();
 
     println!("Let's configure manx for optimal documentation search.");
     println!("This wizard will help you set up:");
     println!();
-    println!("  {} Context7 API for official docs", style("•").cyan());
-    println!("  {} Neural search models", style("•").cyan());
-    println!("  {} AI providers (optional)", style("•").cyan());
+    println!("  * Context7 API for official docs");
+    println!("  * Neural search models");
+    println!("  * AI providers (optional)");
     println!();
 
-    println!("{}", style("Press Enter to begin setup...").dim().italic());
+    println!("Press Enter to begin setup...");
 
     // Wait for user input
     let mut input = String::new();

@@ -1,6 +1,4 @@
 use anyhow::Result;
-use console::style;
-use dialoguer::theme::ColorfulTheme;
 
 use crate::config::Config;
 use crate::wizard::{
@@ -8,20 +6,19 @@ use crate::wizard::{
     prompts,
 };
 
-pub async fn show_and_test(config: &Config, theme: &ColorfulTheme) -> Result<WizardAction> {
+pub async fn show_and_test(config: &Config) -> Result<WizardAction> {
     println!();
-    println!("{}", style("Your manx is configured!").green().bold());
+    println!("Your manx is configured!");
     println!();
 
     // Show configuration summary
     show_config_summary(config);
 
     println!();
-    println!("{}", style("─".repeat(40)).dim());
+    println!("{}", "-".repeat(40));
 
     // Show final options - first ask if they want to test
     let should_test = crate::wizard::prompts::confirm_action(
-        theme,
         "Test configuration before finishing?",
         true,
     )?;
@@ -29,7 +26,7 @@ pub async fn show_and_test(config: &Config, theme: &ColorfulTheme) -> Result<Wiz
     if should_test {
         // Test configuration
         println!();
-        println!("{}", style("Testing configuration...").cyan());
+        println!("Testing configuration...");
         println!();
 
         // Test Context7 API if configured
@@ -61,103 +58,68 @@ pub async fn show_and_test(config: &Config, theme: &ColorfulTheme) -> Result<Wiz
         }
 
         println!();
-        println!("{}", style("Configuration tests completed!").green().bold());
+        println!("Configuration tests completed!");
     }
 
     // Show next steps
     show_next_steps(config);
 
     // Use the navigation function for final navigation
-    crate::wizard::navigation::show_navigation_options(theme, &WizardStep::Summary, false)
+    crate::wizard::navigation::show_navigation_options(&WizardStep::Summary, false)
 }
 
 fn show_config_summary(config: &Config) {
-    println!("{}", style("Configuration Summary:").bold());
+    println!("Configuration Summary:");
     println!();
 
     // Context7 API
     if config.api_key.is_some() {
-        println!(
-            "  - {} Context7 API for official documentation",
-            style("Enabled").green().bold()
-        );
+        println!("  - [Enabled] Context7 API for official documentation");
     } else {
-        println!(
-            "  - {} Context7 API (limited search without this)",
-            style("Disabled").dim()
-        );
+        println!("  - [Disabled] Context7 API (limited search without this)");
     }
 
     // Search Engine
     match &config.rag.embedding.provider {
         crate::rag::EmbeddingProvider::Hash => {
-            println!(
-                "  - {} Hash search engine (fast keyword matching)",
-                style("Enabled").green().bold()
-            );
+            println!("  - [Enabled] Hash search engine (fast keyword matching)");
         }
         crate::rag::EmbeddingProvider::Onnx(model) => {
             println!(
-                "  - {} Neural search engine: {} (semantic understanding)",
-                style("Enabled").green().bold(),
-                style(model).yellow()
+                "  - [Enabled] Neural search engine: {} (semantic understanding)",
+                model
             );
         }
         _ => {
-            println!(
-                "  - {} Custom search engine configured",
-                style("Enabled").green().bold()
-            );
+            println!("  - [Enabled] Custom search engine configured");
         }
     }
 
     // AI Features
     if config.has_llm_configured() {
         let provider_name = get_llm_provider_name(config);
-        println!(
-            "  - {} AI features with {}",
-            style("Enabled").green().bold(),
-            provider_name
-        );
+        println!("  - [Enabled] AI features with {}", provider_name);
     } else {
-        println!(
-            "  - {} AI features (raw docs only - still very useful!)",
-            style("Disabled").dim()
-        );
+        println!("  - [Disabled] AI features (raw docs only - still very useful!)");
     }
 }
 
 fn show_next_steps(config: &Config) {
     println!();
-    println!("{}", style("Try these commands:").cyan().bold());
+    println!("Try these commands:");
 
     if config.api_key.is_some() {
-        println!("  {} snippet react hooks", style("manx").bold().blue());
-        println!(
-            "  {} search \"python async patterns\"",
-            style("manx").bold().blue()
-        );
-        println!("  {} doc fastapi", style("manx").bold().blue());
+        println!("  manx snippet react hooks");
+        println!("  manx search \"python async patterns\"");
+        println!("  manx doc fastapi");
     } else {
-        println!(
-            "  {} embedding download all-MiniLM-L6-v2",
-            style("manx").bold().blue()
-        );
-        println!(
-            "  {} config --api-key <your-context7-key>",
-            style("manx").bold().blue()
-        );
-        println!(
-            "  {} search \"local documentation\"",
-            style("manx").bold().blue()
-        );
+        println!("  manx embedding download all-MiniLM-L6-v2");
+        println!("  manx config --api-key <your-context7-key>");
+        println!("  manx search \"local documentation\"");
     }
 
     println!();
-    println!(
-        "{}",
-        style("Your config is saved to ~/.config/manx/config.json").dim()
-    );
+    println!("Your config is saved to ~/.config/manx/config.json");
 }
 
 fn get_llm_provider_name(config: &Config) -> &'static str {

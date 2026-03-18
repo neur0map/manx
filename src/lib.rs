@@ -12,6 +12,7 @@ pub mod export;
 pub mod rag;
 pub mod render;
 pub mod search;
+pub mod tui;
 pub mod web_search;
 
 // Re-export commonly used types

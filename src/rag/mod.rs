@@ -17,7 +17,7 @@ use docrawl::{crawl, Config as DocrawlConfig, CrawlConfig};
 // use libc::{close, dup, dup2, open, O_WRONLY};
 use serde::{Deserialize, Serialize};
 // no need for Write trait; summary prints are plain
-use indicatif::{ProgressBar, ProgressStyle};
+// Progress is shown via simple stderr prints (TUI handles interactive display)
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use walkdir::WalkDir;
@@ -642,19 +642,9 @@ impl RagSystem {
         // Monitor file discovery with a proper progress spinner
         eprintln!("\nScanning for markdown files...");
 
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.green} {msg}")
-                .unwrap(),
-        );
-        pb.enable_steady_tick(std::time::Duration::from_millis(200));
-
-        // Create a monitoring task that updates the progress bar
+        // Monitor file discovery with periodic stderr updates
         let pages_counter_clone = pages_counter.clone();
         let crawl_done_clone = crawl_done.clone();
-        let pb_clone = pb.clone();
-        let start_time = std::time::Instant::now();
         let monitor_handle = tokio::spawn(async move {
             let mut last_count = 0usize;
             let mut stable_cycles = 0;
@@ -663,35 +653,18 @@ impl RagSystem {
                 tokio::time::sleep(Duration::from_millis(500)).await;
                 let current_count = pages_counter_clone.load(Ordering::Relaxed);
                 let is_crawl_done = crawl_done_clone.load(Ordering::Relaxed);
-                let elapsed = start_time.elapsed().as_secs_f32().max(0.1);
-                let rate = (current_count as f32) / elapsed;
 
-                let message = if current_count != last_count {
+                if current_count != last_count {
+                    eprint!("\rFound {} files...", current_count);
                     last_count = current_count;
                     stable_cycles = 0;
-                    format!("Found {} files | {:.1}/s", current_count, rate)
                 } else {
                     stable_cycles += 1;
-                    if stable_cycles < 4 {
-                        format!(
-                            "Found {} files (scanning...) | {:.1}/s",
-                            current_count, rate
-                        )
-                    } else {
-                        format!(
-                            "Found {} files (finalizing...) | {:.1}/s",
-                            current_count, rate
-                        )
-                    }
-                };
+                }
 
-                pb_clone.set_message(message);
-
-                // Stop monitoring once crawl is done and we've been stable for a bit
                 if is_crawl_done && stable_cycles > 6 {
                     break;
                 }
-                // Safety exit after 30 seconds
                 if stable_cycles > 60 {
                     break;
                 }
@@ -702,10 +675,9 @@ impl RagSystem {
         let scanner_result = scanner_handle.await;
         let _scanner_files = scanner_result.unwrap_or(0);
 
-        // Stop the monitor and finish the progress bar
         monitor_handle.abort();
         let final_count = pages_counter.load(Ordering::Relaxed);
-        pb.finish_with_message(format!("Found {} markdown files", final_count));
+        eprintln!("\rFound {} markdown files", final_count);
 
         drop(tx);
 
@@ -722,16 +694,6 @@ impl RagSystem {
         if total_pages_found > 0 {
             eprintln!("\nProcessing {} markdown files...", total_pages_found);
 
-            // Create a progress bar for chunking
-            let pb = ProgressBar::new(total_pages_found as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} files ({percent}%) | {msg}")
-                    .unwrap()
-                    .progress_chars("█▉▊▋▌▍▎▏  ")
-            );
-            pb.set_message("Chunking... 0 chunks created".to_string());
-
             // Monitor chunking progress
             let mut last_processed = processed_so_far;
             let mut stall_counter = 0;
@@ -741,24 +703,18 @@ impl RagSystem {
                 let chunks_so_far = chunks_counter.load(Ordering::Relaxed);
 
                 if processed_so_far != last_processed {
-                    pb.set_position(processed_so_far as u64);
-                    pb.set_message(format!("{} chunks created", chunks_so_far));
+                    eprint!("\rProcessing: {}/{} files, {} chunks", processed_so_far, total_pages_found, chunks_so_far);
                     last_processed = processed_so_far;
                     stall_counter = 0;
                 } else {
                     stall_counter += 1;
-                    // Update spinner even when stalled to show activity
-                    pb.tick();
                 }
             }
 
-            // Ensure we show completion
-            pb.set_position(processed_so_far as u64);
-
             if processed_so_far == total_pages_found {
-                pb.finish_with_message("All files processed");
+                eprintln!("\rAll {} files processed", total_pages_found);
             } else {
-                pb.abandon_with_message("Processing incomplete - some files may have failed");
+                eprintln!("\rProcessing incomplete - some files may have failed");
             }
         } else {
             eprintln!("\nNo markdown files found to process");
@@ -782,23 +738,15 @@ impl RagSystem {
         if total_pages_found > 0 {
             // Only show spinner if we had files to process
             eprintln!("\nWaiting for workers to finish...");
-            let pb_final = ProgressBar::new_spinner();
-            pb_final.set_style(
-                ProgressStyle::default_spinner()
-                    .template("{spinner:.green} {msg}")
-                    .unwrap(),
-            );
-            pb_final.set_message("Finalizing embeddings and storing to database...");
-            pb_final.enable_steady_tick(std::time::Duration::from_millis(100));
+            eprint!("Finalizing embeddings...");
 
             for j in joins {
-                pb_final.tick();
                 if let Ok(count) = j.await {
                     total_stored += count;
                 }
             }
 
-            pb_final.finish_with_message("Index finalized");
+            eprintln!(" done");
         } else {
             // Just wait for workers without showing spinner
             for j in joins {

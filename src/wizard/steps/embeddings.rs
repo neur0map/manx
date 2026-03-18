@@ -1,27 +1,22 @@
 use anyhow::Result;
-use console::style;
-use dialoguer::theme::ColorfulTheme;
-use spinoff::{spinners, Color, Spinner};
 
 use crate::config::Config;
 use crate::rag::EmbeddingProvider;
 use crate::wizard::navigation::WizardAction;
+use crate::wizard::prompts;
 
-pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardAction> {
+pub async fn setup(config: &mut Config) -> Result<WizardAction> {
     println!();
-    println!(
-        "Choose your {} - this affects how well manx understands your searches:",
-        style("search engine").bold()
-    );
+    println!("Choose your search engine - this affects how well manx understands your searches:");
     println!();
 
-    println!("{}:", style("Hash Search (Default)").cyan());
+    println!("Hash Search (Default):");
     println!("  - Works immediately, no setup required");
     println!("  - Fast and reliable");
     println!("  - Perfect for exact keyword matching");
     println!();
 
-    println!("{}:", style("Neural Search (Recommended)").green());
+    println!("Neural Search (Recommended):");
     println!("  - Understands meaning: \"auth\" finds \"authentication\"");
     println!("  - Better results for complex queries");
     println!("  - Small download (~22MB), runs locally");
@@ -31,16 +26,12 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         "Hash Search (fast, no download)",
         "Neural Search (download small model ~22MB)",
         "Keep current setting",
-        "── Navigation ──",
-        "← Back to previous step",
-        "✕ Quit setup",
+        "-- Navigation --",
+        "<- Back to previous step",
+        "x  Quit setup",
     ];
 
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("Select search engine")
-        .items(&choices)
-        .default(1) // Default to neural
-        .interact()?;
+    let selection = prompts::select_option("Select search engine", &choices);
 
     match selection {
         0 => {
@@ -48,13 +39,13 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
             config.rag.embedding.provider = EmbeddingProvider::Hash;
             config.rag.embedding.dimension = 384;
             println!();
-            println!("{}", style("Hash search configured!").green().bold());
-            println!("{}", style("  Fast keyword search ready to use.").dim());
+            println!("Hash search configured!");
+            println!("  Fast keyword search ready to use.");
             Ok(WizardAction::Next)
         }
         1 => {
             // Neural - show model selection
-            match select_neural_model(config, theme).await? {
+            match select_neural_model(config).await? {
                 WizardAction::Next => Ok(WizardAction::Next),
                 WizardAction::Back => Ok(WizardAction::Skip), // Go back to main menu
                 WizardAction::Quit => Ok(WizardAction::Quit),
@@ -64,7 +55,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         2 => {
             // Keep current
             println!();
-            println!("{}", style("Keeping current search settings.").dim());
+            println!("Keeping current search settings.");
             Ok(WizardAction::Next)
         }
         3 => {
@@ -83,12 +74,12 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
     }
 }
 
-async fn select_neural_model(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardAction> {
+async fn select_neural_model(config: &mut Config) -> Result<WizardAction> {
     use crate::rag::providers::onnx::OnnxProvider;
 
     loop {
         println!();
-        println!("{}", style("Choose Neural Search Model").cyan().bold());
+        println!("Choose Neural Search Model");
         println!();
         println!("Available models (runs locally, no data sent to external servers):");
         println!();
@@ -140,15 +131,11 @@ async fn select_neural_model(config: &mut Config, theme: &ColorfulTheme) -> Resu
         }
 
         // Add navigation options
-        choices.push("── Navigation ──".to_string());
-        choices.push("← Back to search engine selection".to_string());
-        choices.push("✕ Quit setup".to_string());
+        choices.push("-- Navigation --".to_string());
+        choices.push("<- Back to search engine selection".to_string());
+        choices.push("x  Quit setup".to_string());
 
-        let selection = dialoguer::Select::with_theme(theme)
-            .with_prompt("Select neural search model")
-            .items(&choices)
-            .default(0) // Default to all-MiniLM-L6-v2 (recommended)
-            .interact()?;
+        let selection = prompts::select_option_owned("Select neural search model", &choices);
 
         let model_count = model_descriptions.len();
 
@@ -158,20 +145,17 @@ async fn select_neural_model(config: &mut Config, theme: &ColorfulTheme) -> Resu
                 let (selected_model, _) = model_descriptions[i];
 
                 println!();
-                println!("Selected: {}", style(selected_model).yellow().bold());
+                println!("Selected: {}", selected_model);
 
                 // Show confirmation with options
                 let confirm_choices = vec![
                     "Download and configure this model",
                     "Choose a different model",
-                    "← Back to search engine selection",
+                    "<- Back to search engine selection",
                 ];
 
-                let confirm_selection = dialoguer::Select::with_theme(theme)
-                    .with_prompt("Proceed with this model?")
-                    .items(&confirm_choices)
-                    .default(0)
-                    .interact()?;
+                let confirm_selection =
+                    prompts::select_option("Proceed with this model?", &confirm_choices);
 
                 match confirm_selection {
                     0 => {
@@ -209,41 +193,28 @@ async fn select_neural_model(config: &mut Config, theme: &ColorfulTheme) -> Resu
 
 async fn download_and_configure_model(config: &mut Config, model_name: &str) -> Result<()> {
     println!();
-    println!(
-        "{}",
-        style("Preparing to download neural search model")
-            .cyan()
-            .bold()
-    );
+    println!("Preparing to download neural search model");
 
     // Get the appropriate size description for the model
     let size_desc = get_model_size_description(model_name);
 
     println!();
-    println!(
-        "  {} {}",
-        style("Model:").dim(),
-        style(model_name).yellow().bold()
-    );
-    println!("  {} {}", style("Size:").dim(), style(size_desc).yellow());
-    println!(
-        "  {} Downloaded to local storage (no data sent to external servers)",
-        style("Privacy:").dim()
-    );
+    println!("  Model: {}", model_name);
+    println!("  Size: {}", size_desc);
+    println!("  Privacy: Downloaded to local storage (no data sent to external servers)");
     println!();
 
     // Show what files will be downloaded
-    println!("{}", style("Downloading 3 files from HuggingFace:").cyan());
-    println!("  {} model.onnx (main neural network)", style("1.").dim());
-    println!("  {} tokenizer.json (text processing)", style("2.").dim());
-    println!("  {} config.json (model configuration)", style("3.").dim());
+    println!("Downloading 3 files from HuggingFace:");
+    println!("  1. model.onnx (main neural network)");
+    println!("  2. tokenizer.json (text processing)");
+    println!("  3. config.json (model configuration)");
     println!();
 
-    let mut spinner = Spinner::new(
-        spinners::Dots12,
-        format!("Downloading {} {}...", model_name, size_desc),
-        Color::Cyan,
-    );
+    let spinner = prompts::show_spinner(&format!(
+        "Downloading {} {}...",
+        model_name, size_desc
+    ));
 
     // Use the ONNX provider to download
     use crate::rag::providers::onnx::OnnxProvider;
@@ -251,8 +222,7 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
     match OnnxProvider::download_model(model_name, false).await {
         Ok(()) => {
             spinner.success(&format!(
-                "{} Neural search model installed successfully!",
-                style("OK").green().bold()
+                "[OK] Neural search model installed successfully!"
             ));
 
             // Configure the provider
@@ -266,24 +236,12 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
 
                     // Show installation details
                     println!();
-                    println!("{}", style("Installation Summary:").green().bold());
-                    println!("  {} {}", style("Model:").dim(), style(model_name).cyan());
-                    println!(
-                        "  {} {}D",
-                        style("Embedding dimension:").dim(),
-                        style(metadata.dimension.to_string()).cyan()
-                    );
-                    println!(
-                        "  {} {:.1} MB",
-                        style("Downloaded size:").dim(),
-                        style(metadata.size_mb.to_string()).cyan()
-                    );
+                    println!("Installation Summary:");
+                    println!("  Model: {}", model_name);
+                    println!("  Embedding dimension: {}D", metadata.dimension);
+                    println!("  Downloaded size: {:.1} MB", metadata.size_mb);
                     if let Some(path) = &metadata.model_path {
-                        println!(
-                            "  {} {}",
-                            style("Location:").dim(),
-                            style(path.display().to_string()).dim()
-                        );
+                        println!("  Location: {}", path.display());
                     }
                 }
             }
@@ -292,53 +250,27 @@ async fn download_and_configure_model(config: &mut Config, model_name: &str) -> 
             if let Err(e) = config.rag.embedding.detect_and_update_dimension().await {
                 println!();
                 println!(
-                    "{}",
-                    style(format!("Warning: Could not detect model dimension: {}", e)).yellow()
+                    "Warning: Could not detect model dimension: {}",
+                    e
                 );
-                println!("{}", style("   Using default dimension (384)").dim());
+                println!("   Using default dimension (384)");
                 config.rag.embedding.dimension = 384;
             }
 
             println!();
-            println!("{}", style("Neural search is ready!").green().bold());
-            println!(
-                "{}",
-                style("   Your searches will now understand context and meaning.").dim()
-            );
-            println!(
-                "{}",
-                style("   Try: manx search \"authentication patterns\"").dim()
-            );
+            println!("Neural search is ready!");
+            println!("   Your searches will now understand context and meaning.");
+            println!("   Try: manx search \"authentication patterns\"");
         }
         Err(e) => {
-            spinner.fail(&format!(
-                "{} Download failed: {}",
-                style("Error").red().bold(),
-                e
-            ));
+            spinner.fail(&format!("[FAIL] Download failed: {}", e));
 
             println!();
-            println!(
-                "{}",
-                style("Download unsuccessful - falling back to hash search")
-                    .yellow()
-                    .bold()
-            );
+            println!("Download unsuccessful - falling back to hash search");
             println!();
-            println!(
-                "{}",
-                style("Hash search will still work great for exact matches!").dim()
-            );
-            println!(
-                "{}",
-                style("You can try downloading the neural model later with:").dim()
-            );
-            println!(
-                "  {}",
-                style(format!("manx embedding download {}", model_name))
-                    .cyan()
-                    .bold()
-            );
+            println!("Hash search will still work great for exact matches!");
+            println!("You can try downloading the neural model later with:");
+            println!("  manx embedding download {}", model_name);
 
             config.rag.embedding.provider = EmbeddingProvider::Hash;
             config.rag.embedding.dimension = 384;

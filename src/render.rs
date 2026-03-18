@@ -1,10 +1,10 @@
 use crate::client::{CodeExample, DocSection, Documentation, SearchResult};
 use crate::config::Config;
 use anyhow::Result;
-use colored::*;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::io;
 
+/// Renderer handles non-interactive output (JSON/quiet mode, piped output).
+/// Interactive display is handled by the TUI module.
 pub struct Renderer {
     quiet_mode: bool,
     terminal_width: usize,
@@ -13,7 +13,9 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(quiet: bool) -> Self {
-        let terminal_width = termsize::get().map(|size| size.cols as usize).unwrap_or(80);
+        let terminal_width = crossterm::terminal::size()
+            .map(|(cols, _)| cols as usize)
+            .unwrap_or(80);
         let config = Config::load().ok();
 
         Self {
@@ -34,39 +36,24 @@ impl Renderer {
         limit: Option<usize>,
     ) -> io::Result<()> {
         if self.quiet_mode {
-            // JSON output for scripting
             println!("{}", serde_json::to_string_pretty(results)?);
             return Ok(());
         }
 
         if results.is_empty() {
-            println!("{}", "No results found.".yellow().bold());
+            println!("No results found.");
             return Ok(());
         }
 
-        // Compact, high-contrast summary header (emoji-free)
-        let count_label = if results.len() == 1 {
-            "Result"
-        } else {
-            "Results"
-        };
-        println!(
-            "{}: {}",
-            count_label.white().bold(),
-            results.len().to_string().cyan().bold()
-        );
+        let count_label = if results.len() == 1 { "Result" } else { "Results" };
+        println!("{}: {}", count_label, results.len());
 
         if let Some((library_title, library_id)) = library_info {
-            println!(
-                "Using library: {} ({})\n",
-                library_title.bright_blue().bold(),
-                library_id.white().dimmed()
-            );
+            println!("Using library: {} ({})\n", library_title, library_id);
         } else {
             println!();
         }
 
-        // Use provided limit or default to 10 (0 means unlimited)
         let display_limit = limit.unwrap_or(10);
         let total_results = results.len();
         let results_to_show = if display_limit == 0 {
@@ -81,79 +68,59 @@ impl Renderer {
 
         if display_limit > 0 && total_results > display_limit {
             println!(
-                "\n{}",
-                format!(
-                    "... and {} more results. Use --limit 0 to show all, or --save-all to export.",
-                    total_results - display_limit
-                )
-                .yellow()
+                "\n... and {} more results. Use --limit 0 to show all, or --save-all to export.",
+                total_results - display_limit
             );
         }
 
-        println!(
-            "\n{}",
-            "Tip: Use 'manx get <id>' to expand a result.".dimmed()
-        );
         Ok(())
     }
 
     fn render_search_result(&self, num: usize, result: &SearchResult) -> io::Result<()> {
-        let separator = "─".repeat(self.terminal_width.min(70));
+        let separator = "-".repeat(self.terminal_width.min(70));
+        let title = Self::strip_emojis(&result.title);
 
-        println!(
-            "{} {} {}",
-            format!("[{}]", num).cyan().bold(),
-            result.title.bright_white().bold(),
-            format!("({})", result.library).white().dimmed()
-        );
-
-        println!("  {}: {}", "ID".white().dimmed(), result.id.bright_yellow());
+        println!("[{}] {} ({})", num, title, result.library);
+        println!("  ID: {}", result.id);
 
         if let Some(url) = &result.url {
-            println!(
-                "  {}: {}",
-                "URL".white().dimmed(),
-                url.bright_blue().underline()
-            );
+            println!("  URL: {}", url);
         }
 
         println!();
 
-        // Parse and display Context7 content in a more readable format
-        if result.excerpt.contains("CODE SNIPPETS") {
-            self.render_context7_excerpt(&result.excerpt)?;
+        let excerpt = Self::strip_emojis(&result.excerpt);
+        if excerpt.contains("CODE SNIPPETS") {
+            self.render_context7_excerpt(&excerpt)?;
         } else {
-            // Show more of the excerpt with higher contrast
             let max_width = self.terminal_width.saturating_sub(4).max(60);
-            let text = self.truncate_text(&result.excerpt, max_width);
-            println!("  {}", text.white());
+            let text = self.truncate_text(&excerpt, max_width);
+            println!("  {}", text);
         }
 
-        println!("{}\n", separator.white().dimmed());
+        println!("{}\n", separator);
         Ok(())
     }
 
     fn render_context7_excerpt(&self, content: &str) -> io::Result<()> {
-        // Find the first meaningful content after CODE SNIPPETS header
         let lines: Vec<&str> = content.lines().collect();
         let mut found_title = false;
 
         for line in lines.iter().take(10) {
-            // Only show first few lines for excerpt
             if line.starts_with("TITLE: ") && !found_title {
                 let title = &line[7..];
-                println!("  {}", title.white().bold());
+                println!("  {}", title);
                 found_title = true;
             } else if line.starts_with("DESCRIPTION: ") && found_title {
                 let desc = &line[13..];
                 let truncated = self.truncate_text(desc, self.terminal_width - 4);
-                println!("  {}", truncated.dimmed());
+                println!("  {}", truncated);
                 break;
             }
         }
 
         if !found_title {
-            println!("  {}", "Documentation snippets available...".dimmed());
+            println!("  Documentation snippets available...");
         }
 
         Ok(())
@@ -165,24 +132,20 @@ impl Renderer {
             return Ok(());
         }
 
-        // Header
         println!(
             "\n{} {}",
-            doc.library.name.cyan().bold(),
+            doc.library.name,
             doc.library
                 .version
                 .as_ref()
                 .map(|v| format!("v{}", v))
                 .unwrap_or_default()
-                .white()
-                .dimmed()
         );
 
         if let Some(desc) = &doc.library.description {
-            println!("{}\n", desc.dimmed());
+            println!("{}\n", desc);
         }
 
-        // Sections
         for section in &doc.sections {
             self.render_doc_section(section)?;
         }
@@ -191,15 +154,16 @@ impl Renderer {
     }
 
     fn render_doc_section(&self, section: &DocSection) -> io::Result<()> {
-        println!("\n{}", section.title.bright_green().bold());
+        let title = Self::strip_emojis(&section.title);
+        println!("\n{}", title);
 
         if let Some(url) = &section.url {
-            println!("{}: {}", "Source".dimmed(), url.blue().underline());
+            println!("Source: {}", url);
         }
 
-        println!("\n{}", section.content);
+        let content = Self::strip_emojis(&section.content);
+        println!("\n{}", content);
 
-        // Code examples
         for example in &section.code_examples {
             self.render_code_example(example)?;
         }
@@ -209,123 +173,37 @@ impl Renderer {
 
     fn render_code_example(&self, example: &CodeExample) -> io::Result<()> {
         println!(
-            "\n{} {}:",
-            ">".cyan(),
+            "\n> {}:",
             example
                 .description
                 .as_ref()
                 .unwrap_or(&"Example".to_string())
-                .yellow()
         );
-
-        println!("{}", format!("```{}", example.language).dimmed());
-
-        // Simple syntax highlighting for common languages
-        let highlighted = self.highlight_code(&example.code, &example.language);
-        println!("{}", highlighted);
-
-        println!("{}", "```".dimmed());
+        println!("```{}", example.language);
+        println!("{}", example.code);
+        println!("```");
         Ok(())
     }
 
-    fn highlight_code(&self, code: &str, language: &str) -> String {
+    pub fn show_progress(&self, message: &str) -> ProgressHandle {
         if self.quiet_mode {
-            return code.to_string();
+            return ProgressHandle::hidden();
         }
-
-        // Basic syntax highlighting
-        match language {
-            "python" | "py" => self.highlight_python(code),
-            "javascript" | "js" | "typescript" | "ts" => self.highlight_javascript(code),
-            "rust" | "rs" => self.highlight_rust(code),
-            _ => code.to_string(),
-        }
-    }
-
-    fn highlight_python(&self, code: &str) -> String {
-        let keywords = [
-            "def", "class", "import", "from", "return", "if", "else", "elif", "for", "while", "in",
-            "as", "with", "try", "except", "finally", "raise", "yield", "lambda",
-        ];
-
-        let mut highlighted = code.to_string();
-        for keyword in &keywords {
-            let _pattern = format!(r"\b{}\b", keyword);
-            highlighted = highlighted.replace(keyword, &keyword.magenta().to_string());
-        }
-        highlighted
-    }
-
-    fn highlight_javascript(&self, code: &str) -> String {
-        let keywords = [
-            "function", "const", "let", "var", "return", "if", "else", "for", "while", "class",
-            "extends", "import", "export", "async", "await", "try", "catch", "throw", "new",
-        ];
-
-        let mut highlighted = code.to_string();
-        for keyword in &keywords {
-            let _pattern = format!(r"\b{}\b", keyword);
-            highlighted = highlighted.replace(keyword, &keyword.blue().to_string());
-        }
-        highlighted
-    }
-
-    fn highlight_rust(&self, code: &str) -> String {
-        let keywords = [
-            "fn", "let", "mut", "const", "use", "mod", "pub", "impl", "struct", "enum", "trait",
-            "where", "async", "await", "match", "if", "else", "for", "while", "loop", "return",
-        ];
-
-        let mut highlighted = code.to_string();
-        for keyword in &keywords {
-            let _pattern = format!(r"\b{}\b", keyword);
-            highlighted = highlighted.replace(keyword, &keyword.red().to_string());
-        }
-        highlighted
-    }
-
-    fn truncate_text(&self, text: &str, max_len: usize) -> String {
-        if text.len() <= max_len {
-            text.to_string()
-        } else {
-            // Try to break at a word boundary
-            let truncate_at = max_len - 3;
-            if let Some(last_space) = text[..truncate_at].rfind(' ') {
-                format!("{}...", &text[..last_space])
-            } else {
-                format!("{}...", &text[..truncate_at])
-            }
-        }
-    }
-
-    pub fn show_progress(&self, message: &str) -> ProgressBar {
-        if self.quiet_mode {
-            return ProgressBar::hidden();
-        }
-
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-                .template("{spinner:.cyan} {msg}")
-                .unwrap(),
-        );
-        pb.set_message(message.to_string());
-        pb.enable_steady_tick(std::time::Duration::from_millis(100));
-        pb
+        eprint!("{}", message);
+        ProgressHandle { active: true }
     }
 
     pub fn print_error(&self, error: &str) {
         if self.quiet_mode {
             eprintln!("{{\"error\": \"{}\"}}", error);
         } else {
-            eprintln!("{} {}", "ERROR:".red().bold(), error.red());
+            eprintln!("ERROR: {}", error);
         }
     }
 
     pub fn print_success(&self, message: &str) {
         if !self.quiet_mode {
-            println!("{} {}", "OK".green().bold(), message.green());
+            println!("OK {}", message);
         }
     }
 
@@ -344,20 +222,14 @@ impl Renderer {
             return Ok(());
         }
 
-        // Header (emoji-free)
-        println!(
-            "\n{} {}",
-            library.white().bold(),
-            "Documentation".white().dimmed()
-        );
+        println!("\n{} Documentation", library);
 
-        // Parse and render the Context7 format with limit
-        self.parse_and_render_context7_content_with_limit(content, limit)?;
+        let clean_content = Self::strip_emojis(content);
+        self.parse_and_render_context7_content_with_limit(&clean_content, limit)?;
 
-        // Cache individual sections for the open command
         let sections = self.extract_doc_sections(content);
         if self.cache_doc_sections(library, &sections).is_err() {
-            // Silently continue if caching fails
+            // Silently continue
         }
 
         Ok(())
@@ -371,30 +243,24 @@ impl Renderer {
         let lines: Vec<&str> = content.lines().collect();
         let mut i = 0;
         let mut sections_shown = 0;
-        let section_limit = limit.unwrap_or(10); // Default to 10 sections
+        let section_limit = limit.unwrap_or(10);
 
         while i < lines.len() {
-            // Check if we've reached the limit (but only if limit is not 0, which means unlimited)
             if limit.is_some() && limit.unwrap() > 0 && sections_shown >= section_limit {
                 let remaining = self.count_remaining_sections(&lines[i..]);
                 if remaining > 0 {
                     println!(
-                        "\n{}",
-                        format!(
-                            "... and {} more sections. Use --limit 0 to show all.",
-                            remaining
-                        )
-                        .yellow()
+                        "\n... and {} more sections. Use --limit 0 to show all.",
+                        remaining
                     );
                 }
                 break;
             }
             let line = lines[i];
 
-            // Skip headers and separators
             if line.starts_with("========================") {
                 if i + 1 < lines.len() && lines[i + 1].starts_with("CODE SNIPPETS") {
-                    println!("\n{}", "Code Examples & Snippets".green().bold());
+                    println!("\nCode Examples & Snippets");
                     i += 2;
                     continue;
                 }
@@ -402,78 +268,59 @@ impl Renderer {
                 continue;
             }
 
-            // Parse title blocks
             if let Some(title) = line.strip_prefix("TITLE: ") {
                 sections_shown += 1;
-                println!(
-                    "\n{} {}",
-                    format!("[{}]", sections_shown).cyan().bold(),
-                    title.white().bold()
-                );
+                println!("\n[{}] {}", sections_shown, title);
                 i += 1;
 
-                // Look for description
                 if i < lines.len() && lines[i].starts_with("DESCRIPTION: ") {
-                    let desc = &lines[i][13..];
-                    println!("{}", desc.dimmed());
+                    println!("{}", &lines[i][13..]);
                     i += 1;
                 }
 
-                // Skip empty lines
                 while i < lines.len() && lines[i].trim().is_empty() {
                     i += 1;
                 }
 
-                // Look for source
                 while i < lines.len() && lines[i].starts_with("SOURCE: ") {
-                    let source = &lines[i][8..];
-                    println!("{}: {}", "Source".dimmed(), source.blue());
+                    println!("Source: {}", &lines[i][8..]);
                     i += 1;
                 }
 
-                // Skip empty lines
                 while i < lines.len() && lines[i].trim().is_empty() {
                     i += 1;
                 }
 
-                // Look for language and code block
                 if i < lines.len() && lines[i].starts_with("LANGUAGE: ") {
                     let language = &lines[i][10..];
                     i += 1;
 
-                    // Skip "CODE:" line
                     if i < lines.len() && lines[i].starts_with("CODE:") {
                         i += 1;
                     }
 
-                    // Parse code block
                     if i < lines.len() && lines[i].starts_with("```") {
-                        println!("\n{} {}:", ">".cyan(), language.yellow());
-                        println!("{}", lines[i].dimmed());
+                        println!("\n> {}:", language);
+                        println!("{}", lines[i]);
                         i += 1;
 
-                        // Print code content
                         while i < lines.len() && !lines[i].starts_with("```") {
-                            let highlighted =
-                                self.highlight_code(lines[i], &language.to_lowercase());
-                            println!("{}", highlighted);
+                            println!("{}", lines[i]);
                             i += 1;
                         }
 
-                        // Print closing ```
                         if i < lines.len() && lines[i].starts_with("```") {
-                            println!("{}", lines[i].dimmed());
+                            println!("{}", lines[i]);
                             i += 1;
                         }
                     }
                 }
 
-                // Skip separators
-                while i < lines.len() && (lines[i].trim().is_empty() || lines[i].starts_with("---"))
+                while i < lines.len()
+                    && (lines[i].trim().is_empty() || lines[i].starts_with("---"))
                 {
                     if lines[i].starts_with("---") {
-                        let separator = "─".repeat(self.terminal_width.min(60));
-                        println!("\n{}", separator.dimmed());
+                        println!("\n{}", "-".repeat(self.terminal_width.min(60)));
                     }
                     i += 1;
                 }
@@ -482,14 +329,6 @@ impl Renderer {
             }
 
             i += 1;
-        }
-
-        // Add tip message about opening sections
-        if sections_shown > 0 {
-            println!(
-                "\n{}",
-                "Tip: Use 'manx open <section-id>' to expand a specific section.".dimmed()
-            );
         }
 
         Ok(())
@@ -510,12 +349,10 @@ impl Renderer {
         while i < lines.len() {
             let line = lines[i];
 
-            // Look for title blocks (start of a section)
             if let Some(_title) = line.strip_prefix("TITLE: ") {
                 let section_start = i;
                 let mut section_end = lines.len();
 
-                // Find the end of this section (next TITLE or end of content)
                 for (j, line) in lines.iter().enumerate().skip(i + 1) {
                     if line.starts_with("TITLE: ") {
                         section_end = j;
@@ -523,7 +360,6 @@ impl Renderer {
                     }
                 }
 
-                // Extract the complete section
                 let section_lines = &lines[section_start..section_end];
                 let section_content = section_lines.join("\n").trim().to_string();
 
@@ -546,13 +382,7 @@ impl Renderer {
             return Ok(());
         }
 
-        println!(
-            "\n{} {}",
-            id.yellow().bold(),
-            "Documentation Section".white().dimmed()
-        );
-
-        // Parse and render just this section
+        println!("\n{} - Documentation Section", id);
         self.render_single_section(content)?;
 
         Ok(())
@@ -565,10 +395,9 @@ impl Renderer {
         while i < lines.len() {
             let line = lines[i];
 
-            // Skip headers and separators
             if line.starts_with("========================") {
                 if i + 1 < lines.len() && lines[i + 1].starts_with("CODE SNIPPETS") {
-                    println!("\n{}", "Code Examples & Snippets".green().bold());
+                    println!("\nCode Examples & Snippets");
                     i += 2;
                     continue;
                 }
@@ -576,73 +405,58 @@ impl Renderer {
                 continue;
             }
 
-            // Parse title blocks (but don't add numbering)
             if let Some(title) = line.strip_prefix("TITLE: ") {
-                println!("\n{}", title.white().bold());
+                println!("\n{}", title);
                 i += 1;
 
-                // Look for description
                 if i < lines.len() && lines[i].starts_with("DESCRIPTION: ") {
-                    let desc = &lines[i][13..];
-                    println!("{}", desc.dimmed());
+                    println!("{}", &lines[i][13..]);
                     i += 1;
                 }
 
-                // Skip empty lines
                 while i < lines.len() && lines[i].trim().is_empty() {
                     i += 1;
                 }
 
-                // Look for source
                 while i < lines.len() && lines[i].starts_with("SOURCE: ") {
-                    let source = &lines[i][8..];
-                    println!("{}: {}", "Source".dimmed(), source.blue());
+                    println!("Source: {}", &lines[i][8..]);
                     i += 1;
                 }
 
-                // Skip empty lines
                 while i < lines.len() && lines[i].trim().is_empty() {
                     i += 1;
                 }
 
-                // Look for language and code block
                 if i < lines.len() && lines[i].starts_with("LANGUAGE: ") {
                     let language = &lines[i][10..];
                     i += 1;
 
-                    // Skip "CODE:" line
                     if i < lines.len() && lines[i].starts_with("CODE:") {
                         i += 1;
                     }
 
-                    // Parse code block
                     if i < lines.len() && lines[i].starts_with("```") {
-                        println!("\n{} {}:", ">".cyan(), language.yellow());
-                        println!("{}", lines[i].dimmed());
+                        println!("\n> {}:", language);
+                        println!("{}", lines[i]);
                         i += 1;
 
-                        // Print code content
                         while i < lines.len() && !lines[i].starts_with("```") {
-                            let highlighted =
-                                self.highlight_code(lines[i], &language.to_lowercase());
-                            println!("{}", highlighted);
+                            println!("{}", lines[i]);
                             i += 1;
                         }
 
-                        // Print closing ```
                         if i < lines.len() && lines[i].starts_with("```") {
-                            println!("{}", lines[i].dimmed());
+                            println!("{}", lines[i]);
                             i += 1;
                         }
                     }
                 }
 
-                // Skip separators
-                while i < lines.len() && (lines[i].trim().is_empty() || lines[i].starts_with("---"))
+                while i < lines.len()
+                    && (lines[i].trim().is_empty() || lines[i].starts_with("---"))
                 {
                     if lines[i].starts_with("---") {
-                        let separator = "─".repeat(self.terminal_width.min(60));
-                        println!("\n{}", separator.dimmed());
+                        println!("\n{}", "-".repeat(self.terminal_width.min(60)));
                     }
                     i += 1;
                 }
@@ -673,5 +487,84 @@ impl Renderer {
             }
         }
         Ok(())
+    }
+
+    pub fn strip_emojis(text: &str) -> String {
+        text.chars()
+            .filter(|c| {
+                let cp = *c as u32;
+                cp < 0x2600
+                    || (cp >= 0x2700 && cp < 0x2800)
+                    || (cp >= 0x2000 && cp < 0x2100)
+                    || (cp >= 0x2100 && cp < 0x2200)
+                    || matches!(cp, 0x2500..=0x257F)
+            })
+            .filter(|c| {
+                let cp = *c as u32;
+                !matches!(cp,
+                    0x1F300..=0x1F9FF
+                    | 0x2600..=0x26FF
+                    | 0xFE00..=0xFE0F
+                    | 0x200D
+                    | 0x20E3
+                    | 0x2702..=0x27B0
+                    | 0x2934..=0x2935
+                    | 0x25AA..=0x25AB
+                    | 0x25B6 | 0x25C0
+                    | 0x25FB..=0x25FE
+                    | 0x2B05..=0x2B07
+                    | 0x2B1B..=0x2B1C
+                    | 0x2B50 | 0x2B55
+                    | 0x3030 | 0x303D
+                    | 0x3297 | 0x3299
+                    | 0x2139
+                    | 0x2328
+                    | 0x23CF
+                    | 0x23E9..=0x23F3
+                    | 0x23F8..=0x23FA
+                )
+            })
+            .collect::<String>()
+            .replace("  ", " ")
+            .trim()
+            .to_string()
+    }
+
+    fn truncate_text(&self, text: &str, max_len: usize) -> String {
+        if text.len() <= max_len {
+            text.to_string()
+        } else {
+            let truncate_at = max_len - 3;
+            if let Some(last_space) = text[..truncate_at].rfind(' ') {
+                format!("{}...", &text[..last_space])
+            } else {
+                format!("{}...", &text[..truncate_at])
+            }
+        }
+    }
+}
+
+/// Simple progress handle replacing indicatif::ProgressBar
+pub struct ProgressHandle {
+    active: bool,
+}
+
+impl ProgressHandle {
+    pub fn hidden() -> Self {
+        Self { active: false }
+    }
+
+    pub fn finish_and_clear(&self) {
+        if self.active {
+            eprint!("\r\x1b[K"); // clear line
+        }
+    }
+
+    pub fn set_message(&self, _msg: impl Into<String>) {}
+
+    pub fn finish_with_message(&self, _msg: impl Into<String>) {
+        if self.active {
+            eprint!("\r\x1b[K");
+        }
     }
 }

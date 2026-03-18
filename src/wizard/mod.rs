@@ -1,6 +1,4 @@
 use anyhow::Result;
-use console::{style, Term};
-use dialoguer::theme::ColorfulTheme;
 
 mod navigation;
 mod prompts;
@@ -11,30 +9,21 @@ mod validators;
 use crate::config::Config;
 
 pub struct SetupWizard {
-    term: Term,
-    theme: ColorfulTheme,
     config: Config,
 }
 
 impl SetupWizard {
     pub fn new() -> Result<Self> {
-        let term = Term::stdout();
-        let theme = themes::create_theme();
         let config = Config::load().unwrap_or_default();
 
-        Ok(Self {
-            term,
-            theme,
-            config,
-        })
+        Ok(Self { config })
     }
 
     pub async fn run(&mut self) -> Result<()> {
         use navigation::WizardStep;
 
-        // Clear screen and show welcome
-        self.term.clear_screen()?;
-        steps::welcome::show(&self.term)?;
+        // Show welcome
+        steps::welcome::show()?;
 
         // Check if reconfiguring
         if self.check_existing_config()? {
@@ -52,7 +41,7 @@ impl SetupWizard {
                 }
                 WizardStep::Context7 => {
                     navigation::show_step_header(&current_step);
-                    let action = steps::context7::setup(&mut self.config, &self.theme).await?;
+                    let action = steps::context7::setup(&mut self.config).await?;
                     current_step = self.handle_navigation_action(action, &current_step)?;
                     if current_step == WizardStep::Complete {
                         break;
@@ -60,7 +49,7 @@ impl SetupWizard {
                 }
                 WizardStep::Embedding => {
                     navigation::show_step_header(&current_step);
-                    let action = steps::embeddings::setup(&mut self.config, &self.theme).await?;
+                    let action = steps::embeddings::setup(&mut self.config).await?;
                     current_step = self.handle_navigation_action(action, &current_step)?;
                     if current_step == WizardStep::Complete {
                         break;
@@ -68,7 +57,7 @@ impl SetupWizard {
                 }
                 WizardStep::Llm => {
                     navigation::show_step_header(&current_step);
-                    let action = steps::llm::setup(&mut self.config, &self.theme).await?;
+                    let action = steps::llm::setup(&mut self.config).await?;
                     current_step = self.handle_navigation_action(action, &current_step)?;
                     if current_step == WizardStep::Complete {
                         break;
@@ -76,7 +65,7 @@ impl SetupWizard {
                 }
                 WizardStep::Summary => {
                     navigation::show_step_header(&current_step);
-                    let action = steps::summary::show_and_test(&self.config, &self.theme).await?;
+                    let action = steps::summary::show_and_test(&self.config).await?;
                     current_step = self.handle_navigation_action(action, &current_step)?;
                     if current_step == WizardStep::Complete {
                         break;
@@ -138,19 +127,16 @@ impl SetupWizard {
             || self.config.rag.embedding.provider != crate::rag::EmbeddingProvider::Hash
         {
             println!();
-            println!(
-                "{}",
-                style("Existing configuration detected!").yellow().bold()
-            );
+            println!("Existing configuration detected!");
             println!("Would you like to reconfigure manx?");
             println!();
 
             let reconfigure =
-                crate::wizard::prompts::confirm_action(&self.theme, "Reconfigure manx?", false)?;
+                crate::wizard::prompts::confirm_action("Reconfigure manx?", false)?;
 
             if !reconfigure {
                 println!();
-                println!("{}", style("Setup cancelled.").dim());
+                println!("Setup cancelled.");
                 return Ok(true);
             }
         }
@@ -159,38 +145,23 @@ impl SetupWizard {
 
     fn show_completion_message(&self) -> Result<()> {
         println!();
-        println!("{}", style("─".repeat(50)).dim());
+        println!("{}", "-".repeat(50));
         println!();
-        println!("{} manx is ready!", style("Setup complete!").green().bold());
+        println!("Setup complete! manx is ready!");
         println!();
         println!("Get started with these commands:");
 
         if self.config.api_key.is_some() {
-            println!("  {} snippet react hooks", style("manx").bold().blue());
-            println!(
-                "  {} search \"authentication patterns\"",
-                style("manx").bold().blue()
-            );
-            println!("  {} doc fastapi middleware", style("manx").bold().blue());
+            println!("  manx snippet react hooks");
+            println!("  manx search \"authentication patterns\"");
+            println!("  manx doc fastapi middleware");
         } else {
-            println!(
-                "  {} search \"rust error handling\"",
-                style("manx").bold().blue()
-            );
-            println!(
-                "  {} config --api-key <key>  {} {}",
-                style("manx").bold().blue(),
-                style("# Add Context7 later").dim(),
-                style("(optional)").dim()
-            );
+            println!("  manx search \"rust error handling\"");
+            println!("  manx config --api-key <key>  # Add Context7 later (optional)");
         }
 
         println!();
-        println!(
-            "{} {}",
-            style("Need help? Try:").dim(),
-            style("manx --help").bold()
-        );
+        println!("Need help? Try: manx --help");
         println!();
 
         Ok(())

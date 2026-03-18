@@ -1,26 +1,21 @@
 use anyhow::Result;
-use console::style;
-use dialoguer::theme::ColorfulTheme;
 
 use crate::config::Config;
 use crate::rag::llm::LlmProvider;
-use crate::wizard::{navigation::WizardAction, validators};
+use crate::wizard::{navigation::WizardAction, prompts, validators};
 
-pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardAction> {
+pub async fn setup(config: &mut Config) -> Result<WizardAction> {
     println!();
-    println!(
-        "Enable {} for comprehensive answers with explanations?",
-        style("AI features").bold()
-    );
+    println!("Enable AI features for comprehensive answers with explanations?");
     println!();
-    println!("{}:", style("AI features provide").green());
-    println!("  • Detailed explanations with code examples");
-    println!("  • Answers synthesized from multiple sources");
-    println!("  • Source citations for verification");
+    println!("AI features provide:");
+    println!("  * Detailed explanations with code examples");
+    println!("  * Answers synthesized from multiple sources");
+    println!("  * Source citations for verification");
     println!();
-    println!("{}:", style("Without AI").dim());
-    println!("  • Raw documentation snippets (still very useful!)");
-    println!("  • Faster responses, no API costs");
+    println!("Without AI:");
+    println!("  * Raw documentation snippets (still very useful!)");
+    println!("  * Faster responses, no API costs");
     println!();
 
     let choices = vec![
@@ -30,34 +25,24 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         "Groq (fastest inference)",
         "Z.AI (GLM Coding Plan) - affordable, code-optimized",
         "I'll set this up later",
-        "── Navigation ──",
-        "← Back to previous step",
-        "✕ Quit setup",
+        "-- Navigation --",
+        "<- Back to previous step",
+        "x  Quit setup",
     ];
 
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("Add AI features?")
-        .items(&choices)
-        .default(0) // Default to skip, don't assume users want AI
-        .interact()?;
+    let selection = prompts::select_option("Add AI features?", &choices);
 
     match selection {
         0 => {
             // Skip AI features
             println!();
-            println!(
-                "{}",
-                style("AI features skipped - manx will work great without them!").dim()
-            );
-            println!(
-                "{}",
-                style("💡 You can enable AI later with: manx config --openai-api <key>").dim()
-            );
+            println!("AI features skipped - manx will work great without them!");
+            println!("You can enable AI later with: manx config --openai-api <key>");
             Ok(WizardAction::Next)
         }
         1 => {
             // OpenAI
-            if setup_openai(config, theme)? {
+            if setup_openai(config)? {
                 Ok(WizardAction::Next)
             } else {
                 Ok(WizardAction::Skip) // User cancelled API key input
@@ -65,7 +50,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         }
         2 => {
             // Anthropic
-            if setup_anthropic(config, theme)? {
+            if setup_anthropic(config)? {
                 Ok(WizardAction::Next)
             } else {
                 Ok(WizardAction::Skip)
@@ -73,7 +58,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         }
         3 => {
             // Groq
-            if setup_groq(config, theme)? {
+            if setup_groq(config)? {
                 Ok(WizardAction::Next)
             } else {
                 Ok(WizardAction::Skip)
@@ -81,7 +66,7 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         }
         4 => {
             // Zai
-            if setup_zai(config, theme)? {
+            if setup_zai(config)? {
                 Ok(WizardAction::Next)
             } else {
                 Ok(WizardAction::Skip)
@@ -90,11 +75,8 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
         5 => {
             // Skip for now
             println!();
-            println!("{}", style("AI setup deferred.").dim());
-            println!(
-                "{}",
-                style("Use 'manx config' to set up AI providers later.").dim()
-            );
+            println!("AI setup deferred.");
+            println!("Use 'manx config' to set up AI providers later.");
             Ok(WizardAction::Next)
         }
         6 => {
@@ -113,135 +95,108 @@ pub async fn setup(config: &mut Config, theme: &ColorfulTheme) -> Result<WizardA
     }
 }
 
-fn setup_openai(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
+fn setup_openai(config: &mut Config) -> Result<bool> {
     println!();
-    println!("{}", style("Setting up OpenAI...").cyan());
-    println!(
-        "{}",
-        style("Get your API key from: https://platform.openai.com/api-keys").dim()
-    );
+    println!("Setting up OpenAI...");
+    println!("Get your API key from: https://platform.openai.com/api-keys");
     println!();
 
-    let api_key: String = dialoguer::Input::with_theme(theme)
-        .with_prompt("Enter your OpenAI API key (or press Enter to skip)")
-        .allow_empty(true)
-        .validate_with(|input: &String| {
-            if input.is_empty() {
-                Ok(())
-            } else if !validators::validate_api_key(input, "OpenAI") {
-                Err("Invalid API key format - should start with 'sk-'")
-            } else {
-                Ok(())
-            }
-        })
-        .interact_text()?;
+    let api_key =
+        prompts::get_input("Enter your OpenAI API key (or press Enter to skip)");
 
     if api_key.is_empty() {
-        println!("{}", style("OpenAI setup skipped.").dim());
+        println!("OpenAI setup skipped.");
+        return Ok(false);
+    }
+
+    if !validators::validate_api_key(&api_key, "OpenAI") {
+        println!("Invalid API key format - should start with 'sk-'");
         return Ok(false);
     }
 
     // Select OpenAI model
-    let model = select_openai_model(theme)?;
+    let model = select_openai_model()?;
 
     config.llm.openai_api_key = Some(api_key);
     config.llm.preferred_provider = LlmProvider::OpenAI;
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("OpenAI configured!").green().bold());
-    println!("{}", style(format!("  Using {}", model)).dim());
+    println!("OpenAI configured!");
+    println!("  Using {}", model);
 
     Ok(true)
 }
 
-fn setup_anthropic(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
+fn setup_anthropic(config: &mut Config) -> Result<bool> {
     println!();
-    println!("{}", style("Setting up Anthropic...").cyan());
-    println!(
-        "{}",
-        style("Get your API key from: https://console.anthropic.com/").dim()
-    );
+    println!("Setting up Anthropic...");
+    println!("Get your API key from: https://console.anthropic.com/");
     println!();
 
-    let api_key: String = dialoguer::Input::with_theme(theme)
-        .with_prompt("Enter your Anthropic API key (or press Enter to skip)")
-        .allow_empty(true)
-        .validate_with(|input: &String| {
-            if input.is_empty() {
-                Ok(())
-            } else if !validators::validate_api_key(input, "Anthropic") {
-                Err("Invalid API key format - should start with 'sk-ant-'")
-            } else {
-                Ok(())
-            }
-        })
-        .interact_text()?;
+    let api_key =
+        prompts::get_input("Enter your Anthropic API key (or press Enter to skip)");
 
     if api_key.is_empty() {
-        println!("{}", style("Anthropic setup skipped.").dim());
+        println!("Anthropic setup skipped.");
+        return Ok(false);
+    }
+
+    if !validators::validate_api_key(&api_key, "Anthropic") {
+        println!("Invalid API key format - should start with 'sk-ant-'");
         return Ok(false);
     }
 
     // Select Anthropic model
-    let model = select_anthropic_model(theme)?;
+    let model = select_anthropic_model()?;
 
     config.llm.anthropic_api_key = Some(api_key);
     config.llm.preferred_provider = LlmProvider::Anthropic;
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("Anthropic configured!").green().bold());
-    println!("{}", style(format!("  Using {}", model)).dim());
+    println!("Anthropic configured!");
+    println!("  Using {}", model);
 
     Ok(true)
 }
 
-fn setup_groq(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
+fn setup_groq(config: &mut Config) -> Result<bool> {
     println!();
-    println!("{}", style("Setting up Groq...").cyan());
-    println!(
-        "{}",
-        style("Get your API key from: https://console.groq.com/").dim()
-    );
+    println!("Setting up Groq...");
+    println!("Get your API key from: https://console.groq.com/");
     println!();
 
-    let api_key: String = dialoguer::Input::with_theme(theme)
-        .with_prompt("Enter your Groq API key (or press Enter to skip)")
-        .allow_empty(true)
-        .validate_with(|input: &String| {
-            if input.is_empty() {
-                Ok(())
-            } else if !validators::validate_api_key(input, "Groq") {
-                Err("Invalid API key format - should start with 'gsk_'")
-            } else {
-                Ok(())
-            }
-        })
-        .interact_text()?;
+    let api_key =
+        prompts::get_input("Enter your Groq API key (or press Enter to skip)");
 
     if api_key.is_empty() {
-        println!("{}", style("Groq setup skipped.").dim());
+        println!("Groq setup skipped.");
+        return Ok(false);
+    }
+
+    if !validators::validate_api_key(&api_key, "Groq") {
+        println!("Invalid API key format - should start with 'gsk_'");
         return Ok(false);
     }
 
     // Select Groq model
-    let model = select_groq_model(theme)?;
+    let model = select_groq_model()?;
 
     config.llm.groq_api_key = Some(api_key);
     config.llm.preferred_provider = LlmProvider::Groq;
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("Groq configured!").green().bold());
-    println!("{}", style(format!("  Using {}", model)).dim());
+    println!("Groq configured!");
+    println!("  Using {}", model);
 
     Ok(true)
 }
 
-fn select_openai_model(theme: &ColorfulTheme) -> Result<String> {
+fn select_openai_model() -> Result<String> {
     println!();
-    println!("{}", style("Choose OpenAI Model").cyan().bold());
+    println!("Choose OpenAI Model");
     println!();
 
     let models = [
@@ -259,18 +214,14 @@ fn select_openai_model(theme: &ColorfulTheme) -> Result<String> {
         .map(|(model, desc)| format!("{} - {}", model, desc))
         .collect();
 
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("Select OpenAI model")
-        .items(&choices)
-        .default(1) // Default to gpt-4o-mini (recommended)
-        .interact()?;
+    let selection = prompts::select_option_owned("Select OpenAI model", &choices);
 
     Ok(models[selection].0.to_string())
 }
 
-fn select_anthropic_model(theme: &ColorfulTheme) -> Result<String> {
+fn select_anthropic_model() -> Result<String> {
     println!();
-    println!("{}", style("Choose Anthropic Model").cyan().bold());
+    println!("Choose Anthropic Model");
     println!();
 
     let models = [
@@ -297,18 +248,14 @@ fn select_anthropic_model(theme: &ColorfulTheme) -> Result<String> {
         .map(|(model, desc)| format!("{} - {}", model, desc))
         .collect();
 
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("Select Anthropic model")
-        .items(&choices)
-        .default(1) // Default to haiku (recommended)
-        .interact()?;
+    let selection = prompts::select_option_owned("Select Anthropic model", &choices);
 
     Ok(models[selection].0.to_string())
 }
 
-fn select_groq_model(theme: &ColorfulTheme) -> Result<String> {
+fn select_groq_model() -> Result<String> {
     println!();
-    println!("{}", style("Choose Groq Model").cyan().bold());
+    println!("Choose Groq Model");
     println!();
 
     let models = [
@@ -340,60 +287,47 @@ fn select_groq_model(theme: &ColorfulTheme) -> Result<String> {
         .map(|(model, desc)| format!("{} - {}", model, desc))
         .collect();
 
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("Select Groq model")
-        .items(&choices)
-        .default(0) // Default to llama-3.1-8b-instant (recommended)
-        .interact()?;
+    let selection = prompts::select_option_owned("Select Groq model", &choices);
 
     Ok(models[selection].0.to_string())
 }
 
-fn setup_zai(config: &mut Config, theme: &ColorfulTheme) -> Result<bool> {
+fn setup_zai(config: &mut Config) -> Result<bool> {
     println!();
-    println!("{}", style("Setting up Z.AI GLM Coding Plan...").cyan());
-    println!(
-        "{}",
-        style("Get your API key from: https://z.ai/model-api").dim()
-    );
+    println!("Setting up Z.AI GLM Coding Plan...");
+    println!("Get your API key from: https://z.ai/model-api");
     println!();
 
-    let api_key: String = dialoguer::Input::with_theme(theme)
-        .with_prompt("Enter your Z.AI API key (or press Enter to skip)")
-        .allow_empty(true)
-        .validate_with(|input: &String| {
-            if input.is_empty() {
-                Ok(())
-            } else if input.len() < 10 {
-                Err("API key too short - please enter a valid key")
-            } else {
-                Ok(())
-            }
-        })
-        .interact_text()?;
+    let api_key =
+        prompts::get_input("Enter your Z.AI API key (or press Enter to skip)");
 
     if api_key.is_empty() {
-        println!("{}", style("Z.AI setup skipped.").dim());
+        println!("Z.AI setup skipped.");
+        return Ok(false);
+    }
+
+    if api_key.len() < 10 {
+        println!("API key too short - please enter a valid key");
         return Ok(false);
     }
 
     // Select Zai model
-    let model = select_zai_model(theme)?;
+    let model = select_zai_model()?;
 
     config.llm.zai_api_key = Some(api_key);
     config.llm.preferred_provider = LlmProvider::Zai;
     config.llm.model_name = Some(model.clone());
 
     println!();
-    println!("{}", style("Z.AI configured!").green().bold());
-    println!("{}", style(format!("  Using {}", model)).dim());
+    println!("Z.AI configured!");
+    println!("  Using {}", model);
 
     Ok(true)
 }
 
-fn select_zai_model(theme: &ColorfulTheme) -> Result<String> {
+fn select_zai_model() -> Result<String> {
     println!();
-    println!("{}", style("Choose Z.AI Model").cyan().bold());
+    println!("Choose Z.AI Model");
     println!();
 
     let models = [
@@ -413,11 +347,7 @@ fn select_zai_model(theme: &ColorfulTheme) -> Result<String> {
         .map(|(model, desc)| format!("{} - {}", model, desc))
         .collect();
 
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("Select Z.AI model")
-        .items(&choices)
-        .default(0) // Default to glm-4.7 (recommended)
-        .interact()?;
+    let selection = prompts::select_option_owned("Select Z.AI model", &choices);
 
     Ok(models[selection].0.to_string())
 }

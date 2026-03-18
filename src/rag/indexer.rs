@@ -399,7 +399,6 @@ impl Indexer {
         url: &str,
         max_pages: Option<usize>,
     ) -> Result<Vec<DocumentChunk>> {
-        use indicatif::{ProgressBar, ProgressStyle};
         use scraper::{Html, Selector};
         use tokio::task::JoinSet;
 
@@ -502,19 +501,9 @@ impl Indexer {
         eprintln!("🔗 Found {} same-host links", targets.len());
 
         // Fetch first-level pages with small concurrency
-        let pb = if !targets.is_empty() {
-            let pb = ProgressBar::new(targets.len() as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} pages ({percent}%) | {msg}")
-                    .unwrap()
-                    .progress_chars("█▉▊▋▌▍▎▏  "),
-            );
-            pb.set_message("Fetching pages...");
-            Some(pb)
-        } else {
-            None
-        };
+        if !targets.is_empty() {
+            eprintln!("Fetching {} pages...", targets.len());
+        }
         let mut set = JoinSet::new();
         let client2 = client.clone();
         for t in targets.into_iter() {
@@ -537,14 +526,9 @@ impl Indexer {
                 }
             }
             fetched += 1;
-            if let Some(pb) = &pb {
-                pb.set_position(fetched as u64);
-            }
         }
 
-        if let Some(pb) = pb {
-            pb.finish_with_message("✓ Shallow crawl completed");
-        }
+        eprintln!("Shallow crawl completed: {} pages fetched", fetched);
 
         Ok(all_chunks)
     }

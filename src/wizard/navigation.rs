@@ -1,6 +1,6 @@
 use anyhow::Result;
-use console::style;
-use dialoguer::theme::ColorfulTheme;
+
+use super::prompts;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WizardAction {
@@ -71,7 +71,6 @@ impl WizardStep {
 }
 
 pub fn show_navigation_options(
-    theme: &ColorfulTheme,
     current_step: &WizardStep,
     can_skip: bool,
 ) -> Result<WizardAction> {
@@ -94,11 +93,7 @@ pub fn show_navigation_options(
     choices.push("Quit setup");
 
     println!();
-    let selection = dialoguer::Select::with_theme(theme)
-        .with_prompt("What would you like to do?")
-        .items(&choices)
-        .default(0)
-        .interact()?;
+    let selection = prompts::select_option("What would you like to do?", &choices);
 
     let mut index = 0;
 
@@ -140,15 +135,10 @@ pub fn show_step_header(step: &WizardStep) {
 
     println!();
     println!(
-        "{}",
-        style(format!(
-            "[Step {}/{}] {}",
-            step.number(),
-            WizardStep::total_steps(),
-            step.name()
-        ))
-        .cyan()
-        .bold()
+        "[Step {}/{}] {}",
+        step.number(),
+        WizardStep::total_steps(),
+        step.name()
     );
-    println!("{}", style("─".repeat(40)).dim());
+    println!("{}", "-".repeat(40));
 }
