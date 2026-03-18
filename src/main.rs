@@ -751,14 +751,16 @@ async fn handle_search_command(
         }
     }
 
-    // Apply LLM synthesis if configured and not disabled (only in quiet/pipe mode)
-    if quiet && config.should_use_llm(no_llm) && !results.is_empty() {
-        println!("Synthesizing answer with AI...");
+    // LLM synthesis — capture answer for both modes
+    let mut llm_answer: Option<String> = None;
+    if config.should_use_llm(no_llm) && !results.is_empty() {
+        if quiet {
+            eprint!("Synthesizing answer with AI...");
+        }
 
-        // Convert search results to RAG format for LLM synthesis
         let rag_results: Vec<crate::rag::RagSearchResult> = results
             .iter()
-            .take(5) // Use top 5 results for synthesis
+            .take(5)
             .map(|result| {
                 use chrono::Utc;
                 crate::rag::RagSearchResult {
@@ -781,81 +783,63 @@ async fn handle_search_command(
             })
             .collect();
 
-        // Initialize LLM client and synthesize answer
         match crate::rag::llm::LlmClient::new(config.llm.clone()) {
             Ok(llm_client) => {
                 match llm_client.synthesize_answer(query, &rag_results).await {
                     Ok(synthesis) => {
-                        println!("\n{}", "AI Summary");
-
-                        // Clean AI response
-                        for line in synthesis.answer.lines() {
-                            if line.trim().is_empty() {
-                                println!();
-                                continue;
-                            }
-
-                            let trimmed = line.trim();
-                            if trimmed.starts_with("**Quick Answer**") {
-                                println!(
-                                    "  {}",
-                                    trimmed.replace(
-                                        "**Quick Answer**",
-                                        "> Quick Answer"
-                                    )
-                                );
-                            } else if trimmed.starts_with("**Key Points**") {
-                                println!(
-                                    "  {}",
-                                    trimmed.replace(
-                                        "**Key Points**",
-                                        "> Key Points"
-                                    )
-                                );
-                            } else if trimmed.starts_with("**Code Example**") {
-                                println!(
-                                    "  {}",
-                                    trimmed.replace(
-                                        "**Code Example**",
-                                        "> Code Example"
-                                    )
-                                );
-                            } else {
-                                println!("  {}", trimmed);
-                            }
-                        }
-
+                        let mut answer = synthesis.answer.clone();
                         if !synthesis.citations.is_empty() && synthesis.citations.len() <= 3 {
-                            println!("\n  {}", "Sources used:");
+                            answer.push_str("\n\nSources:\n");
                             for citation in synthesis.citations.iter().take(3) {
-                                println!("  {} {}", "•", citation.source_title);
+                                answer.push_str(&format!("  - {}\n", citation.source_title));
                             }
                         }
-                        println!();
+                        llm_answer = Some(answer);
+
+                        if quiet {
+                            eprintln!();
+                            println!("\nAI Summary\n");
+                            for line in synthesis.answer.lines() {
+                                println!("  {}", line.trim());
+                            }
+                            println!();
+                        }
                     }
                     Err(e) => {
                         log::warn!("LLM synthesis failed: {}", e);
-                        renderer.print_error(
-                            "AI synthesis failed, showing search results only check API status ",
-                        );
                     }
                 }
             }
             Err(e) => {
                 log::warn!("Failed to initialize LLM client: {}", e);
-                renderer.print_error("Failed to initialize AI client");
             }
         }
     }
 
     // Display results: TUI for interactive mode, plain renderer for quiet/pipe mode
     if !quiet {
-        // Convert SearchResults to TUI ResultItems
-        let items: Vec<crate::tui::ResultItem> = results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| crate::tui::ResultItem::from((i, r)))
-            .collect();
+        let mut items: Vec<crate::tui::ResultItem> = Vec::new();
+
+        // Insert LLM answer as the first item if available
+        if let Some(answer) = &llm_answer {
+            items.push(crate::tui::ResultItem {
+                index: 0,
+                title: "AI Summary".to_string(),
+                library: library.to_string(),
+                id: "ai-summary".to_string(),
+                url: None,
+                excerpt: "AI-generated answer based on search results".to_string(),
+                full_content: answer.clone(),
+            });
+        }
+
+        // Add search results (offset index if LLM answer present)
+        let offset = items.len();
+        for (i, r) in results.iter().enumerate() {
+            let mut item = crate::tui::ResultItem::from((i + offset, r));
+            item.index = i + offset;
+            items.push(item);
+        }
 
         let app = crate::tui::App::new(&library_id, query, items);
         app.run().map_err(|e| anyhow::anyhow!("TUI error: {}", e))?;

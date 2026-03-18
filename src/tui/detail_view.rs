@@ -41,8 +41,6 @@ impl DetailView {
         self.content_height = text.lines.len() as u16;
 
         let block = Block::default()
-            .title(format!(" {} ", item.title))
-            .title_style(theme.header_title)
             .borders(Borders::ALL)
             .border_style(theme.border_focused);
 
@@ -71,13 +69,11 @@ impl DetailView {
         }
     }
 
-    /// Render as a preview pane — shows full content with wrapping
+    /// Render as a preview pane — title inside content, not in border
     pub fn render_preview(&self, frame: &mut Frame, area: Rect, item: &ResultItem, theme: &Theme) {
         let text = build_preview_text(item, theme);
 
         let block = Block::default()
-            .title(format!(" {} ", item.title))
-            .title_style(theme.header_title)
             .borders(Borders::ALL)
             .border_style(theme.border);
 
@@ -100,6 +96,13 @@ fn truncate_str(s: &str, max: usize) -> String {
 fn build_preview_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
     let mut lines = vec![];
 
+    // Title as first line inside the pane (wraps naturally)
+    lines.push(Line::from(Span::styled(
+        item.title.clone(),
+        theme.section_heading,
+    )));
+    lines.push(Line::from(""));
+
     // Source URL if available
     if let Some(url) = &item.url {
         lines.push(Line::from(Span::styled(url.clone(), theme.result_url)));
@@ -115,7 +118,12 @@ fn build_preview_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
 fn build_detail_text<'a>(item: &ResultItem, theme: &Theme) -> Text<'a> {
     let mut lines = vec![];
 
-    // Compact metadata
+    // Title
+    lines.push(Line::from(Span::styled(
+        item.title.clone(),
+        theme.section_heading,
+    )));
+
     if let Some(url) = &item.url {
         lines.push(Line::from(Span::styled(url.clone(), theme.result_url)));
     }
