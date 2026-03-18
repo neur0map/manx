@@ -272,16 +272,12 @@ impl SearchEngine {
             if relevance > relevance_threshold {
                 // Only include sections with reasonable relevance
                 let title = self.extract_section_title(section).unwrap_or_else(|| {
-                    // Try to create a meaningful title from the section content
                     let first_line = section.lines().next().unwrap_or("");
-                    let title_candidate = if first_line.len() > 60 {
-                        format!("{}...", &first_line[..57])
-                    } else if first_line.is_empty() {
+                    if first_line.is_empty() {
                         format!("{} - Result {}", original_query, idx + 1)
                     } else {
                         first_line.to_string()
-                    };
-                    format!("{} ({})", title_candidate, library)
+                    }
                 });
 
                 let excerpt = self.extract_section_excerpt(section);
@@ -306,28 +302,14 @@ impl SearchEngine {
             for (idx, section) in sections.iter().enumerate().take(10) {
                 // Limit to first 10 sections
                 let title = self.extract_section_title(section).unwrap_or_else(|| {
-                    // Try to extract a meaningful title from the section
                     let lines: Vec<&str> = section.lines().take(3).collect();
-                    let mut title_candidate = String::new();
-
-                    // Look for the first non-empty, meaningful line
                     for line in &lines {
                         let trimmed = line.trim();
                         if !trimmed.is_empty() && trimmed.len() > 10 {
-                            title_candidate = if trimmed.len() > 60 {
-                                format!("{}...", &trimmed[..57])
-                            } else {
-                                trimmed.to_string()
-                            };
-                            break;
+                            return trimmed.to_string();
                         }
                     }
-
-                    if title_candidate.is_empty() {
-                        format!("{} - Section {}", original_query, idx + 1)
-                    } else {
-                        title_candidate
-                    }
+                    format!("{} - Section {}", original_query, idx + 1)
                 });
 
                 // Create a unique excerpt from this specific section
